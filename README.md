@@ -23,7 +23,7 @@ This system implements a **Supervisor-based multi-agent architecture** where:
 - Structured analysis planning for complex reverse engineering tasks
 
 ## System Architecture
-
+<img width="800" alt="Query" src="https://github.com/user-attachments/assets/5206b3ca-e97b-4b3e-aa65-5c9d80d09c08" />
 
 ---
 
