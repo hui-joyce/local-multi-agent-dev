@@ -6,24 +6,22 @@ within the reverse engineering domain.
 
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.agents import (
-    PlanningAgent,
-    CodeAnalysisAgent,
-    VulnerabilityDetectionAgent,
-)
+from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
 
 
-def build_reverse_engineering_graph():
+def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     """
-    Flow:
-        planning → code_analysis → vulnerability_detection → END
+    Args:
+        factory: MLXAgentFactory instance. If None, creates a new one.
     """
+    if factory is None:
+        factory = MLXAgentFactory()
     
-    # Initialize agents
-    planning_agent = PlanningAgent()
-    analysis_agent = CodeAnalysisAgent()
-    vuln_agent = VulnerabilityDetectionAgent()
+    # Initialize agents using factory
+    planning_agent = factory.create_planning_agent()
+    analysis_agent = factory.create_code_analysis_agent()
+    vuln_agent = factory.create_vulnerability_detection_agent()
     
     # Create graph
     graph = StateGraph(AgentState)
@@ -42,7 +40,6 @@ def build_reverse_engineering_graph():
         )
     
     def code_analysis_node(state: AgentState) -> AgentState:
-        """Analyze code structure and patterns based on the plan."""
         analysis_input = f"""Based on this plan:
 {state.intermediate_outputs.get('planning', '')}
 
@@ -59,7 +56,6 @@ Now analyze: {state.user_input}"""
         )
     
     def vulnerability_detection_node(state: AgentState) -> AgentState:
-        """Detect security vulnerabilities in the analyzed code."""
         vuln_input = f"""Based on this analysis:
 {state.intermediate_outputs.get('code_analysis', '')}
 
@@ -76,7 +72,6 @@ Perform vulnerability assessment for: {state.user_input}"""
         )
     
     def synthesize_output(state: AgentState) -> AgentState:
-        """Synthesize all analysis outputs into final comprehensive report."""
         final = f"""# Reverse Engineering Analysis Report
 
 ## User Request

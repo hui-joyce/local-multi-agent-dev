@@ -1,32 +1,33 @@
 """
 Software development domain graph.
-
 Defines the subgraph for code generation, testing, and architectural review
 within the software development domain.
 """
 
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.agents import (
-    CodeGenerationAgent,
-    UnitTestingAgent,
-    ArchitecturalReviewAgent,
-)
+from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
 
 
-def build_software_dev_graph():    
-    # Initialize agents
-    code_gen_agent = CodeGenerationAgent()
-    test_agent = UnitTestingAgent()
-    arch_agent = ArchitecturalReviewAgent()
+def build_software_dev_graph(factory: MLXAgentFactory = None):
+    """
+    Args:
+        factory: MLXAgentFactory instance. If None, creates a new one.
+    """
+    if factory is None:
+        factory = MLXAgentFactory()
+    
+    # Initialize agents using factory
+    code_gen_agent = factory.create_code_generation_agent()
+    test_agent = factory.create_unit_testing_agent()
+    arch_agent = factory.create_architectural_review_agent()
     
     # Create graph
     graph = StateGraph(AgentState)
     
     # Define node functions
     def code_generation_node(state: AgentState) -> AgentState:
-        """Generate code based on user request and retrieved context."""
         output = code_gen_agent.invoke(
             user_input=state.user_input,
             context=state.retrieved_context,
@@ -38,7 +39,6 @@ def build_software_dev_graph():
         )
     
     def unit_testing_node(state: AgentState) -> AgentState:
-        """Generate tests for the generated code."""
         # Use previous agent output as input
         test_input = f"Code to test:\n{state.intermediate_outputs.get('code_generation', '')}"
         output = test_agent.invoke(
@@ -52,7 +52,6 @@ def build_software_dev_graph():
         )
     
     def architectural_review_node(state: AgentState) -> AgentState:
-        """Review architectural fit and best practices."""
         # Review all generated outputs
         review_input = f"Code and tests generated:\n{StateManager.format_agent_outputs(state)}"
         output = arch_agent.invoke(
