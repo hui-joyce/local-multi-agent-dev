@@ -1,3 +1,12 @@
+# MLX Framework & Dependencies (Apple Silicon optimized)
+mlx==0.31.1
+mlx-lm==0.31.2
+
+# Text processing & embeddings for MLX
+numpy>=1.21.0
+transformers>=4.30.0  # For tokenization with Qwen models
+safetensors>=0.3.1    # For secure model loading
+
 # Core orchestration dependencies
 langgraph>=0.0.1
 langchain>=0.0.1
@@ -8,5 +17,5 @@ pydantic>=1.7
 qdrant-client>=1.0.0
 langchain-community>=0.0.1
 
-# Optional but recommended
+# optional
 python-dotenv>=1.0.0

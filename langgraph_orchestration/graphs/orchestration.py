@@ -1,6 +1,4 @@
 """
-Main orchestration graph.
-
 Implements the Supervisor pattern for routing requests to appropriate domains
 and coordinating the overall multi-agent workflow.
 """
@@ -8,13 +6,14 @@ and coordinating the overall multi-agent workflow.
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.supervisor import SupervisorAgent
+from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.software_dev import build_software_dev_graph
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 
 
-def build_orchestration_graph():
+def build_orchestration_graph(factory: MLXAgentFactory = None):
     """
     This graph implements the high-level orchestration logic:
     1. Routes incoming request to appropriate domain via Supervisor
@@ -25,17 +24,23 @@ def build_orchestration_graph():
     The routing to either software_dev or reverse_engineering subgraph
     is handled via conditional edges.
     
+    Args:
+        factory: MLXAgentFactory instance for shared model loading.
+                 If None, creates a new one.
     Returns:
         Compiled StateGraph for the complete orchestration system
     """
     
     # Initialize components
+    if factory is None:
+        factory = MLXAgentFactory()
+    
     supervisor = SupervisorAgent()
     retriever = QdrantRetriever()
     
-    # Build domain subgraphs
-    software_dev_graph = build_software_dev_graph()
-    reverse_eng_graph = build_reverse_engineering_graph()
+    # Build domain subgraphs (pass factory for model sharing)
+    software_dev_graph = build_software_dev_graph(factory=factory)
+    reverse_eng_graph = build_reverse_engineering_graph(factory=factory)
     
     # Create main graph
     graph = StateGraph(AgentState)
@@ -46,7 +51,7 @@ def build_orchestration_graph():
         Analyze user request and route to appropriate domain.
         
         The Supervisor uses heuristic-based keyword analysis to determine
-        whether the request is for software development or reverse engineering.
+        whether the request is for software development or reverse engineering. (TBC)
         """
         domain = supervisor.invoke(user_input=state.user_input)
         state.selected_domain = domain
@@ -56,7 +61,7 @@ def build_orchestration_graph():
     def retrieve_context_node(state: AgentState) -> AgentState:
         """
         Retrieve relevant context from Qdrant knowledge base.
-        
+
         Uses the selected domain as a filter to retrieve domain-specific
         knowledge that will inform the specialized agents.
         """
@@ -69,9 +74,7 @@ def build_orchestration_graph():
     
     # Node 3: Software development domain router
     def software_dev_router(state: AgentState) -> AgentState:
-        """
-        Invoke software development subgraph.
-        
+        """        
         This node executes the code generation, testing, and architectural
         review workflow for software development tasks.
         """
@@ -81,8 +84,6 @@ def build_orchestration_graph():
     # Node 4: Reverse engineering domain router
     def reverse_engineering_router(state: AgentState) -> AgentState:
         """
-        Invoke reverse engineering subgraph.
-        
         This node executes the planning, analysis, and vulnerability detection
         workflow for reverse engineering tasks.
         """
@@ -93,7 +94,6 @@ def build_orchestration_graph():
     def final_synthesis(state: AgentState) -> AgentState:
         """
         Ensure final output is properly formatted and complete.
-        
         This is a safety node that guarantees a response even if
         subgraph synthesis was skipped.
         """
