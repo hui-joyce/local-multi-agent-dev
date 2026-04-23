@@ -55,18 +55,23 @@ This system implements a **Supervisor-based multi-agent architecture** where:
    cd local-multi-agent-dev
    ```
 
-2. **Create a virtual environment**
+2. **Setup Virtual Environment** (Choose one)
+
+   **Option A: Automated (Recommended)**
+   ```bash
+   chmod +x setup-venv.sh
+   ./setup-venv.sh
+   ```
+
+   **Option B: Manual**
    ```bash
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
+   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-4. **Verify installation**
+3. **Verify Installation**
    ```bash
    python3 examples.py
    ```
@@ -94,6 +99,68 @@ print(f"Domain: {result['selected_domain']}")
 print(f"Agents executed: {result['agent_chain']}")
 print(f"Response:\n{result['final_output']}")
 ```
+
+### Running the API Server
+
+To expose your orchestration system as a REST API and monitor it with LangSmith:
+
+```bash
+# Install optional dependencies
+pip install fastapi uvicorn
+
+# Start the API server
+python3 api.py
+```
+
+The server will start on **http://localhost:8000**
+
+#### Available Endpoints
+
+- `GET /` - Health check
+- `GET /info` - Service information
+- `GET /domains` - List available agent domains
+- `POST /invoke` - Execute orchestration
+
+#### Example API Request
+
+```bash
+curl -X POST http://localhost:8000/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"user_input": "Create a Python function to sort a list"}'
+```
+
+#### Interactive API Documentation
+
+Once the server is running, visit:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+#### Monitoring with LangSmith Studio
+
+1. Start the API server with LangSmith enabled:
+   ```bash
+   # Make sure LANGSMITH_TRACING=true in .env
+   python3 api.py
+   ```
+
+2. Open LangSmith: https://smith.langchain.com
+
+3. Navigate to your project: **Projects → local-multi-agent-dev**
+
+4. Make API requests - traces will appear automatically:
+   ```bash
+   curl -X POST http://localhost:8000/invoke \
+     -H "Content-Type: application/json" \
+     -d '{"user_input": "Your query here"}'
+   ```
+
+5. View the execution traces in LangSmith dashboard showing:
+   - Complete execution flow
+   - Domain routing decisions
+   - Agent execution details
+   - Token counts and latencies
+   - Input/output for each step
+
 ## Documentation
 
 ---

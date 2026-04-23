@@ -94,4 +94,7 @@ Ready for integration and deployment.
     # Set entry point
     graph.set_entry_point("code_generation")
     
-    return graph.compile()
+    compiled = graph.compile()
+    compiled.name = "Software Development"
+    compiled.description = "Code generation, testing, and architectural review workflow"
+    return compiled

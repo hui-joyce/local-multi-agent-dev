@@ -1,18 +1,21 @@
-"""
-Example execution and testing of the orchestration system.
-"""
-
+import os
+from dotenv import load_dotenv
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 
+# Load environment variables
+load_dotenv()
+
+# Enable LangSmith tracing if credentials are available
+if os.getenv("LANGSMITH_API_KEY"):
+    os.environ["LANGSMITH_TRACING"] = "true"
+    print(f"✓ LangSmith tracing enabled")
+    print(f"  Project: {os.getenv('LANGSMITH_PROJECT', 'default')}")
+else:
+    print("LangSmith not configured. Set LANGSMITH_API_KEY to enable tracing.")
+
 
 def run_orchestration_example(user_input: str) -> None:
-    """
-    Run the orchestration graph with a user input and display results.
-    
-    Args:
-        user_input: The user's request to the multi-agent system
-    """
     print("\n" + "="*80)
     print(f"USER REQUEST: {user_input}")
     print("="*80 + "\n")
@@ -26,8 +29,6 @@ def run_orchestration_example(user_input: str) -> None:
     # Execute the graph
     print("Executing orchestration graph...\n")
     result = graph.invoke(initial_state.model_dump())
-    
-    # Convert result dict back to AgentState for easier access
     final_state = AgentState(**result)
     
     # Display results
@@ -46,9 +47,7 @@ def run_orchestration_example(user_input: str) -> None:
     print("="*80 + "\n")
 
 
-def run_all_examples() -> None:
-    """Run multiple examples demonstrating different capabilities."""
-    
+def run_all_examples() -> None:    
     # Example 1: Software development request
     print("\n\nEXAMPLE 1: Software Development Assistant")
     run_orchestration_example(
@@ -78,7 +77,7 @@ def run_all_examples() -> None:
 
 if __name__ == "__main__":
     print("MULTI-AGENT ORCHESTRATION SYSTEM - EXAMPLES")
-    
+    if os.getenv("LANGCHAIN_TRACING_V2"):
+        print("See LangSmith dashboard")
+    # Run examples
     run_all_examples()
-    
-    print("All examples completed successfully!")

@@ -1,4 +1,4 @@
-from typing import Optional, Iterator
+from typing import Optional, Iterator, Union
 from dataclasses import dataclass
 
 @dataclass
@@ -51,7 +51,7 @@ class MLXInferenceEngine:
         prompt: str,
         config: Optional[GenerationConfig] = None,
         stream: bool = False,
-    ) -> str | Iterator[str]:
+    ) -> Union[str, Iterator[str]]:
         """Generate text using the model."""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded. Call load() first.")
@@ -76,7 +76,7 @@ class MLXInferenceEngine:
                     self.model,
                     self.tokenizer,
                     prompt=prompt,
-                    **config.to_dict(),
+                    max_tokens=config.max_tokens,
                     verbose=False,
                 )
                 return generated_text
@@ -95,13 +95,11 @@ class MLXInferenceEngine:
         except ImportError:
             raise RuntimeError("MLX not installed")
         
-        # Use generate with streaming
-        # Note: This is a simplified version - actual implementation depends on mlx-lm version
         full_text = generate(
             self.model,
             self.tokenizer,
             prompt=prompt,
-            **config.to_dict(),
+            max_tokens=config.max_tokens,
             verbose=False,
         )
         
