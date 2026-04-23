@@ -136,4 +136,11 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
     # Set entry point
     graph.set_entry_point("supervisor")
     
-    return graph.compile()
+    # Compile with metadata for LangSmith Studio
+    compiled_graph = graph.compile()
+    
+    # Set graph metadata
+    compiled_graph.name = "Multi-Agent Orchestration"
+    compiled_graph.description = "Supervisor-based multi-agent system routing to software development or reverse engineering domains"
+    
+    return compiled_graph

@@ -1,11 +1,4 @@
-"""
-State management and utilities for LangGraph orchestration.
-Provides helper functions for state updates and transitions
-throughout the orchestration graph.
-"""
-
 from langgraph_orchestration.schemas.state import AgentState
-
 
 class StateManager:    
     @staticmethod
@@ -13,6 +6,7 @@ class StateManager:
         state: AgentState,
         agent_name: str,
         output: str,
+    ) -> AgentState:
         state.intermediate_outputs[agent_name] = output
         state.agent_chain.append(agent_name)
         return state

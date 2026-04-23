@@ -102,4 +102,7 @@ with remediation recommendations where applicable.
     # Set entry point
     graph.set_entry_point("planning")
     
-    return graph.compile()
+    compiled = graph.compile()
+    compiled.name = "Reverse Engineering"
+    compiled.description = "Planning, code analysis, and vulnerability detection workflow"
+    return compiled

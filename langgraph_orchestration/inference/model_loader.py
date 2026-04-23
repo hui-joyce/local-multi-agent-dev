@@ -4,26 +4,13 @@ from pathlib import Path
 
 
 class MLXModelLoader:
-    """
-    Features:
-    - Automatic model downloading from HuggingFace
-    - Quantization support (4-bit, 8-bit)
-    - Memory-efficient loading on Apple Silicon
-    - Caching and management of model files
-    """
-    
     # Default model configurations
     DEFAULT_MODELS = {
         "qwen-3.5-9b": {
-            "repo_id": "Qwen/Qwen2.5-7B-Instruct",  # Using 7B as proxy for 9B capabilities
-            "model_type": "qwen2",
+            "repo_id": "mlx-community/Qwen3.5-9B-MLX-4bit",
+            "model_type": "qwen3_5",
             "quantization": "4bit",
-        },
-        "qwen-1.5-7b": {
-            "repo_id": "Qwen/Qwen1.5-7B-Chat",
-            "model_type": "qwen",
-            "quantization": "4bit",
-        },
+        }
     }
     
     def __init__(
@@ -53,10 +40,9 @@ class MLXModelLoader:
         self.tokenizer = None
     
     def load(self) -> tuple:
+        """Load model and tokenizer using mlx-lm."""
         try:
-            import mlx.core as mx
-            from mlx_lm import load, models
-            from transformers import AutoTokenizer
+            from mlx_lm import load
         except ImportError as e:
             raise RuntimeError(
                 f"MLX not installed. Install with: pip install -r requirements.txt"
@@ -64,26 +50,28 @@ class MLXModelLoader:
         
         print(f"Loading {self.model_name} from {self.model_config['repo_id']}...")
         
-        # Load model using mlx-lm
         try:
-            self.model, self.tokenizer = load(
-                self.model_config["repo_id"],
-                quantization=self.model_config.get("quantization")
-            )
-            print(f"✓ Model loaded successfully on device: {mx.default_device()}")
-        except Exception as e:
-            print(f"Failed to load model from mlx-lm, trying direct load...")
-            # Fallback to direct HuggingFace loading
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_config["repo_id"]
-            )
-            print(f"✓ Tokenizer loaded successfully")
+            # Load model and tokenizer from HuggingFace repo
+            # mlx-lm 0.31.2+ supports qwen3_5 model type natively
+            model_and_tokenizer = load(self.model_config["repo_id"])
             
-            # Model loading would happen here with transformers + mlx conversion
-            # For now, this is a fallback point
+            if isinstance(model_and_tokenizer, tuple) and len(model_and_tokenizer) == 2:
+                self.model, self.tokenizer = model_and_tokenizer
+            else:
+                self.model = model_and_tokenizer
+                # Load tokenizer separately if needed
+                from transformers import AutoTokenizer
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_config["repo_id"],
+                    trust_remote_code=True
+                )
+            
+            print(f"  ✓ Model loaded successfully")
+            print(f"  Quantization: {self.model_config.get('quantization', 'none')}")
+            
+        except Exception as e:
             raise RuntimeError(
-                f"Model loading not fully configured. "
-                f"Please ensure mlx-lm is properly installed."
+                f"Failed to load model {self.model_config['repo_id']}: {str(e)}"
             ) from e
         
         return self.model, self.tokenizer
