@@ -7,6 +7,7 @@ within the reverse engineering domain.
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
+from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
 from langgraph_orchestration.core.state_utils import StateManager
 
 
@@ -22,16 +23,25 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     planning_agent = factory.create_planning_agent()
     analysis_agent = factory.create_code_analysis_agent()
     vuln_agent = factory.create_vulnerability_detection_agent()
+    retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
+
+    def retrieve_re_context_node(state: AgentState) -> AgentState:
+        context = retriever.retrieve(
+            query=state.user_input,
+            top_k=5,
+            domain="reverse_engineering",
+        )
+        state.re_context = context
+        return StateManager.add_retrieved_context(state, context)
     
     # Define node functions
     def planning_node(state: AgentState) -> AgentState:
-        """Create analysis plan for the reverse engineering task."""
         plan = planning_agent.invoke(
             user_input=state.user_input,
-            context=state.retrieved_context,
+            context=state.re_context,
         )
         return StateManager.add_intermediate_output(
             state=state,
@@ -47,7 +57,7 @@ Now analyze: {state.user_input}"""
         
         output = analysis_agent.invoke(
             user_input=analysis_input,
-            context=state.retrieved_context,
+            context=state.re_context,
         )
         return StateManager.add_intermediate_output(
             state=state,
@@ -63,7 +73,7 @@ Perform vulnerability assessment for: {state.user_input}"""
         
         output = vuln_agent.invoke(
             user_input=vuln_input,
-            context=state.retrieved_context,
+            context=state.re_context,
         )
         return StateManager.add_intermediate_output(
             state=state,
@@ -85,22 +95,26 @@ Comprehensive reverse engineering analysis completed with planning,
 structural analysis, and vulnerability assessment. All findings documented
 with remediation recommendations where applicable.
 """
-        return StateManager.set_final_output(state, final)
+    state.branch_outputs["reverse_engineering"] = final
+    state.agent_chain.append("reverse_engineering_synthesize")
+    return state
     
     # Add nodes
+    graph.add_node("retrieve_re_context", retrieve_re_context_node)
     graph.add_node("planning", planning_node)
     graph.add_node("code_analysis", code_analysis_node)
     graph.add_node("vulnerability_detection", vulnerability_detection_node)
     graph.add_node("synthesize", synthesize_output)
     
     # Add edges - sequential pipeline
+    graph.add_edge("retrieve_re_context", "planning")
     graph.add_edge("planning", "code_analysis")
     graph.add_edge("code_analysis", "vulnerability_detection")
     graph.add_edge("vulnerability_detection", "synthesize")
     graph.add_edge("synthesize", END)
     
     # Set entry point
-    graph.set_entry_point("planning")
+    graph.set_entry_point("retrieve_re_context")
     
     compiled = graph.compile()
     compiled.name = "Reverse Engineering"

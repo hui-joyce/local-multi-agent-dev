@@ -56,7 +56,7 @@ app.add_middleware(
 # Request/Response models
 class AgentRequest(BaseModel):
     user_input: str
-    domain: Optional[str] = None  # "software_dev" or "reverse_engineering"
+    domain: Optional[str] = None  # "software_dev", "reverse_engineering", or "both"
 
 
 class AgentResponse(BaseModel):
@@ -218,7 +218,7 @@ async def get_graph_schema():
                 },
                 "domain": {
                     "type": "string",
-                    "enum": ["software_dev", "reverse_engineering"],
+                    "enum": ["software_dev", "reverse_engineering", "both"],
                     "description": "Optional domain specification"
                 }
             },

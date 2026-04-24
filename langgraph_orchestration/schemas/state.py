@@ -14,19 +14,49 @@ class AgentState(BaseModel):
         description="The original user request/query"
     )
     
-    selected_domain: Optional[Literal["software_dev", "reverse_engineering"]] = Field(
+    selected_domain: Optional[Literal["software_dev", "reverse_engineering", "both"]] = Field(
         default=None,
         description="Domain selected by supervisor routing"
     )
     
     retrieved_context: list[str] = Field(
         default_factory=list,
-        description="Context documents retrieved from Qdrant RAG"
+        description="Combined context documents retrieved across active branches"
+    )
+
+    dev_context: list[str] = Field(
+        default_factory=list,
+        description="Domain-specific context retrieved for software development branch"
+    )
+
+    re_context: list[str] = Field(
+        default_factory=list,
+        description="Domain-specific context retrieved for reverse engineering branch"
     )
     
     intermediate_outputs: dict[str, str] = Field(
         default_factory=dict,
         description="Outputs from individual agents {agent_name: output}"
+    )
+
+    branch_outputs: dict[str, str] = Field(
+        default_factory=dict,
+        description="Branch-level synthesized outputs keyed by branch name"
+    )
+
+    dev_test_passed: bool = Field(
+        default=False,
+        description="Latest unit testing status for software development branch"
+    )
+
+    dev_iteration: int = Field(
+        default=0,
+        description="Current software development regeneration iteration count"
+    )
+
+    max_dev_iterations: int = Field(
+        default=3,
+        description="Maximum code generation retry attempts when tests fail"
     )
     
     final_output: Optional[str] = Field(
