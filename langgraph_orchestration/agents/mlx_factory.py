@@ -9,6 +9,7 @@ from langgraph_orchestration.agents.mlx_agents import (
     MLXCodeAnalysisAgent,
     MLXVulnerabilityDetectionAgent,
 )
+from langgraph_orchestration.agents.supervisor import SupervisorAgent
 
 class MLXAgentFactory:
     def __init__(
@@ -46,6 +47,11 @@ class MLXAgentFactory:
         if not self._model_loaded:
             self.load_model()
         return MLXCodeGenerationAgent(self.inference_engine)
+
+    def create_supervisor_agent(self):
+        if not self._model_loaded:
+            self.load_model()
+        return SupervisorAgent(self.inference_engine)
     
     def create_unit_testing_agent(self):
         if not self._model_loaded:

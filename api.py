@@ -74,7 +74,6 @@ async def root():
         "inference_backend": "MLX",
     }
 
-
 @app.get("/info")
 async def get_info():
     return {
@@ -117,7 +116,6 @@ async def invoke_orchestration(request: AgentRequest):
             status_code=500,
             detail=f"Orchestration failed: {str(e)}"
         )
-
 
 @app.get("/domains")
 async def list_domains():
