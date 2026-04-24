@@ -7,7 +7,6 @@ from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.software_dev import build_software_dev_graph
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 
-
 def build_orchestration_graph(factory: MLXAgentFactory = None):
     """Build the supervisor-driven orchestration graph."""
 
@@ -22,23 +21,25 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
     graph = StateGraph(AgentState)
 
     def supervisor_node(state: AgentState) -> AgentState:
-        domain = supervisor.invoke(user_input=state.user_input)
-        state.selected_domain = domain
+        decision = supervisor.invoke(user_input=state.user_input)
+        state.selected_domain = decision.get("primary_domain", "software_dev")
+        state.execution_domains = decision.get("execution_domains", [state.selected_domain])
+        state.split_tasks = decision.get("split_tasks", {})
         return state
 
     def software_dev_router(state: AgentState) -> AgentState:
-        result = software_dev_graph.invoke(state.model_dump())
+        dev_state = state.model_dump()
+        if state.split_tasks.get("software_dev"):
+            dev_state["user_input"] = state.split_tasks["software_dev"]
+        result = software_dev_graph.invoke(dev_state)
         return AgentState(**result)
 
     def reverse_engineering_router(state: AgentState) -> AgentState:
-        result = reverse_eng_graph.invoke(state.model_dump())
+        re_state = state.model_dump()
+        if state.split_tasks.get("reverse_engineering"):
+            re_state["user_input"] = state.split_tasks["reverse_engineering"]
+        result = reverse_eng_graph.invoke(re_state)
         return AgentState(**result)
-
-    def both_router(state: AgentState) -> AgentState:
-        dev_result = software_dev_graph.invoke(state.model_dump())
-        merged_state = AgentState(**dev_result)
-        re_result = reverse_eng_graph.invoke(merged_state.model_dump())
-        return AgentState(**re_result)
 
     def final_synthesis(state: AgentState) -> AgentState:
         dev_output = state.branch_outputs.get("software_dev")
@@ -69,16 +70,31 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
         return state
 
     def route_to_domain(state: AgentState) -> str:
-        if state.selected_domain == "software_dev":
-            return "software_dev"
-        if state.selected_domain == "reverse_engineering":
+        domains = state.execution_domains or ([state.selected_domain] if state.selected_domain else ["software_dev"])
+        first_domain = domains[0]
+        if first_domain == "reverse_engineering":
             return "reverse_engineering"
-        return "both"
+        return "software_dev"
+
+    def route_after_software_dev(state: AgentState) -> str:
+        domains = state.execution_domains or ["software_dev"]
+        should_run_re = "reverse_engineering" in domains
+        re_already_run = "reverse_engineering" in state.branch_outputs
+        if should_run_re and not re_already_run:
+            return "reverse_engineering"
+        return "final_synthesis"
+
+    def route_after_reverse_engineering(state: AgentState) -> str:
+        domains = state.execution_domains or ["reverse_engineering"]
+        should_run_dev = "software_dev" in domains
+        dev_already_run = "software_dev" in state.branch_outputs
+        if should_run_dev and not dev_already_run:
+            return "software_dev"
+        return "final_synthesis"
 
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("software_dev", software_dev_router)
     graph.add_node("reverse_engineering", reverse_engineering_router)
-    graph.add_node("both", both_router)
     graph.add_node("final_synthesis", final_synthesis)
 
     graph.add_conditional_edges(
@@ -87,13 +103,25 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
         {
             "software_dev": "software_dev",
             "reverse_engineering": "reverse_engineering",
-            "both": "both",
         },
     )
 
-    graph.add_edge("software_dev", "final_synthesis")
-    graph.add_edge("reverse_engineering", "final_synthesis")
-    graph.add_edge("both", "final_synthesis")
+    graph.add_conditional_edges(
+        "software_dev",
+        route_after_software_dev,
+        {
+            "reverse_engineering": "reverse_engineering",
+            "final_synthesis": "final_synthesis",
+        },
+    )
+    graph.add_conditional_edges(
+        "reverse_engineering",
+        route_after_reverse_engineering,
+        {
+            "software_dev": "software_dev",
+            "final_synthesis": "final_synthesis",
+        },
+    )
     graph.add_edge("final_synthesis", END)
 
     graph.set_entry_point("supervisor")

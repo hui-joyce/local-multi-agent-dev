@@ -8,15 +8,24 @@ including user input, retrieved context, and outputs from agents.
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
-
 class AgentState(BaseModel):
     user_input: str = Field(
         description="The original user request/query"
     )
     
-    selected_domain: Optional[Literal["software_dev", "reverse_engineering", "both"]] = Field(
+    selected_domain: Optional[Literal["software_dev", "reverse_engineering"]] = Field(
         default=None,
-        description="Domain selected by supervisor routing"
+        description="Primary domain selected by supervisor routing"
+    )
+
+    execution_domains: list[Literal["software_dev", "reverse_engineering"]] = Field(
+        default_factory=list,
+        description="Domain execution plan selected by supervisor"
+    )
+
+    split_tasks: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional domain-specific subtasks when request is split across domains"
     )
     
     retrieved_context: list[str] = Field(
@@ -29,9 +38,19 @@ class AgentState(BaseModel):
         description="Domain-specific context retrieved for software development branch"
     )
 
+    dev_task_plan: list[str] = Field(
+        default_factory=list,
+        description="LLM-selected execution plan for software development branch"
+    )
+
     re_context: list[str] = Field(
         default_factory=list,
         description="Domain-specific context retrieved for reverse engineering branch"
+    )
+
+    re_task_plan: list[str] = Field(
+        default_factory=list,
+        description="LLM-selected execution plan for reverse engineering branch"
     )
     
     intermediate_outputs: dict[str, str] = Field(

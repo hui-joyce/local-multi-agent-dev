@@ -4,9 +4,13 @@ Defines the subgraph for code generation, testing, and architectural review
 within the software development domain.
 """
 
+import json
+import re
+
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
+from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
 from langgraph_orchestration.core.state_utils import StateManager
 
@@ -23,10 +27,64 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     code_gen_agent = factory.create_code_generation_agent()
     test_agent = factory.create_unit_testing_agent()
     arch_agent = factory.create_architectural_review_agent()
+    inference_engine = factory.inference_engine
     retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
+
+    def _extract_json_block(raw_output: str) -> str:
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?", "", cleaned).strip()
+            cleaned = re.sub(r"```$", "", cleaned).strip()
+        return cleaned
+
+    def _select_dev_task_plan(user_input: str) -> list[str]:
+        allowed = ["code_generation", "unit_testing", "architectural_review"]
+        if inference_engine is None:
+            return ["code_generation"]
+
+        prompt = inference_engine.build_prompt(
+            user_input=(
+                "Select only the required software development tasks for this request.\n"
+                f"Request: {user_input}\n\n"
+                "Allowed tasks:\n"
+                "- code_generation\n"
+                "- unit_testing\n"
+                "- architectural_review\n\n"
+                "Return strict JSON only: {\"steps\": [\"...\"]}.\n"
+                "Only include necessary tasks."
+            ),
+            context=None,
+            system_prompt="You are a precise task router. Return JSON only.",
+        )
+
+        try:
+            raw = inference_engine.generate(
+                prompt=prompt,
+                config=GenerationConfig(max_tokens=120, temperature=0.0),
+                stream=False,
+            )
+            parsed = json.loads(_extract_json_block(raw))
+            selected = parsed.get("steps", [])
+            if not isinstance(selected, list):
+                selected = []
+        except Exception:
+            selected = []
+
+        normalized = [step for step in allowed if step in selected]
+        if not normalized:
+            return ["code_generation"]
+        return normalized
+
+    def _next_step_from_plan(plan: list[str], current_step: str) -> str:
+        if current_step not in plan:
+            return "synthesize"
+        idx = plan.index(current_step)
+        if idx + 1 >= len(plan):
+            return "synthesize"
+        return plan[idx + 1]
 
     def retrieve_dev_context_node(state: AgentState) -> AgentState:
         context = retriever.retrieve(
@@ -35,6 +93,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
             domain="software_dev",
         )
         state.dev_context = context
+        state.dev_task_plan = _select_dev_task_plan(state.user_input)
         return StateManager.add_retrieved_context(state, context)
     
     # Define node functions
@@ -63,7 +122,8 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return not has_fail
     
     def unit_testing_node(state: AgentState) -> AgentState:
-        test_input = f"Code to test:\n{state.intermediate_outputs.get('code_generation', '')}"
+        code_target = state.intermediate_outputs.get("code_generation") or state.user_input
+        test_input = f"Code or component to test:\n{code_target}"
         output = test_agent.invoke(
             user_input=test_input,
             context=state.dev_context,
@@ -89,10 +149,19 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
 
     def route_after_testing(state: AgentState) -> str:
         if state.dev_test_passed:
-            return "architectural_review"
+            return _next_step_from_plan(state.dev_task_plan, "unit_testing")
         if state.dev_iteration < state.max_dev_iterations:
-            return "code_generation"
-        return "architectural_review"
+            if "code_generation" in state.dev_task_plan:
+                return "code_generation"
+        return _next_step_from_plan(state.dev_task_plan, "unit_testing")
+
+    def route_after_retrieve(state: AgentState) -> str:
+        if not state.dev_task_plan:
+            return "synthesize"
+        return state.dev_task_plan[0]
+
+    def route_after_codegen(state: AgentState) -> str:
+        return _next_step_from_plan(state.dev_task_plan, "code_generation")
     
     def synthesize_output(state: AgentState) -> AgentState:
         final = f"""# Software Development Analysis
@@ -104,8 +173,8 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
 {StateManager.format_agent_outputs(state)}
 
 ## Summary
-    Development workflow completed in {state.dev_iteration} attempt(s).
-    Latest test status: {'PASS' if state.dev_test_passed else 'FAIL'}.
+Development workflow completed in {state.dev_iteration} attempt(s).
+Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.
 """
         state.branch_outputs["software_dev"] = final
         state.agent_chain.append("software_dev_synthesize")
@@ -119,14 +188,32 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     graph.add_node("synthesize", synthesize_output)
     
     # Add edges
-    graph.add_edge("retrieve_dev_context", "code_generation")
-    graph.add_edge("code_generation", "unit_testing")
+    graph.add_conditional_edges(
+        "retrieve_dev_context",
+        route_after_retrieve,
+        {
+            "code_generation": "code_generation",
+            "unit_testing": "unit_testing",
+            "architectural_review": "architectural_review",
+            "synthesize": "synthesize",
+        },
+    )
+    graph.add_conditional_edges(
+        "code_generation",
+        route_after_codegen,
+        {
+            "unit_testing": "unit_testing",
+            "architectural_review": "architectural_review",
+            "synthesize": "synthesize",
+        },
+    )
     graph.add_conditional_edges(
         "unit_testing",
         route_after_testing,
         {
             "code_generation": "code_generation",
             "architectural_review": "architectural_review",
+            "synthesize": "synthesize",
         },
     )
     graph.add_edge("architectural_review", "synthesize")

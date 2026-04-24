@@ -56,7 +56,7 @@ app.add_middleware(
 # Request/Response models
 class AgentRequest(BaseModel):
     user_input: str
-    domain: Optional[str] = None  # "software_dev", "reverse_engineering", or "both"
+    domain: Optional[str] = None  # "software_dev" or "reverse_engineering"
 
 
 class AgentResponse(BaseModel):
@@ -73,7 +73,6 @@ async def root():
         "service": "Multi-Agent Orchestration",
         "inference_backend": "MLX",
     }
-
 
 @app.get("/info")
 async def get_info():
@@ -117,7 +116,6 @@ async def invoke_orchestration(request: AgentRequest):
             status_code=500,
             detail=f"Orchestration failed: {str(e)}"
         )
-
 
 @app.get("/domains")
 async def list_domains():
@@ -218,7 +216,7 @@ async def get_graph_schema():
                 },
                 "domain": {
                     "type": "string",
-                    "enum": ["software_dev", "reverse_engineering", "both"],
+                    "enum": ["software_dev", "reverse_engineering"],
                     "description": "Optional domain specification"
                 }
             },
