@@ -1,175 +1,131 @@
 # Local Multi-Agent Development System
 
-A production-ready **multi-agent AI orchestration system** featuring two specialized assistants: a **Software Development Assistant** and a **Reverse Engineering Assistant**. Built with LangGraph for intelligent agent coordination, Qdrant for RAG-enhanced context retrieval, and designed for local inference via MlX framework and Qwen 3.5 9B (4-bit quantized).
+A local-first, LangGraph-based multi-agent orchestration system with two specialized domains:
+- Software Development
+- Reverse Engineering
 
-## System Overview
+It uses an LLM-powered supervisor for dynamic routing, branch-specific retrieval, and structured synthesis across one or both branches.
 
-This system implements a **Supervisor-based multi-agent architecture** where:
-- A central **Supervisor Agent** routes incoming requests to the appropriate domain
-- Domain-specific **sub-agents** collaborate on specialized tasks
-- **RAG (Retrieval-Augmented Generation)** enriches agent responses with domain knowledge
-- All components are optimized for **local inference** 
+## Architecture
+![System Architecture](assets/system-architecture.png)
 
-### Two Specialized Domains
+LangGraph flow:
+![LangGraph Flow](assets/langgraph.png)
 
-**Software Development Assistant**
-- Code generation and implementation
-- Automated unit test creation
-- Architectural design review and best practices
+Software development branch:
 
-**Reverse Engineering Assistant**
-- Binary and assembly code analysis
-- Vulnerability detection and security assessment
-- Structured analysis planning for complex reverse engineering tasks
+1. `retrieve_dev_context`
+2. `code_generation`
+3. `unit_testing`
+4. Conditional loop:
+   - if tests fail and iteration limit not reached: back to `code_generation`
+   - else: continue
+5. `architectural_review`
+6. `synthesize`
 
-## System Architecture
-<img width="800" alt="Query" src="https://github.com/user-attachments/assets/5206b3ca-e97b-4b3e-aa65-5c9d80d09c08" />
+Reverse engineering branch:
 
----
+1. `retrieve_re_context`
+2. `planning`
+3. `code_analysis`
+4. `vulnerability_detection`
+5. `synthesize`
 
 ## Tech Stack
 
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| **Orchestration** | LangGraph | ≥0.0.1 |
-| **LLM Framework** | MLX-LM | 0.31.2|
-| **State Management** | Pydantic | ≥1.7 |
-| **Vector Database** | Qdrant | ≥1.0.0 |
-| **Local Model** | Qwen 3.5 9B (4-bit) | - |
-| **Language** | Python | 3.9+ |
+| Component | Technology |
+|---|---|
+| Orchestration | LangGraph |
+| LLM Inference | MLX + MLX-LM |
+| State Model | Pydantic |
+| Retrieval Layer | Qdrant Vector Database|
+| API | FastAPI |
+| Language | Python 3.9+ |
 
----
+## Installation
+
+```bash
+git clone https://github.com/yourusername/local-multi-agent-dev.git
+cd local-multi-agent-dev
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
 ## Quick Start
 
-### Prerequisites
-- Python 3.9 or higher
-- ~8GB RAM (for Qwen 3.5 9B 4-bit)
-- ~30GB disk space (model + vector database)
+Run examples:
 
-### Installation
+```bash
+source venv/bin/activate
+python3 examples.py
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/local-multi-agent-dev.git
-   cd local-multi-agent-dev
-   ```
+Run API server:
 
-2. **Setup Virtual Environment** (Choose one)
+```bash
+source venv/bin/activate
+python3 api.py
+```
 
-   **Option A: Automated (Recommended)**
-   ```bash
-   chmod +x setup-venv.sh
-   ./setup-venv.sh
-   ```
+API default address: `http://localhost:8000`
 
-   **Option B: Manual**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-3. **Verify Installation**
-   ```bash
-   python3 examples.py
-   ```
----
-
-## How to Use the System
-
-### Basic Usage
+## Basic Python Usage
 
 ```python
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 
-# Build the orchestration graph
 graph = build_orchestration_graph()
-
-# Create a request
-state = AgentState(user_input="Generate a Python sorting function")
-
-# Execute the graph
+state = AgentState(user_input="Generate a Python sorting function and assess security risks")
 result = graph.invoke(state.model_dump())
 
-# Access results
-print(f"Domain: {result['selected_domain']}")
-print(f"Agents executed: {result['agent_chain']}")
-print(f"Response:\n{result['final_output']}")
+print(result["selected_domain"])
+print(result["agent_chain"])
+print(result["final_output"])
 ```
 
-### Running the API Server
+## API Endpoints
 
-To expose your orchestration system as a REST API and monitor it with LangSmith:
+- `GET /` health check
+- `GET /info` service metadata
+- `GET /domains` available domains
+- `POST /invoke` run orchestration
+- `GET /graph` graph nodes and edges
+- `GET /graph/schema` runnable schema
+- `POST /langgraph` LangSmith-friendly invocation
 
-```bash
-# Install optional dependencies
-pip install fastapi uvicorn
-
-# Start the API server
-python3 api.py
-```
-
-The server will start on **http://localhost:8000**
-
-#### Available Endpoints
-
-- `GET /` - Health check
-- `GET /info` - Service information
-- `GET /domains` - List available agent domains
-- `POST /invoke` - Execute orchestration
-
-#### Example API Request
+Example request:
 
 ```bash
 curl -X POST http://localhost:8000/invoke \
   -H "Content-Type: application/json" \
-  -d '{"user_input": "Create a Python function to sort a list"}'
+  -d '{"user_input": "Implement an API auth flow and inspect it for vulnerabilities"}'
 ```
 
-#### Interactive API Documentation
+## Notes on Local Models
 
-Once the server is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+The project is configured for MLX-based local inference.
 
-#### Monitoring with LangSmith Studio
+If you see an error like `Model type qwen3_5 not supported`, your installed `mlx-lm` version likely does not support the selected checkpoint architecture. In that case:
 
-1. Start the API server with LangSmith enabled:
-   ```bash
-   # Make sure LANGSMITH_TRACING=true in .env
-   python3 api.py
-   ```
+1. Upgrade `mlx-lm` to a version that supports your model, or
+2. Switch to an MLX model repo compatible with your current `mlx-lm` install
 
-2. Open LangSmith: https://smith.langchain.com
+## Development
 
-3. Navigate to your project: **Projects → local-multi-agent-dev**
+Useful commands:
 
-4. Make API requests - traces will appear automatically:
-   ```bash
-   curl -X POST http://localhost:8000/invoke \
-     -H "Content-Type: application/json" \
-     -d '{"user_input": "Your query here"}'
-   ```
+```bash
+python3 -m compileall langgraph_orchestration api.py
+python3 test_graph_tracing.py
+```
 
-5. View the execution traces in LangSmith dashboard showing:
-   - Complete execution flow
-   - Domain routing decisions
-   - Agent execution details
-   - Token counts and latencies
-   - Input/output for each step
+## References
 
-## Documentation
+- LangGraph: https://langchain-ai.github.io/langgraph/
+- Pydantic: https://docs.pydantic.dev/
+- Qdrant: https://qdrant.tech/documentation/
 
----
-
-## Key Resources
-
-- **LangGraph Docs**: https://langchain-ai.github.io/langgraph/
-- **Pydantic Docs**: https://docs.pydantic.dev/
-- **Qdrant Docs**: https://qdrant.tech/documentation/
-- **Qwen Model**: https://github.com/QwenLM/Qwen
-
-**Last Updated**: April 2026
+Last updated: April 2026
