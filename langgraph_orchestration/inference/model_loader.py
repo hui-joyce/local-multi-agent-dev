@@ -4,7 +4,6 @@ from pathlib import Path
 
 
 class MLXModelLoader:
-    # Default model configurations
     DEFAULT_MODELS = {
         "qwen-3.5-9b": {
             "repo_id": "mlx-community/Qwen3.5-9B-MLX-4bit",
@@ -31,7 +30,6 @@ class MLXModelLoader:
                 f"Unknown model: {model_name}. "
                 f"Available: {list(self.DEFAULT_MODELS.keys())}"
             )
-        
         # Override quantization if specified
         if quantization:
             self.model_config["quantization"] = quantization
