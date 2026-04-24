@@ -1,0 +1,7 @@
+{
+  "graphs": {
+    "multi-agent-orchestration": "langgraph_orchestration.graphs.orchestration:build_orchestration_graph"
+  },
+  "dependencies": ["."],
+  "env": ".env"
+}

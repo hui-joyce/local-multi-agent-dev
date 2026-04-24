@@ -15,7 +15,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     Args:
         factory: MLXAgentFactory instance. If None, creates a new one.
     """
-    if factory is None:
+    if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
     
     # Initialize agents using factory
