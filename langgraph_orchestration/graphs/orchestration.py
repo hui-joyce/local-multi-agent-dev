@@ -32,7 +32,7 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
     """
     
     # Initialize components
-    if factory is None:
+    if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
     
     supervisor = SupervisorAgent()

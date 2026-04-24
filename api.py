@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     if os.getenv("LANGSMITH_TRACING", "false").lower() == "true":
         try:
             from langsmith import Client
-=            client = Client()
+            client = Client()
             print(f"✓ LangSmith connected to project: {os.getenv('LANGSMITH_PROJECT', 'default')}")
         except Exception as e:
             print(f"⚠ LangSmith warning: {e}")
