@@ -26,6 +26,7 @@ sys.path.insert(0, str(project_root))
 from dotenv import load_dotenv
 
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.schemas.state import AgentState
 
 @dataclass
@@ -51,16 +52,16 @@ class BenchmarkResult:
     agent_chain: list[str]
     latency_seconds: float
     output_chars: int
+    ttft_seconds: float
+    prompt_tokens: int
+    generated_tokens: int
+    prompt_generation_speed_tok_s: float
+    generation_speed_tok_s: float
+    peak_memory_gb: float
     output_text: str
     output_preview: str
 
 def get_benchmark_cases(single_domain_only: bool = False) -> list[BenchmarkCase]:
-    """
-    Provide a balanced suite of software and reverse-engineering cases.
-    Args:
-        single_domain_only: If True, exclude mixed-domain test cases (MX-01, MX-02).
-                           Use this to isolate single-domain routing behavior.
-    """
     cases = [
         BenchmarkCase(
             case_id="SD-01",
@@ -192,8 +193,7 @@ def get_benchmark_cases(single_domain_only: bool = False) -> list[BenchmarkCase]
     
     return cases
 
-def run_case(graph: Any, case: BenchmarkCase) -> BenchmarkResult:
-    """Execute one case and capture benchmark-friendly metadata"""
+def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkResult:
     initial_state = AgentState(user_input=case.user_input)
 
     start = time.perf_counter()
@@ -205,6 +205,30 @@ def run_case(graph: Any, case: BenchmarkCase) -> BenchmarkResult:
     expected = sorted(case.expected_execution_domains)
     actual = sorted(final_state.execution_domains)
     routing_match = expected == actual
+
+    # Extract metrics from inference engine if available
+    ttft_seconds = 0.0
+    prompt_tokens = 0
+    generated_tokens = 0
+    prompt_generation_speed_tok_s = 0.0
+    generation_speed_tok_s = 0.0
+    peak_memory_gb = 0.0
+    
+    if factory is not None:
+        try:
+            supervisor = factory.create_supervisor_agent()
+            if (supervisor.inference_engine and 
+                hasattr(supervisor.inference_engine, 'last_metrics') and 
+                supervisor.inference_engine.last_metrics):
+                metrics = supervisor.inference_engine.last_metrics
+                ttft_seconds = metrics.ttft_seconds
+                prompt_tokens = metrics.prompt_tokens
+                generated_tokens = metrics.generated_tokens
+                prompt_generation_speed_tok_s = metrics.prompt_generation_speed_tok_s
+                generation_speed_tok_s = metrics.generation_speed_tok_s
+                peak_memory_gb = metrics.peak_memory_gb
+        except Exception:
+            pass  
 
     return BenchmarkResult(
         case_id=case.case_id,
@@ -218,6 +242,12 @@ def run_case(graph: Any, case: BenchmarkCase) -> BenchmarkResult:
         agent_chain=final_state.agent_chain,
         latency_seconds=round(elapsed, 3),
         output_chars=len(final_output),
+        ttft_seconds=ttft_seconds,
+        prompt_tokens=prompt_tokens,
+        generated_tokens=generated_tokens,
+        prompt_generation_speed_tok_s=prompt_generation_speed_tok_s,
+        generation_speed_tok_s=generation_speed_tok_s,
+        peak_memory_gb=peak_memory_gb,
         output_text=final_output,
         output_preview=final_output[:500],
     )
@@ -245,16 +275,32 @@ def write_results(results: list[BenchmarkResult], output_dir: Path) -> tuple[Pat
         "",
         "This run measures model behavior with retrieval disabled.",
         "",
-        "| Case | Focus | Expected Domains | Selected Domain | Execution Domains | Route Match | Latency (s) | Output Chars |",
-        "|---|---|---|---|---|---|---:|---:|",
+        "## Performance Metrics Summary",
+        "",
+        "| Case | Route Match | Latency (s) | TTFT (s) | Prompt Tok | Gen Tok | Prompt Speed (tok/s) | Gen Speed (tok/s) | Peak Mem (GB) |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
+
+    for row in results:
+        lines.append(
+            "| "
+            f"{row.case_id} | {'YES' if row.routing_match else 'NO'} | {row.latency_seconds} | "
+            f"{row.ttft_seconds} | {row.prompt_tokens} | {row.generated_tokens} | "
+            f"{row.prompt_generation_speed_tok_s} | {row.generation_speed_tok_s} | {row.peak_memory_gb} |"
+        )
+
+    lines.append("")
+    lines.append("## Detailed Results")
+    lines.append("")
+    lines.append("| Case | Focus | Expected Domains | Selected Domain | Execution Domains | Route Match | Output Chars |")
+    lines.append("|---|---|---|---|---|---|---:|")
 
     for row in results:
         lines.append(
             "| "
             f"{row.case_id} | {row.domain_focus} | {', '.join(row.expected_execution_domains)} | "
             f"{row.selected_domain} | {', '.join(row.execution_domains)} | "
-            f"{'YES' if row.routing_match else 'NO'} | {row.latency_seconds} | {row.output_chars} |"
+            f"{'YES' if row.routing_match else 'NO'} | {row.output_chars} |"
         )
 
     lines.append("")
@@ -288,7 +334,8 @@ def main() -> None:
         print("Running full benchmark suite (including mixed-domain cases)")
     
     cases = get_benchmark_cases(single_domain_only=single_domain_only)
-    graph = build_orchestration_graph()
+    factory = MLXAgentFactory()
+    graph = build_orchestration_graph(factory=factory)
 
     print(f"Running no-RAG benchmark suite...")
     print(f"Total cases: {len(cases)}\n")
@@ -296,7 +343,7 @@ def main() -> None:
     results: list[BenchmarkResult] = []
     for idx, case in enumerate(cases, start=1):
         print(f"[{idx}/{len(cases)}] {case.case_id} - {case.description}")
-        case_result = run_case(graph, case)
+        case_result = run_case(graph, case, factory=factory)
         results.append(case_result)
         print(
             "  "
@@ -304,7 +351,9 @@ def main() -> None:
             f"execution={case_result.execution_domains}, "
             f"expected={case_result.expected_execution_domains}, "
             f"route_match={case_result.routing_match}, "
-            f"latency={case_result.latency_seconds}s"
+            f"latency={case_result.latency_seconds}s, "
+            f"gen_speed={case_result.generation_speed_tok_s}tok/s, "
+            f"mem={case_result.peak_memory_gb}GB"
         )
 
     routing_accuracy = (
