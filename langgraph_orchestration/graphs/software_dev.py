@@ -13,6 +13,14 @@ from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
 from langgraph_orchestration.core.state_utils import StateManager
+from langgraph_orchestration.prompts.software_dev import (
+    SOFTWARE_DEV_TASKS,
+    ROUTER_SYSTEM_PROMPT,
+    build_dev_task_router_prompt,
+    build_code_generation_prompt,
+    build_unit_testing_prompt,
+    build_architectural_review_prompt,
+)
 
 
 def build_software_dev_graph(factory: MLXAgentFactory = None):
@@ -28,7 +36,8 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     test_agent = factory.create_unit_testing_agent()
     arch_agent = factory.create_architectural_review_agent()
     inference_engine = factory.inference_engine
-    retriever = QdrantRetriever()
+    # RAG disabled for no-RAG benchmark runs.
+    # retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
@@ -41,23 +50,13 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return cleaned
 
     def _select_dev_task_plan(user_input: str) -> list[str]:
-        allowed = ["code_generation", "unit_testing", "architectural_review"]
         if inference_engine is None:
             return ["code_generation"]
 
         prompt = inference_engine.build_prompt(
-            user_input=(
-                "Select only the required software development tasks for this request.\n"
-                f"Request: {user_input}\n\n"
-                "Allowed tasks:\n"
-                "- code_generation\n"
-                "- unit_testing\n"
-                "- architectural_review\n\n"
-                "Return strict JSON only: {\"steps\": [\"...\"]}.\n"
-                "Only include necessary tasks."
-            ),
+            user_input=build_dev_task_router_prompt(user_input),
             context=None,
-            system_prompt="You are a precise task router. Return JSON only.",
+            system_prompt=ROUTER_SYSTEM_PROMPT,
         )
 
         try:
@@ -73,7 +72,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         except Exception:
             selected = []
 
-        normalized = [step for step in allowed if step in selected]
+        normalized = [step for step in SOFTWARE_DEV_TASKS if step in selected]
         if not normalized:
             return ["code_generation"]
         return normalized
@@ -87,11 +86,13 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_dev_context_node(state: AgentState) -> AgentState:
-        context = retriever.retrieve(
-            query=state.user_input,
-            top_k=5,
-            domain="software_dev",
-        )
+        # RAG retrieval intentionally commented out for baseline LLM-only testing
+        # context = retriever.retrieve(
+        #     query=state.user_input,
+        #     top_k=5,
+        #     domain="software_dev",
+        # )
+        context = []
         state.dev_context = context
         state.dev_task_plan = _select_dev_task_plan(state.user_input)
         return StateManager.add_retrieved_context(state, context)
@@ -100,7 +101,10 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     def code_generation_node(state: AgentState) -> AgentState:
         state.dev_iteration += 1
         output = code_gen_agent.invoke(
-            user_input=f"{state.user_input}\n\nGeneration attempt: {state.dev_iteration}",
+            user_input=build_code_generation_prompt(
+                user_input=state.user_input,
+                attempt=state.dev_iteration,
+            ),
             context=state.dev_context,
         )
         return StateManager.add_intermediate_output(
@@ -123,9 +127,8 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     
     def unit_testing_node(state: AgentState) -> AgentState:
         code_target = state.intermediate_outputs.get("code_generation") or state.user_input
-        test_input = f"Code or component to test:\n{code_target}"
         output = test_agent.invoke(
-            user_input=test_input,
+            user_input=build_unit_testing_prompt(code_target),
             context=state.dev_context,
         )
         state.dev_test_passed = _tests_passed(output)
@@ -136,9 +139,11 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         )
     
     def architectural_review_node(state: AgentState) -> AgentState:
-        review_input = f"Code and tests generated:\n{StateManager.format_agent_outputs(state)}"
         output = arch_agent.invoke(
-            user_input=review_input,
+            user_input=build_architectural_review_prompt(
+                user_request=state.user_input,
+                combined_outputs=StateManager.format_agent_outputs(state),
+            ),
             context=state.dev_context,
         )
         return StateManager.add_intermediate_output(

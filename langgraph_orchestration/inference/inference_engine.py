@@ -1,3 +1,4 @@
+import time
 from typing import Optional, Iterator, Union
 from dataclasses import dataclass
 
@@ -19,6 +20,17 @@ class GenerationConfig:
             "repeat_penalty": self.repeat_penalty,
         }
 
+@dataclass
+class GenerationMetrics:
+    """Metrics captured during text generation"""
+    ttft_seconds: float  # Time to first token
+    prompt_tokens: int
+    generated_tokens: int
+    prompt_generation_speed_tok_s: float  # tokens/second for prompt building
+    generation_speed_tok_s: float  # tokens/second for generation
+    # peak_memory_gb: float
+    total_generation_seconds: float
+
 class MLXInferenceEngine:
     """    
     Features:
@@ -27,13 +39,17 @@ class MLXInferenceEngine:
     - Token counting and management
     - Prompt formatting with RAG context
     - System role and conversation history support
+    - Detailed metrics: TTFT, prompt/generation speeds
     """
     
     # Default system prompt for agents
     DEFAULT_SYSTEM_PROMPT = (
         "You are a specialized AI assistant. "
         "Provide concise, actionable responses. "
-        "Use provided context to inform your answers."
+        "Use provided context to inform your answers. "
+        # Disable thinking for benchmarking
+        "Do not use extended thinking or <think> tags. "
+        "Respond directly without internal reasoning tags."
     )
     
     def __init__(
@@ -45,6 +61,100 @@ class MLXInferenceEngine:
         self.model = model
         self.tokenizer = tokenizer
         self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
+        self.last_metrics: Optional[GenerationMetrics] = None
+    
+    # def _get_memory_usage_gb(self) -> float:
+    #     """Get current memory usage in GB (works with MLX on Apple Silicon)."""
+    #     try:
+    #         import psutil
+    #         process = psutil.Process()
+    #         # Get resident set size (RSS) (actual physical memory used)
+    #         rss_bytes = process.memory_info().rss
+    #         return rss_bytes / 1e9
+    #     except ImportError:
+    #         # MLX-specific memory as fallback
+    #         try:
+    #             import mlx.core as mx
+    #             if hasattr(mx, 'metal'):
+    #                 try:
+    #                     stats = mx.metal.mem_stats()
+    #                     if isinstance(stats, dict) and 'peak_memory' in stats:
+    #                         return stats['peak_memory'] / 1e9
+    #                 except (AttributeError, KeyError, TypeError):
+    #                     pass
+    #         except Exception:
+    #             pass
+    #         return 0.0
+    #     except Exception:
+    #         return 0.0
+    
+    def generate_with_metrics(
+        self,
+        prompt: str,
+        config: Optional[GenerationConfig] = None,
+    ) -> tuple[str, GenerationMetrics]:
+        """Generate text and capture detailed metrics (TTFT, speeds)"""
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError("Model not loaded. Call load() first.")
+        
+        config = config or GenerationConfig()
+        
+        try:
+            import mlx.core as mx
+            from mlx_lm import generate
+        except ImportError as e:
+            raise RuntimeError(
+                "MLX not available. Install with: pip install -r requirements.txt"
+            ) from e
+        
+        try:
+            # Measure actual tokenization time for prompt
+            tokenize_start = time.time()
+            prompt_tokens = self.count_tokens(prompt)
+            tokenize_end = time.time()
+            prompt_tokenization_time = tokenize_end - tokenize_start
+            
+            # Calculate prompt generation speed (tokens per second)
+            prompt_generation_speed = prompt_tokens / prompt_tokenization_time if prompt_tokenization_time > 0 else 0
+            
+            # Time the text generation
+            gen_start = time.time()
+            
+            generated_text = generate(
+                self.model,
+                self.tokenizer,
+                prompt=prompt,
+                max_tokens=config.max_tokens,
+                verbose=False,
+            )
+            
+            gen_end = time.time()
+            total_gen_time = gen_end - gen_start
+            
+            # Count generated tokens
+            generated_tokens = self.count_tokens(generated_text)
+            
+            # Estimate TTFT from total time and token count
+            # For non-streaming - estimate based on average generation speed
+            ttft = total_gen_time / max(generated_tokens, 1) if generated_tokens > 0 else total_gen_time
+            
+            # Calculate generation speed
+            generation_speed = generated_tokens / total_gen_time if total_gen_time > 0 else 0
+            
+            metrics = GenerationMetrics(
+                ttft_seconds=round(ttft, 4),
+                prompt_tokens=prompt_tokens,
+                generated_tokens=generated_tokens,
+                prompt_generation_speed_tok_s=round(prompt_generation_speed, 2),
+                generation_speed_tok_s=round(generation_speed, 2),
+                total_generation_seconds=round(total_gen_time, 3),
+            )
+            
+            self.last_metrics = metrics
+            return generated_text, metrics
+        
+        except Exception as e:
+            raise RuntimeError(f"Generation failed: {str(e)}") from e
     
     def generate(
         self,
@@ -52,7 +162,6 @@ class MLXInferenceEngine:
         config: Optional[GenerationConfig] = None,
         stream: bool = False,
     ) -> Union[str, Iterator[str]]:
-        """Generate text using the model."""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded. Call load() first.")
         
@@ -141,7 +250,7 @@ class MLXInferenceEngine:
         return len(tokens)
     
     def get_model_info(self) -> dict:
-        """Get information about the loaded model."""
+        """Get information about the loaded model"""
         return {
             "has_model": self.model is not None,
             "has_tokenizer": self.tokenizer is not None,

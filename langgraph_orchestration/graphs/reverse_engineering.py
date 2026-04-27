@@ -13,6 +13,14 @@ from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
 from langgraph_orchestration.core.state_utils import StateManager
+from langgraph_orchestration.prompts.reverse_engineering import (
+    REVERSE_ENGINEERING_TASKS,
+    ROUTER_SYSTEM_PROMPT,
+    build_re_task_router_prompt,
+    build_planning_prompt,
+    build_code_analysis_prompt,
+    build_vulnerability_detection_prompt,
+)
 
 
 def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
@@ -28,7 +36,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     analysis_agent = factory.create_code_analysis_agent()
     vuln_agent = factory.create_vulnerability_detection_agent()
     inference_engine = factory.inference_engine
-    retriever = QdrantRetriever()
+    # RAG disabled for no-RAG benchmark runs
+    # retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
@@ -41,23 +50,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return cleaned
 
     def _select_re_task_plan(user_input: str) -> list[str]:
-        allowed = ["planning", "code_analysis", "vulnerability_detection"]
         if inference_engine is None:
             return ["code_analysis"]
 
         prompt = inference_engine.build_prompt(
-            user_input=(
-                "Select only the required reverse engineering tasks for this request.\n"
-                f"Request: {user_input}\n\n"
-                "Allowed tasks:\n"
-                "- planning\n"
-                "- code_analysis\n"
-                "- vulnerability_detection\n\n"
-                "Return strict JSON only: {\"steps\": [\"...\"]}.\n"
-                "Only include necessary tasks."
-            ),
+            user_input=build_re_task_router_prompt(user_input),
             context=None,
-            system_prompt="You are a precise task router. Return JSON only.",
+            system_prompt=ROUTER_SYSTEM_PROMPT,
         )
 
         try:
@@ -73,7 +72,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         except Exception:
             selected = []
 
-        normalized = [step for step in allowed if step in selected]
+        normalized = [step for step in REVERSE_ENGINEERING_TASKS if step in selected]
         if not normalized:
             return ["code_analysis"]
         return normalized
@@ -87,11 +86,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
-        context = retriever.retrieve(
-            query=state.user_input,
-            top_k=5,
-            domain="reverse_engineering",
-        )
+        # RAG retrieval intentionally commented out for baseline LLM-only testing.
+        # context = retriever.retrieve(
+        #     query=state.user_input,
+        #     top_k=5,
+        #     domain="reverse_engineering",
+        # )
+        context = []
         state.re_context = context
         state.re_task_plan = _select_re_task_plan(state.user_input)
         return StateManager.add_retrieved_context(state, context)
@@ -99,7 +100,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     # Define node functions
     def planning_node(state: AgentState) -> AgentState:
         plan = planning_agent.invoke(
-            user_input=state.user_input,
+            user_input=build_planning_prompt(state.user_input),
             context=state.re_context,
         )
         return StateManager.add_intermediate_output(
@@ -110,16 +111,11 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     
     def code_analysis_node(state: AgentState) -> AgentState:
         planning_output = state.intermediate_outputs.get("planning", "")
-        if planning_output:
-            analysis_input = f"""Based on this plan:
-    {planning_output}
-
-    Now analyze: {state.user_input}"""
-        else:
-            analysis_input = f"Analyze this target directly:\n{state.user_input}"
-        
         output = analysis_agent.invoke(
-            user_input=analysis_input,
+            user_input=build_code_analysis_prompt(
+                user_input=state.user_input,
+                planning_output=planning_output,
+            ),
             context=state.re_context,
         )
         return StateManager.add_intermediate_output(
@@ -130,16 +126,11 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     
     def vulnerability_detection_node(state: AgentState) -> AgentState:
         analysis_output = state.intermediate_outputs.get("code_analysis", "")
-        if analysis_output:
-            vuln_input = f"""Based on this analysis:
-    {analysis_output}
-
-    Perform vulnerability assessment for: {state.user_input}"""
-        else:
-            vuln_input = f"Perform vulnerability assessment for: {state.user_input}"
-        
         output = vuln_agent.invoke(
-            user_input=vuln_input,
+            user_input=build_vulnerability_detection_prompt(
+                user_input=state.user_input,
+                analysis_output=analysis_output,
+            ),
             context=state.re_context,
         )
         return StateManager.add_intermediate_output(

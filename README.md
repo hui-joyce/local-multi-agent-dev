@@ -122,6 +122,23 @@ python3 -m compileall langgraph_orchestration api.py
 python3 test_graph_tracing.py
 ```
 
+## No-RAG Benchmark Harness
+
+This project now includes a baseline test harness for measuring LLM behavior
+with retrieval disabled (no RAG, no fine-tuning).
+
+Run benchmark suite:
+
+```bash
+source venv/bin/activate
+python3 benchmarks/no_rag_harness.py
+```
+
+Optional output directory override:
+```bash
+NO_RAG_RESULTS_DIR=benchmarks/results python3 benchmarks/no_rag_harness.py
+```
+
 ## References
 
 - LangGraph: https://langchain-ai.github.io/langgraph/

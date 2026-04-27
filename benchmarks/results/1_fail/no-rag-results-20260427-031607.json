@@ -1,0 +1,141 @@
+{
+  "run_type": "no_rag_baseline",
+  "generated_at_utc": "2026-04-27T03:16:07.414658+00:00",
+  "total_cases": 6,
+  "results": [
+    {
+      "case_id": "SD-01",
+      "domain_focus": "software_dev",
+      "expected_execution_domains": [
+        "software_dev"
+      ],
+      "description": "Feature implementation request with expected test generation.",
+      "user_input": "Implement a Python rate limiter using token bucket logic and include unit tests for burst and refill behavior.",
+      "selected_domain": "software_dev",
+      "execution_domains": [
+        "software_dev"
+      ],
+      "routing_match": true,
+      "agent_chain": [
+        "code_generation",
+        "software_dev_synthesize",
+        "final_synthesis"
+      ],
+      "latency_seconds": 106.614,
+      "output_chars": 10779,
+      "output_preview": "# Software Development Analysis\n\n## User Request\nImplement a Python rate limiter using token bucket logic and include unit tests for burst and refill behavior.\n\n## Generated Solutions\n\n## CODE_GENERATION\n\n<think>\n\n</think>\n\nHere is a production-ready, thread-safe implementation of a Token Bucket rate limiter in Python, along with comprehensive unit tests.\n\n### Assumptions\n1.  **Concurrency**: The implementation assumes a multi-threaded environment. Therefore, the `TokenBucket` class uses a `thre"
+    },
+    {
+      "case_id": "SD-02",
+      "domain_focus": "software_dev",
+      "expected_execution_domains": [
+        "software_dev"
+      ],
+      "description": "Architecture-oriented backend service design prompt.",
+      "user_input": "Design and implement a minimal FastAPI service for project tasks with clear module boundaries and architectural rationale.",
+      "selected_domain": "software_dev",
+      "execution_domains": [
+        "software_dev"
+      ],
+      "routing_match": true,
+      "agent_chain": [
+        "code_generation",
+        "software_dev_synthesize",
+        "final_synthesis"
+      ],
+      "latency_seconds": 111.186,
+      "output_chars": 10611,
+      "output_preview": "# Software Development Analysis\n\n## User Request\nDesign and implement a minimal FastAPI service for project tasks with clear module boundaries and architectural rationale.\n\n## Generated Solutions\n\n## CODE_GENERATION\n\n<think>\n\n</think>\n\nHere is a production-ready, minimal FastAPI service for managing project tasks.\n\n### Architectural Rationale & Assumptions\n\n1.  **Architecture Pattern**: **Layered Architecture (Thin)**.\n    *   **Rationale**: For a \"minimal\" service, we avoid over-engineering wit"
+    },
+    {
+      "case_id": "RE-01",
+      "domain_focus": "reverse_engineering",
+      "expected_execution_domains": [
+        "reverse_engineering"
+      ],
+      "description": "Code-behavior reconstruction request.",
+      "user_input": "Reverse engineer this pseudo-code behavior and explain likely intent, state transitions, and hidden assumptions.",
+      "selected_domain": "software_dev",
+      "execution_domains": [
+        "software_dev"
+      ],
+      "routing_match": false,
+      "agent_chain": [
+        "code_generation",
+        "software_dev_synthesize",
+        "final_synthesis"
+      ],
+      "latency_seconds": 22.435,
+      "output_chars": 841,
+      "output_preview": "# Software Development Analysis\n\n## User Request\nReverse engineer this pseudo-code behavior and explain likely intent, state transitions, and hidden assumptions.\n\n## Generated Solutions\n\n## CODE_GENERATION\n\n<think>\n\n</think>\n\nSince you did not provide the specific pseudo-code to reverse engineer, I cannot generate the implementation yet.\n\nHowever, to ensure we get the correct result on the next attempt, please **paste the pseudo-code snippet** you are referring to.\n\nOnce provided, I will:\n1.  **"
+    },
+    {
+      "case_id": "RE-02",
+      "domain_focus": "reverse_engineering",
+      "expected_execution_domains": [
+        "reverse_engineering"
+      ],
+      "description": "Security-oriented binary triage request.",
+      "user_input": "Analyze a decompiled parser routine for memory safety risks and identify potential exploit paths with mitigation guidance.",
+      "selected_domain": "software_dev",
+      "execution_domains": [
+        "software_dev"
+      ],
+      "routing_match": false,
+      "agent_chain": [
+        "code_generation",
+        "software_dev_synthesize",
+        "final_synthesis"
+      ],
+      "latency_seconds": 142.587,
+      "output_chars": 15051,
+      "output_preview": "# Software Development Analysis\n\n## User Request\nAnalyze a decompiled parser routine for memory safety risks and identify potential exploit paths with mitigation guidance.\n\n## Generated Solutions\n\n## CODE_GENERATION\n\n<think>\n\n</think>\n\nSince you did not provide the specific decompiled parser routine code, I cannot perform the specific analysis on your target. However, I can provide a **production-ready Python framework** designed to automate the static analysis of decompiled parser routines (e.g"
+    },
+    {
+      "case_id": "MX-01",
+      "domain_focus": "mixed",
+      "expected_execution_domains": [
+        "software_dev",
+        "reverse_engineering"
+      ],
+      "description": "Cross-domain request requiring implementation plus security review.",
+      "user_input": "Build a secure file upload handler in Python, then assess its design and implementation for reverse-engineering and vulnerability concerns.",
+      "selected_domain": "software_dev",
+      "execution_domains": [
+        "software_dev"
+      ],
+      "routing_match": false,
+      "agent_chain": [
+        "code_generation",
+        "software_dev_synthesize",
+        "final_synthesis"
+      ],
+      "latency_seconds": 167.423,
+      "output_chars": 11162,
+      "output_preview": "# Software Development Analysis\n\n## User Request\nBuild a secure file upload handler in Python, then assess its design and implementation for reverse-engineering and vulnerability concerns.\n\n## Generated Solutions\n\n## CODE_GENERATION\n\n<think>\n\n</think>\n\nHere is a production-ready, secure file upload handler implemented in Python using the `Flask` framework and `werkzeug`. Following the code, I have provided a design assessment focusing on reverse-engineering risks and vulnerability concerns.\n\n###"
+    },
+    {
+      "case_id": "MX-02",
+      "domain_focus": "mixed",
+      "expected_execution_domains": [
+        "software_dev",
+        "reverse_engineering"
+      ],
+      "description": "Documentation generation plus threat assessment behavior check.",
+      "user_input": "Generate code documentation for an authentication module and then perform a vulnerability-oriented reverse engineering assessment of its flow.",
+      "selected_domain": "software_dev",
+      "execution_domains": [
+        "software_dev"
+      ],
+      "routing_match": false,
+      "agent_chain": [
+        "code_generation",
+        "software_dev_synthesize",
+        "final_synthesis"
+      ],
+      "latency_seconds": 137.16,
+      "output_chars": 14979,
+      "output_preview": "# Software Development Analysis\n\n## User Request\nGenerate code documentation for an authentication module and then perform a vulnerability-oriented reverse engineering assessment of its flow.\n\n## Generated Solutions\n\n## CODE_GENERATION\n\n<think>\n\n</think>\n\nSince you did not provide the specific source code for the authentication module, I cannot perform a reverse engineering assessment on a non-existent artifact.\n\nHowever, to fulfill your request for **implementation-ready code** and a **vulnerab"
+    }
+  ]
+}
