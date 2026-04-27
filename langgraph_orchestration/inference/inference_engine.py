@@ -1,5 +1,4 @@
 import time
-import threading
 from typing import Optional, Iterator, Union
 from dataclasses import dataclass
 
@@ -29,7 +28,7 @@ class GenerationMetrics:
     generated_tokens: int
     prompt_generation_speed_tok_s: float  # tokens/second for prompt building
     generation_speed_tok_s: float  # tokens/second for generation
-    peak_memory_gb: float
+    # peak_memory_gb: float
     total_generation_seconds: float
 
 class MLXInferenceEngine:
@@ -40,7 +39,7 @@ class MLXInferenceEngine:
     - Token counting and management
     - Prompt formatting with RAG context
     - System role and conversation history support
-    - Detailed metrics: TTFT, generation speed, memory usage
+    - Detailed metrics: TTFT, prompt/generation speeds
     """
     
     # Default system prompt for agents
@@ -61,37 +60,37 @@ class MLXInferenceEngine:
         self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
         self.last_metrics: Optional[GenerationMetrics] = None
     
-    def _get_memory_usage_gb(self) -> float:
-        """Get current memory usage in GB (works with MLX on Apple Silicon)."""
-        try:
-            import psutil
-            process = psutil.Process()
-            # Get resident set size (RSS) (actual physical memory used)
-            rss_bytes = process.memory_info().rss
-            return rss_bytes / 1e9
-        except ImportError:
-            # MLX-specific memory as fallback
-            try:
-                import mlx.core as mx
-                if hasattr(mx, 'metal'):
-                    try:
-                        stats = mx.metal.mem_stats()
-                        if isinstance(stats, dict) and 'peak_memory' in stats:
-                            return stats['peak_memory'] / 1e9
-                    except (AttributeError, KeyError, TypeError):
-                        pass
-            except Exception:
-                pass
-            return 0.0
-        except Exception:
-            return 0.0
+    # def _get_memory_usage_gb(self) -> float:
+    #     """Get current memory usage in GB (works with MLX on Apple Silicon)."""
+    #     try:
+    #         import psutil
+    #         process = psutil.Process()
+    #         # Get resident set size (RSS) (actual physical memory used)
+    #         rss_bytes = process.memory_info().rss
+    #         return rss_bytes / 1e9
+    #     except ImportError:
+    #         # MLX-specific memory as fallback
+    #         try:
+    #             import mlx.core as mx
+    #             if hasattr(mx, 'metal'):
+    #                 try:
+    #                     stats = mx.metal.mem_stats()
+    #                     if isinstance(stats, dict) and 'peak_memory' in stats:
+    #                         return stats['peak_memory'] / 1e9
+    #                 except (AttributeError, KeyError, TypeError):
+    #                     pass
+    #         except Exception:
+    #             pass
+    #         return 0.0
+    #     except Exception:
+    #         return 0.0
     
     def generate_with_metrics(
         self,
         prompt: str,
         config: Optional[GenerationConfig] = None,
     ) -> tuple[str, GenerationMetrics]:
-        """Generate text and capture detailed metrics (TTFT, speeds, memory)."""
+        """Generate text and capture detailed metrics (TTFT, speeds)"""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded. Call load() first.")
         
@@ -106,39 +105,25 @@ class MLXInferenceEngine:
             ) from e
         
         try:
-            # Count prompt tokens
+            # Measure actual tokenization time for prompt
+            tokenize_start = time.time()
             prompt_tokens = self.count_tokens(prompt)
+            tokenize_end = time.time()
+            prompt_tokenization_time = tokenize_end - tokenize_start
             
-            # Set up memory monitoring in background
-            peak_memory_gb = [self._get_memory_usage_gb()]  # Use list for thread-safe mutation
-            monitoring = [True]
+            # Calculate prompt generation speed (tokens per second)
+            prompt_generation_speed = prompt_tokens / prompt_tokenization_time if prompt_tokenization_time > 0 else 0
             
-            def monitor_memory():
-                """Background thread to continuously track peak memory."""
-                while monitoring[0]:
-                    current_mem = self._get_memory_usage_gb()
-                    peak_memory_gb[0] = max(peak_memory_gb[0], current_mem)
-                    time.sleep(0.1)  # Sample every 100ms
-            
-            # Start memory monitoring
-            mem_thread = threading.Thread(target=monitor_memory, daemon=True)
-            mem_thread.start()
-            
-            # Time the generation
+            # Time the text generation
             gen_start = time.time()
             
-            try:
-                generated_text = generate(
-                    self.model,
-                    self.tokenizer,
-                    prompt=prompt,
-                    max_tokens=config.max_tokens,
-                    verbose=False,
-                )
-            finally:
-                # Stop memory monitoring
-                monitoring[0] = False
-                mem_thread.join(timeout=1.0)
+            generated_text = generate(
+                self.model,
+                self.tokenizer,
+                prompt=prompt,
+                max_tokens=config.max_tokens,
+                verbose=False,
+            )
             
             gen_end = time.time()
             total_gen_time = gen_end - gen_start
@@ -150,17 +135,15 @@ class MLXInferenceEngine:
             # For non-streaming - estimate based on average generation speed
             ttft = total_gen_time / max(generated_tokens, 1) if generated_tokens > 0 else total_gen_time
             
-            # Calculate speeds
-            prompt_build_speed = prompt_tokens / 0.001 if prompt_tokens > 0 else 0  # Assume ~1ms to tokenize
+            # Calculate generation speed
             generation_speed = generated_tokens / total_gen_time if total_gen_time > 0 else 0
             
             metrics = GenerationMetrics(
                 ttft_seconds=round(ttft, 4),
                 prompt_tokens=prompt_tokens,
                 generated_tokens=generated_tokens,
-                prompt_generation_speed_tok_s=round(prompt_build_speed, 2),
+                prompt_generation_speed_tok_s=round(prompt_generation_speed, 2),
                 generation_speed_tok_s=round(generation_speed, 2),
-                peak_memory_gb=round(peak_memory_gb[0], 3),
                 total_generation_seconds=round(total_gen_time, 3),
             )
             
@@ -176,7 +159,6 @@ class MLXInferenceEngine:
         config: Optional[GenerationConfig] = None,
         stream: bool = False,
     ) -> Union[str, Iterator[str]]:
-        """Generate text using the model."""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded. Call load() first.")
         
@@ -265,7 +247,7 @@ class MLXInferenceEngine:
         return len(tokens)
     
     def get_model_info(self) -> dict:
-        """Get information about the loaded model."""
+        """Get information about the loaded model"""
         return {
             "has_model": self.model is not None,
             "has_tokenizer": self.tokenizer is not None,
