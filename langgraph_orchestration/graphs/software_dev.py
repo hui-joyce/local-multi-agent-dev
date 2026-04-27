@@ -36,7 +36,8 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     test_agent = factory.create_unit_testing_agent()
     arch_agent = factory.create_architectural_review_agent()
     inference_engine = factory.inference_engine
-    retriever = QdrantRetriever()
+    # RAG disabled for no-RAG benchmark runs.
+    # retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
@@ -85,11 +86,13 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_dev_context_node(state: AgentState) -> AgentState:
-        context = retriever.retrieve(
-            query=state.user_input,
-            top_k=5,
-            domain="software_dev",
-        )
+        # RAG retrieval intentionally commented out for baseline LLM-only testing
+        # context = retriever.retrieve(
+        #     query=state.user_input,
+        #     top_k=5,
+        #     domain="software_dev",
+        # )
+        context = []
         state.dev_context = context
         state.dev_task_plan = _select_dev_task_plan(state.user_input)
         return StateManager.add_retrieved_context(state, context)

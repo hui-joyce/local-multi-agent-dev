@@ -23,28 +23,28 @@ class SupervisorAgent(SyncBaseAgent):
             description="Routes user requests to software_dev and/or reverse_engineering",
         )
         self.inference_engine = inference_engine
+        self._decision_cache: dict[str, dict] = {}
 
     def _build_routing_prompt(self, user_input: str) -> str:
         system_prompt = (
             "You are a routing supervisor for a multi-agent system. "
-            "Decide whether to execute software_dev, reverse_engineering, or both domains. "
-            "There are only two valid domains: software_dev and reverse_engineering. "
-            "When both are needed, split the request into concise domain-specific subtasks. "
-            "Return strict JSON only with this schema: "
-            "{\"execution_domains\": [\"software_dev\", \"reverse_engineering\"], "
-            "\"primary_domain\": \"software_dev|reverse_engineering\", "
-            "\"split_tasks\": {\"software_dev\": \"...\", \"reverse_engineering\": \"...\"}, "
-            "\"rationale\": \"short reason\"}."
+            "Use intent-based routing with only two valid domains: software_dev and reverse_engineering. "
+            "Return strict JSON only."
         )
         return self.inference_engine.build_prompt(
             user_input=(
-                "Decide route for this request:\n"
+                "Task:\n"
                 f"{user_input}\n\n"
-                "Guidance:\n"
-                "- software_dev: implementation, testing, architecture, feature delivery\n"
-                "- reverse_engineering: analysis, security/vulnerability, binary/behavior understanding\n"
-                "- If both are needed, include both domains in execution_domains and split tasks clearly\n"
-                "Output strict JSON only."
+                "Classify using these steps:\n"
+                "1) Identify implementation intent (build/generate/test/design) -> software_dev\n"
+                "2) Identify analysis/security/decompilation intent -> reverse_engineering\n"
+                "3) If both intents are present, return both domains and split_tasks for each domain\n"
+                "4) If only one intent is present, return one domain only\n\n"
+                "Return strict JSON with schema:\n"
+                '{"execution_domains": ["software_dev"] | ["reverse_engineering"] | ["software_dev", "reverse_engineering"], '
+                '"primary_domain": "software_dev|reverse_engineering", '
+                '"split_tasks": {} | {"software_dev": "...", "reverse_engineering": "..."}, '
+                '"rationale": "short reason"}'
             ),
             context=None,
             system_prompt=system_prompt,
@@ -52,13 +52,8 @@ class SupervisorAgent(SyncBaseAgent):
 
     def _extract_decision(self, raw_output: str) -> Optional[dict]:
         cleaned = raw_output.strip()
-
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?", "", cleaned).strip()
-            cleaned = re.sub(r"```$", "", cleaned).strip()
-
-        try:
-            parsed = json.loads(cleaned)
+        parsed = self._parse_json_from_text(cleaned)
+        if parsed is not None:
             execution_domains = parsed.get("execution_domains", [])
             if not isinstance(execution_domains, list):
                 execution_domains = []
@@ -96,23 +91,6 @@ class SupervisorAgent(SyncBaseAgent):
                 "execution_domains": normalized_domains,
                 "split_tasks": normalized_split_tasks,
             }
-        except Exception:
-            pass
-
-        lowered = cleaned.lower()
-
-        matches = [
-            option
-            for option in self.DOMAIN_OPTIONS
-            if re.search(rf"\b{re.escape(option)}\b", lowered)
-        ]
-        matches = list(dict.fromkeys(matches))
-        if matches:
-            return {
-                "primary_domain": matches[0],
-                "execution_domains": matches,
-                "split_tasks": {},
-            }
 
         return None
     
@@ -121,26 +99,75 @@ class SupervisorAgent(SyncBaseAgent):
         user_input: str,
         context: Optional[list[str]] = None,
     ) -> dict:
+        if user_input in self._decision_cache:
+            return self._decision_cache[user_input]
+
         if self.inference_engine is None:
-            return {
+            decision = {
                 "primary_domain": "software_dev",
                 "execution_domains": ["software_dev"],
                 "split_tasks": {},
             }
+            self._decision_cache[user_input] = decision
+            return decision
 
         prompt = self._build_routing_prompt(user_input)
-        config = GenerationConfig(max_tokens=220, temperature=0.0)
+        config = GenerationConfig(max_tokens=140, temperature=0.0)
 
         try:
             output = self.inference_engine.generate(prompt=prompt, config=config, stream=False)
             decision = self._extract_decision(output)
             if decision is not None:
+                self._decision_cache[user_input] = decision
                 return decision
         except Exception:
             pass
 
-        return {
+        decision = {
             "primary_domain": "software_dev",
             "execution_domains": ["software_dev"],
             "split_tasks": {},
         }
+        self._decision_cache[user_input] = decision
+        return decision
+
+    @staticmethod
+    def _parse_json_from_text(text: str) -> Optional[dict]:
+        """Parse JSON robustly from raw LLM text (supports fenced and prose-wrapped JSON)."""
+        candidates: list[str] = []
+        stripped = text.strip()
+
+        if stripped.startswith("```"):
+            stripped = re.sub(r"^```(?:json)?", "", stripped).strip()
+            stripped = re.sub(r"```$", "", stripped).strip()
+        candidates.append(stripped)
+
+        block = SupervisorAgent._extract_first_braced_block(stripped)
+        if block:
+            candidates.append(block)
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _extract_first_braced_block(text: str) -> str:
+        """Extract first balanced {...} block from text."""
+        start = text.find("{")
+        if start == -1:
+            return ""
+        depth = 0
+        for idx in range(start, len(text)):
+            char = text[idx]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : idx + 1]
+        return ""

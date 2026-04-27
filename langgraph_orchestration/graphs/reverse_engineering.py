@@ -36,7 +36,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     analysis_agent = factory.create_code_analysis_agent()
     vuln_agent = factory.create_vulnerability_detection_agent()
     inference_engine = factory.inference_engine
-    retriever = QdrantRetriever()
+    # RAG disabled for no-RAG benchmark runs
+    # retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
@@ -85,11 +86,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
-        context = retriever.retrieve(
-            query=state.user_input,
-            top_k=5,
-            domain="reverse_engineering",
-        )
+        # RAG retrieval intentionally commented out for baseline LLM-only testing.
+        # context = retriever.retrieve(
+        #     query=state.user_input,
+        #     top_k=5,
+        #     domain="reverse_engineering",
+        # )
+        context = []
         state.re_context = context
         state.re_task_plan = _select_re_task_plan(state.user_input)
         return StateManager.add_retrieved_context(state, context)
