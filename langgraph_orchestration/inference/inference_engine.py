@@ -46,7 +46,10 @@ class MLXInferenceEngine:
     DEFAULT_SYSTEM_PROMPT = (
         "You are a specialized AI assistant. "
         "Provide concise, actionable responses. "
-        "Use provided context to inform your answers."
+        "Use provided context to inform your answers. "
+        # Disable thinking for benchmarking
+        "Do not use extended thinking or <think> tags. "
+        "Respond directly without internal reasoning tags."
     )
     
     def __init__(
