@@ -1,4 +1,5 @@
 import time
+import threading
 from typing import Optional, Iterator, Union
 from dataclasses import dataclass
 
@@ -63,23 +64,25 @@ class MLXInferenceEngine:
     def _get_memory_usage_gb(self) -> float:
         """Get current memory usage in GB (works with MLX on Apple Silicon)."""
         try:
-            import mlx.core as mx
-            mx.eval(mx.zeros(1))  
-            # Try MLX-specific memory tracking
-            if hasattr(mx, 'metal'):
-                try:
-                    stats = mx.metal.mem_stats()
-                    if 'active_memory' in stats:
-                        return stats['active_memory'] / 1e9
-                except Exception:
-                    pass
-            # Fallback to psutil for system memory
+            import psutil
+            process = psutil.Process()
+            # Get resident set size (RSS) (actual physical memory used)
+            rss_bytes = process.memory_info().rss
+            return rss_bytes / 1e9
+        except ImportError:
+            # MLX-specific memory as fallback
             try:
-                import psutil
-                process = psutil.Process()
-                return process.memory_info().rss / 1e9
-            except ImportError:
-                return 0.0
+                import mlx.core as mx
+                if hasattr(mx, 'metal'):
+                    try:
+                        stats = mx.metal.mem_stats()
+                        if isinstance(stats, dict) and 'peak_memory' in stats:
+                            return stats['peak_memory'] / 1e9
+                    except (AttributeError, KeyError, TypeError):
+                        pass
+            except Exception:
+                pass
+            return 0.0
         except Exception:
             return 0.0
     
@@ -106,32 +109,42 @@ class MLXInferenceEngine:
             # Count prompt tokens
             prompt_tokens = self.count_tokens(prompt)
             
-            # Record initial memory
-            initial_memory = self._get_memory_usage_gb()
-            peak_memory = initial_memory
+            # Set up memory monitoring in background
+            peak_memory_gb = [self._get_memory_usage_gb()]  # Use list for thread-safe mutation
+            monitoring = [True]
+            
+            def monitor_memory():
+                """Background thread to continuously track peak memory."""
+                while monitoring[0]:
+                    current_mem = self._get_memory_usage_gb()
+                    peak_memory_gb[0] = max(peak_memory_gb[0], current_mem)
+                    time.sleep(0.1)  # Sample every 100ms
+            
+            # Start memory monitoring
+            mem_thread = threading.Thread(target=monitor_memory, daemon=True)
+            mem_thread.start()
             
             # Time the generation
             gen_start = time.time()
-            first_token_time = None
-            token_count = 0
             
-            generated_text = generate(
-                self.model,
-                self.tokenizer,
-                prompt=prompt,
-                max_tokens=config.max_tokens,
-                verbose=False,
-            )
+            try:
+                generated_text = generate(
+                    self.model,
+                    self.tokenizer,
+                    prompt=prompt,
+                    max_tokens=config.max_tokens,
+                    verbose=False,
+                )
+            finally:
+                # Stop memory monitoring
+                monitoring[0] = False
+                mem_thread.join(timeout=1.0)
             
             gen_end = time.time()
             total_gen_time = gen_end - gen_start
             
             # Count generated tokens
             generated_tokens = self.count_tokens(generated_text)
-            
-            # Record final memory
-            final_memory = self._get_memory_usage_gb()
-            peak_memory = max(peak_memory, final_memory)
             
             # Estimate TTFT from total time and token count
             # For non-streaming - estimate based on average generation speed
@@ -147,7 +160,7 @@ class MLXInferenceEngine:
                 generated_tokens=generated_tokens,
                 prompt_generation_speed_tok_s=round(prompt_build_speed, 2),
                 generation_speed_tok_s=round(generation_speed, 2),
-                peak_memory_gb=round(peak_memory, 3),
+                peak_memory_gb=round(peak_memory_gb[0], 3),
                 total_generation_seconds=round(total_gen_time, 3),
             )
             
