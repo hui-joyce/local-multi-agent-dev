@@ -36,7 +36,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     test_agent = factory.create_unit_testing_agent()
     arch_agent = factory.create_architectural_review_agent()
     inference_engine = factory.inference_engine
-    # RAG disabled for no-RAG benchmark runs.
+    # RAG disabled for no-RAG benchmark runs
     # retriever = QdrantRetriever()
     
     # Create graph

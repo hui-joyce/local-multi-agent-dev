@@ -57,7 +57,7 @@ class BenchmarkResult:
     generated_tokens: int
     prompt_generation_speed_tok_s: float
     generation_speed_tok_s: float
-    peak_memory_gb: float
+    # peak_memory_gb: float
     output_text: str
     output_preview: str
 
@@ -212,7 +212,7 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
     generated_tokens = 0
     prompt_generation_speed_tok_s = 0.0
     generation_speed_tok_s = 0.0
-    peak_memory_gb = 0.0
+    # peak_memory_gb = 0.0
     
     if factory is not None:
         try:
@@ -226,7 +226,7 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
                 generated_tokens = metrics.generated_tokens
                 prompt_generation_speed_tok_s = metrics.prompt_generation_speed_tok_s
                 generation_speed_tok_s = metrics.generation_speed_tok_s
-                peak_memory_gb = metrics.peak_memory_gb
+                # peak_memory_gb = metrics.peak_memory_gb
         except Exception:
             pass  
 
@@ -247,7 +247,7 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
         generated_tokens=generated_tokens,
         prompt_generation_speed_tok_s=prompt_generation_speed_tok_s,
         generation_speed_tok_s=generation_speed_tok_s,
-        peak_memory_gb=peak_memory_gb,
+        # peak_memory_gb=peak_memory_gb,
         output_text=final_output,
         output_preview=final_output[:500],
     )
@@ -277,7 +277,7 @@ def write_results(results: list[BenchmarkResult], output_dir: Path) -> tuple[Pat
         "",
         "## Performance Metrics Summary",
         "",
-        "| Case | Route Match | Latency (s) | TTFT (s) | Prompt Tok | Gen Tok | Prompt Speed (tok/s) | Gen Speed (tok/s) | Peak Mem (GB) |",
+        "| Case | Route Match | Latency (s) | TTFT (s) | Prompt Tok | Gen Tok | Prompt Speed (tok/s) | Gen Speed (tok/s) | ",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
@@ -286,7 +286,7 @@ def write_results(results: list[BenchmarkResult], output_dir: Path) -> tuple[Pat
             "| "
             f"{row.case_id} | {'YES' if row.routing_match else 'NO'} | {row.latency_seconds} | "
             f"{row.ttft_seconds} | {row.prompt_tokens} | {row.generated_tokens} | "
-            f"{row.prompt_generation_speed_tok_s} | {row.generation_speed_tok_s} | {row.peak_memory_gb} |"
+            f"{row.prompt_generation_speed_tok_s} | {row.generation_speed_tok_s} | "
         )
 
     lines.append("")
@@ -352,8 +352,7 @@ def main() -> None:
             f"expected={case_result.expected_execution_domains}, "
             f"route_match={case_result.routing_match}, "
             f"latency={case_result.latency_seconds}s, "
-            f"gen_speed={case_result.generation_speed_tok_s}tok/s, "
-            f"mem={case_result.peak_memory_gb}GB"
+            f"gen_speed={case_result.generation_speed_tok_s}tok/s "
         )
 
     routing_accuracy = (
