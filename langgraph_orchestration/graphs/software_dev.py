@@ -11,7 +11,7 @@ from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
-from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
+from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.prompts.software_dev import (
     SOFTWARE_DEV_TASKS,
@@ -86,13 +86,13 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_dev_context_node(state: AgentState) -> AgentState:
-        # RAG retrieval intentionally commented out for baseline LLM-only testing
-        # context = retriever.retrieve(
-        #     query=state.user_input,
-        #     top_k=5,
-        #     domain="software_dev",
-        # )
-        context = []
+        RAGConfigManager.initialize()
+        rag_manager = RAGConfigManager.get_rag_manager()
+        config = RAGConfigManager.get_config()
+        context = rag_manager.retrieve_software_dev_context(
+            query=state.user_input,
+            top_k=config.default_top_k,
+        )
         state.dev_context = context
         state.dev_task_plan = _select_dev_task_plan(state.user_input)
         return StateManager.add_retrieved_context(state, context)
