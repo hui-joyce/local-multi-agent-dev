@@ -15,7 +15,7 @@ from langgraph_orchestration.inference.inference_engine import (
 )
 from langgraph_orchestration.prompts.supervisor import (
     build_label_routing_prompt,
-    build_json_routing_prompt,
+    build_split_tasks_prompt,
 )
 
 class SupervisorAgent(SyncBaseAgent):
@@ -29,10 +29,6 @@ class SupervisorAgent(SyncBaseAgent):
         )
         self.inference_engine = inference_engine
         self._decision_cache: dict[str, dict] = {}
-
-    def _build_routing_prompt(self, user_input: str) -> str:
-        """Build JSON-based routing prompt (legacy)."""
-        return build_json_routing_prompt(self.inference_engine, user_input)
 
     def _build_label_prompt(self, user_input: str) -> str:
         """Build label-based routing prompt."""
@@ -65,6 +61,55 @@ class SupervisorAgent(SyncBaseAgent):
 
         return None
 
+    def _extract_split_tasks(self, user_input: str) -> dict[str, str]:
+        """Extract domain-specific subtasks from a multi-domain request."""
+        normalized_input = re.sub(r"\s+", " ", user_input).strip()
+
+        # Prefer a deterministic split when the request explicitly chains
+        # implementation work followed by analysis/review work.
+        split_markers = (
+            r"\band then\b",
+            r"\bthen\b",
+        )
+        for marker in split_markers:
+            match = re.search(marker, normalized_input, flags=re.IGNORECASE)
+            if not match:
+                continue
+
+            software_part = normalized_input[: match.start()].strip(" ,;:-\n\t")
+            reverse_part = normalized_input[match.end() :].strip(" ,;:-\n\t")
+
+            if software_part and reverse_part:
+                return {
+                    "software_dev": software_part,
+                    "reverse_engineering": reverse_part,
+                }
+
+        if self.inference_engine is None:
+            return {}
+
+        try:
+            prompt = build_split_tasks_prompt(self.inference_engine, user_input)
+            config = GenerationConfig(max_tokens=1200, temperature=0.0)
+            output = self.inference_engine.generate(
+                prompt=prompt,
+                config=config,
+                stream=False,
+            )
+            
+            parsed = self._parse_json_from_text(output)
+            if parsed is not None:
+                split_tasks = {}
+                if "software_dev" in parsed and parsed["software_dev"]:
+                    split_tasks["software_dev"] = str(parsed["software_dev"]).strip()
+                if "reverse_engineering" in parsed and parsed["reverse_engineering"]:
+                    split_tasks["reverse_engineering"] = str(parsed["reverse_engineering"]).strip()
+                return split_tasks
+        except Exception:
+            pass
+        
+        return {}
+
     def _extract_decision(self, raw_output: str) -> Optional[dict]:
         cleaned = raw_output.strip()
         parsed = self._parse_json_from_text(cleaned)
@@ -96,11 +141,6 @@ class SupervisorAgent(SyncBaseAgent):
                 for domain in self.DOMAIN_OPTIONS
                 if str(split_tasks.get(domain, "")).strip()
             }
-
-            if len(normalized_domains) == 2 and "software_dev" not in normalized_split_tasks:
-                normalized_split_tasks["software_dev"] = "Implement and validate the requested software solution."
-            if len(normalized_domains) == 2 and "reverse_engineering" not in normalized_split_tasks:
-                normalized_split_tasks["reverse_engineering"] = "Analyze the request from security and reverse-engineering perspective."
 
             return {
                 "primary_domain": primary_domain,
@@ -168,13 +208,11 @@ class SupervisorAgent(SyncBaseAgent):
                     self._decision_cache[user_input] = decision
                     return decision
                 if label == "BOTH":
+                    split_tasks = self._extract_split_tasks(user_input)
                     decision = {
                         "primary_domain": "software_dev",
                         "execution_domains": ["software_dev", "reverse_engineering"],
-                        "split_tasks": {
-                            "software_dev": "Implement and validate the requested software solution.",
-                            "reverse_engineering": "Analyze the request from security and reverse-engineering perspective.",
-                        },
+                        "split_tasks": split_tasks,
                     }
                     self._decision_cache[user_input] = decision
                     return decision

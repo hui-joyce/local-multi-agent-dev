@@ -94,7 +94,17 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         # )
         context = []
         state.re_context = context
-        state.re_task_plan = _select_re_task_plan(state.user_input)
+        
+        # When analyzing generated code from software_dev domain, skip planning and code_analysis
+        # Go directly to vulnerability detection since we already have structured code
+        software_dev_output = state.branch_outputs.get("software_dev", "")
+        if software_dev_output:
+            # For generated code security analysis only
+            state.re_task_plan = ["vulnerability_detection"]
+        else:
+            # For standalone reverse engineering, use LLM-selected task plan
+            state.re_task_plan = _select_re_task_plan(state.user_input)
+        
         return StateManager.add_retrieved_context(state, context)
     
     # Define node functions
@@ -111,10 +121,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     
     def code_analysis_node(state: AgentState) -> AgentState:
         planning_output = state.intermediate_outputs.get("planning", "")
+        # Check if there's generated code from previous software_dev domain
+        generated_code = state.branch_outputs.get("software_dev", "")
         output = analysis_agent.invoke(
             user_input=build_code_analysis_prompt(
                 user_input=state.user_input,
                 planning_output=planning_output,
+                generated_code=generated_code,
             ),
             context=state.re_context,
         )

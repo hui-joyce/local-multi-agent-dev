@@ -21,7 +21,23 @@ def build_planning_prompt(user_input: str) -> str:
         f"Target request:\n{user_input}"
     )
 
-def build_code_analysis_prompt(user_input: str, planning_output: str = "") -> str:
+def build_code_analysis_prompt(user_input: str, planning_output: str = "", generated_code: str = "") -> str:
+    if generated_code:
+        if planning_output:
+            return (
+                "Analyze this GENERATED code using the structured plan below.\n"
+                "Identify structural issues, logic flaws, security considerations, and design problems.\n\n"
+                f"Structured Plan:\n{planning_output}\n\n"
+                f"Generated Code to Analyze:\n{generated_code}\n\n"
+                f"Additional Context:\n{user_input}"
+            )
+        return (
+            "Analyze this GENERATED code for structural issues, logic flaws, and security concerns.\n"
+            "Examine control flow, data handling, error scenarios, and potential vulnerabilities.\n\n"
+            f"Generated Code:\n{generated_code}\n\n"
+            f"Analysis Focus:\n{user_input}"
+        )
+    
     if planning_output:
         return (
             "Use the plan below to drive a structured reverse-engineering analysis.\n"
