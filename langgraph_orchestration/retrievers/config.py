@@ -80,6 +80,9 @@ class RAGConfigManager:
     def initialize(cls, config: Optional[RAGConfig] = None) -> None:
         manager = cls()
         
+        if manager._retriever is not None and manager._config is not None:
+            return
+        
         if config is None:
             config = RAGConfig.from_env()
         
@@ -103,7 +106,15 @@ class RAGConfigManager:
         from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
         
         manager = cls()
+        
+        # Prevent re-initialization if already exists
+        if manager._retriever is not None:
+            return
+        
         config = manager._config
+        
+        if config is None:
+            raise RuntimeError("RAGConfigManager not initialized. Call initialize() first.")
         
         if config.db_mode == "embedded":
             manager._retriever = QdrantRetriever(

@@ -7,6 +7,7 @@
 """
 
 import os
+import time
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
@@ -60,16 +61,39 @@ class QdrantRetriever(BaseRetriever):
                 "qdrant-client is required. Install with: pip install qdrant-client"
             )
         
-        try:
-            # Use embedded mode with local SQLite storage
-            self.client = QdrantClient(
-                path=str(self.db_path),
-                prefer_grpc=False,  # Use HTTP for embedded mode
-            )
-            logger.info(f"✓ Qdrant client initialized in embedded mode")
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize Qdrant: {e}")
-    
+        max_retries = 5
+        retry_delay = 0.5  # Start with 0.5 seconds
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                # Use embedded mode with local SQLite storage
+                self.client = QdrantClient(
+                    path=str(self.db_path),
+                    prefer_grpc=False,  # Use HTTP for embedded mode
+                )
+                logger.info(f"✓ Qdrant client initialized in embedded mode")
+                return
+            except Exception as e:
+                last_error = e
+                error_msg = str(e)
+                
+                if "AlreadyLocked" in error_msg or "Resource temporarily unavailable" in error_msg:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                        logger.warning(
+                            f"Qdrant database locked (attempt {attempt + 1}/{max_retries}), "
+                            f"retrying in {wait_time:.1f}s: {e}"
+                        )
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"Failed to acquire Qdrant lock after {max_retries} attempts")
+                
+                raise RuntimeError(f"Failed to initialize Qdrant: {e}")
+
+        raise RuntimeError(f"Failed to initialize Qdrant after {max_retries} retries: {last_error}")
+
     def _ensure_collection(self, collection_name: str) -> None:
         try:
             self.client.get_collection(collection_name)
@@ -118,9 +142,9 @@ class QdrantRetriever(BaseRetriever):
             
             for collection_name in collections:
                 try:
-                    search_result = self.client.search(
+                    search_result = self.client.query_points(
                         collection_name=collection_name,
-                        query_vector=query_embedding_list,
+                        query=query_embedding_list,
                         limit=top_k * 2,  # Get extra to account for filtering
                         score_threshold=score_threshold,
                     )
