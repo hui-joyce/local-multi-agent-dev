@@ -62,36 +62,30 @@ class QdrantRetriever(BaseRetriever):
             )
         
         max_retries = 5
-        retry_delay = 0.5  # Start with 0.5 seconds
+        retry_delay = 0.5
         last_error = None
         
         for attempt in range(max_retries):
             try:
-                # Use embedded mode with local SQLite storage
                 self.client = QdrantClient(
                     path=str(self.db_path),
-                    prefer_grpc=False,  # Use HTTP for embedded mode
+                    prefer_grpc=False,
                 )
-                logger.info(f"✓ Qdrant client initialized in embedded mode")
+                logger.info("✓ Qdrant client initialized in embedded mode")
                 return
             except Exception as e:
                 last_error = e
-                error_msg = str(e)
-                
-                if "AlreadyLocked" in error_msg or "Resource temporarily unavailable" in error_msg:
+                if "AlreadyLocked" in str(e) or "Resource temporarily unavailable" in str(e):
                     if attempt < max_retries - 1:
-                        wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                        wait_time = retry_delay * (2 ** attempt)
                         logger.warning(
                             f"Qdrant database locked (attempt {attempt + 1}/{max_retries}), "
-                            f"retrying in {wait_time:.1f}s: {e}"
+                            f"retrying in {wait_time:.1f}s"
                         )
                         time.sleep(wait_time)
                         continue
-                    else:
-                        logger.error(f"Failed to acquire Qdrant lock after {max_retries} attempts")
-                
                 raise RuntimeError(f"Failed to initialize Qdrant: {e}")
-
+        
         raise RuntimeError(f"Failed to initialize Qdrant after {max_retries} retries: {last_error}")
 
     def _ensure_collection(self, collection_name: str) -> None:
@@ -145,7 +139,7 @@ class QdrantRetriever(BaseRetriever):
                     search_result = self.client.query_points(
                         collection_name=collection_name,
                         query=query_embedding_list,
-                        limit=top_k * 2,  # Get extra to account for filtering
+                        limit=top_k * 2,
                         score_threshold=score_threshold,
                     )
                     
@@ -159,10 +153,7 @@ class QdrantRetriever(BaseRetriever):
                 
                 except Exception as e:
                     logger.warning(f"Search in {collection_name} failed: {e}")
-                    if self.enable_fallback:
-                        logger.info("Falling back to keyword search")
             
-            # Sort by score and return top-k documents
             all_results.sort(key=lambda x: x["score"], reverse=True)
             results = [r["text"] for r in all_results[:top_k]]
             
@@ -184,10 +175,7 @@ class QdrantRetriever(BaseRetriever):
         top_k: int,
         domain: Optional[str],
     ) -> list[str]:
-        """Fallback keyword-based search."""
-        query_terms = set(query.lower().split())
-        
-        # Get all documents from relevant collections
+        query_terms = set(query.lower().split())        
         all_docs = []
         
         if domain and domain in self.domain_collections:
@@ -298,7 +286,6 @@ class QdrantRetriever(BaseRetriever):
             logger.error(f"Failed to delete collection: {e}")
     
     def get_collection_info(self, domain: str) -> dict:
-        """Get statistics for a collection"""
         if domain not in self.domain_collections:
             return {"error": f"Unknown domain: {domain}"}
         
@@ -316,7 +303,6 @@ class QdrantRetriever(BaseRetriever):
             return {"error": str(e)}
     
     def _generate_point_id(self, collection_name: str, text: str) -> int:
-        """Generate deterministic ID from text hash"""
         import hashlib
         # Use hash of text to create consistent IDs
         hash_value = int(

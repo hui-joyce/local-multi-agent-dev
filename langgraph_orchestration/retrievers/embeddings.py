@@ -119,15 +119,15 @@ class EmbeddingService:
         return int(self.embedding_dim)
 
     def similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
-        """Compute cosine similarity between two normalized embeddings"""
-        embedding1 = np.asarray(embedding1)
-        embedding2 = np.asarray(embedding2)
-        # If not normalized, normalize
-        if embedding1.size == 0 or embedding2.size == 0:
+        """Compute cosine similarity between two embeddings"""
+        e1 = np.asarray(embedding1)
+        e2 = np.asarray(embedding2)
+        if e1.size == 0 or e2.size == 0:
             return 0.0
-        # Use dot product (works for normalized vectors)
-        sim = float(np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2)))
-        return sim
+        norm1, norm2 = np.linalg.norm(e1), np.linalg.norm(e2)
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        return float(np.dot(e1, e2) / (norm1 * norm2))
 
     def batch_similarity(
         self,
@@ -135,13 +135,10 @@ class EmbeddingService:
         embeddings_list: list[np.ndarray],
     ) -> list[float]:
         """Compute cosine similarity between query and multiple embeddings"""
-        query_embedding = np.asarray(query_embedding)
+        query = np.asarray(query_embedding)
         matrix = np.asarray(embeddings_list)
-        # Normalize if necessary
-        q_norm = np.linalg.norm(query_embedding)
+        q_norm = np.linalg.norm(query)
         if q_norm == 0:
-            return [0.0 for _ in range(len(matrix))]
-        matrix_norms = np.linalg.norm(matrix, axis=1)
-        dots = matrix.dot(query_embedding)
-        sims = dots / (matrix_norms * q_norm + 1e-12)
-        return [float(s) for s in sims]
+            return [0.0] * len(matrix)
+        norms = np.linalg.norm(matrix, axis=1)
+        return [float(s) for s in matrix.dot(query) / (norms * q_norm + 1e-12)]

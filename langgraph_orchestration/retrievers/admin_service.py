@@ -145,26 +145,23 @@ class RAGAdminService:
                     continue
 
                 documents = []
-                next_page = None
-
+                offset = None
                 while True:
-                    points, next_page = self.retriever.client.scroll(
+                    points, offset = self.retriever.client.scroll(
                         collection_name=collection_name,
                         limit=500,
-                        offset=next_page,
+                        offset=offset,
                         with_payload=True,
-                        with_vectors=False,
                     )
-
-                    for point in points:
-                        payload = point.payload or {}
-                        documents.append({
+                    documents.extend([
+                        {
                             "id": point.id,
-                            "text": payload.get("text", ""),
-                            "metadata": payload.get("metadata", {}),
-                        })
-
-                    if next_page is None:
+                            "text": point.payload.get("text", ""),
+                            "metadata": point.payload.get("metadata", {}),
+                        }
+                        for point in points
+                    ])
+                    if offset is None:
                         break
 
                 export_data["domains"][d] = {
@@ -173,10 +170,7 @@ class RAGAdminService:
                     "documents": documents,
                 }
             
-            return {
-                "status": "success",
-                "export": export_data,
-            }
+            return {"status": "success", "export": export_data}
         except Exception as e:
             logger.error(f"Export failed: {e}")
             return {"status": "error", "message": str(e)}

@@ -13,12 +13,13 @@ Local-first, LangGraph-based orchestration for two domains: software development
 
 | Component | Technology |
 |---|---|
-| Orchestration | LangGraph |
-| LLM Inference | MLX + MLX-LM |
-| State Model | Pydantic |
-| Retrieval Layer | Qdrant Vector Database |
-| API | FastAPI |
-| Language | Python 3.11 |
+| **Orchestration** | LangGraph |
+| **LLM Inference** | MLX + MLX-LM |
+| **State Management** | Pydantic |
+| **Vector Database** | Qdrant (Embedded) |
+| **Embeddings** | Sentence Transformers (all-MiniLM-L6-v2) |
+| **API Server** | FastAPI |
+| **Runtime** | Python 3.11+ |
 
 ## Flow (High-Level)
 ![System Architecture](assets/system-architecture.png)
@@ -29,13 +30,13 @@ Local-first, LangGraph-based orchestration for two domains: software development
 - Splits tasks when both domains are relevant
 
 **Software Development Branch**
-- `retrieve_dev_context` (RAG disabled by default for now)
-- `code_generation` -> `unit_testing` (loop until pass or iteration cap)
-- `architectural_review` -> `synthesize`
+- `retrieve_dev_context` 
+- `code_generation` → `unit_testing` (loop until pass or iteration cap)
+- `architectural_review` → `synthesize`
 
 **Reverse Engineering Branch**
-- `retrieve_re_context` (RAG disabled by default for now)
-- `planning` -> `code_analysis` -> `vulnerability_detection` -> `synthesize`
+- `retrieve_re_context`
+- `planning` → `code_analysis` → `vulnerability_detection` → `synthesize`
 
 **Final Synthesis**
 - Merges branch outputs when both ran, otherwise returns the selected branch result
@@ -114,8 +115,11 @@ If you see `Model type qwen3_5 not supported`, upgrade `mlx-lm` or select a mode
 - Harness validation: `python3 benchmarks/validate_harness.py`
 
 ## References
-- LangGraph: https://langchain-ai.github.io/langgraph/
-- Pydantic: https://docs.pydantic.dev/
-- Qdrant: https://qdrant.tech/documentation/
+- **LangGraph**: https://langchain-ai.github.io/langgraph/
+- **Pydantic**: https://docs.pydantic.dev/
+- **Qdrant**: https://qdrant.tech/documentation/
+- **Sentence Transformers**: https://www.sbert.net/
+- **MLX**: https://ml-explore.github.io/mlx/
+- **FastAPI**: https://fastapi.tiangolo.com/
 
-Last updated: April 2026
+Last updated: May 2026

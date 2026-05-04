@@ -89,21 +89,15 @@ class RAGManager:
             return ""
         
         if format_type == "markdown":
-            context = "## Retrieved Context\n\n"
-            for i, doc in enumerate(documents, 1):
-                context += f"{i}. {doc}\n\n"
-            return context.strip()
-        
+            return "## Retrieved Context\n\n" + "\n\n".join(
+                f"{i}. {doc}" for i, doc in enumerate(documents, 1)
+            )
         elif format_type == "plain":
             return "\n".join(f"- {doc}" for doc in documents)
-        
         elif format_type == "xml":
-            context = "<context>\n"
-            for doc in documents:
-                context += f"  <document>{doc}</document>\n"
-            context += "</context>"
-            return context
-        
+            return ("<context>\n" + 
+                    "\n".join(f"  <document>{doc}</document>" for doc in documents) +
+                    "\n</context>")
         else:
             raise ValueError(f"Unknown format type: {format_type}")
 
