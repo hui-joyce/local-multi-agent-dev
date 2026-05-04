@@ -181,7 +181,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
 Development workflow completed in {state.dev_iteration} attempt(s).
 Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.
 """
-        state.branch_outputs["software_dev"] = final
+        state.branch_outputs["software_dev"] = StateManager.sanitize_output(final)
         state.agent_chain.append("software_dev_synthesize")
         return state
     

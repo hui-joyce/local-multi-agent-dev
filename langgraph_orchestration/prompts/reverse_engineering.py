@@ -1,52 +1,80 @@
+from langgraph_orchestration.prompts import render_prompt
+
 REVERSE_ENGINEERING_TASKS = ["planning", "code_analysis", "vulnerability_detection"]
-ROUTER_SYSTEM_PROMPT = "You are a precise task router. Return JSON only."
+ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
+    "reverse_engineering/task_router.md",
+    user_input="",
+)
 
 def build_re_task_router_prompt(user_input: str) -> str:
     """Build routing prompt for selecting the reverse engineering plan"""
-    return (
-        "Select only the required reverse engineering tasks for this request.\n"
-        f"Request: {user_input}\n\n"
-        "Allowed tasks:\n"
-        "- planning\n"
-        "- code_analysis\n"
-        "- vulnerability_detection\n\n"
-        'Return strict JSON only: {"steps": ["..."]}.\n'
-        "Only include necessary tasks."
+    _, body = render_prompt(
+        "reverse_engineering/task_router.md",
+        user_input=user_input,
     )
+    return body
 
 def build_planning_prompt(user_input: str) -> str:
-    return (
-        "Create a clear reverse-engineering plan before deep analysis.\n"
-        "Break work into ordered phases with concrete objectives and expected evidence.\n\n"
-        f"Target request:\n{user_input}"
+    _, body = render_prompt(
+        "reverse_engineering/planning.md",
+        user_input=user_input,
     )
+    return body
 
-def build_code_analysis_prompt(user_input: str, planning_output: str = "") -> str:
-    if planning_output:
-        return (
+def build_code_analysis_prompt(user_input: str, planning_output: str = "", generated_code: str = "") -> str:
+    if generated_code and planning_output:
+        intro = (
+            "Analyze this GENERATED code using the structured plan below.\n"
+            "Identify structural issues, logic flaws, security considerations, and design problems."
+        )
+    elif generated_code:
+        intro = (
+            "Analyze this GENERATED code for structural issues, logic flaws, and security concerns.\n"
+            "Examine control flow, data handling, error scenarios, and potential vulnerabilities."
+        )
+    elif planning_output:
+        intro = (
             "Use the plan below to drive a structured reverse-engineering analysis.\n"
-            "Focus on control flow, data flow, key components, and behavior reconstruction.\n\n"
-            f"Plan:\n{planning_output}\n\n"
-            f"Target:\n{user_input}"
+            "Focus on control flow, data flow, key components, and behavior reconstruction."
+        )
+    else:
+        intro = (
+            "Perform direct reverse-engineering analysis for the target.\n"
+            "Focus on structure, logic flow, and inferred behavior."
         )
 
-    return (
-        "Perform direct reverse-engineering analysis for the target.\n"
-        "Focus on structure, logic flow, and inferred behavior.\n\n"
-        f"Target:\n{user_input}"
+    planning_block = f"Structured Plan:\n{planning_output}\n\n" if planning_output else ""
+    generated_block = f"Generated Code to Analyze:\n{generated_code}\n\n" if generated_code else ""
+    analysis_block = "Additional Context:\n" if generated_code else ""
+
+    _, body = render_prompt(
+        "reverse_engineering/code_analysis.md",
+        intro=intro,
+        planning_block=planning_block,
+        generated_block=generated_block,
+        analysis_block=analysis_block,
+        user_input=user_input,
     )
+    return body
 
 def build_vulnerability_detection_prompt(user_input: str, analysis_output: str = "") -> str:
     if analysis_output:
-        return (
+        intro = (
             "Assess vulnerabilities using the analysis below as primary evidence.\n"
-            "Highlight exploitability, impact, and mitigation guidance.\n\n"
-            f"Analysis:\n{analysis_output}\n\n"
-            f"Target:\n{user_input}"
+            "Highlight exploitability, impact, and mitigation guidance."
         )
+        analysis_block = f"Analysis:\n{analysis_output}\n\n"
+    else:
+        intro = (
+            "Perform vulnerability assessment for the target directly.\n"
+            "Report likely weakness classes, attack vectors, and mitigations."
+        )
+        analysis_block = ""
 
-    return (
-        "Perform vulnerability assessment for the target directly.\n"
-        "Report likely weakness classes, attack vectors, and mitigations.\n\n"
-        f"Target:\n{user_input}"
+    _, body = render_prompt(
+        "reverse_engineering/vulnerability_detection.md",
+        intro=intro,
+        analysis_block=analysis_block,
+        user_input=user_input,
     )
+    return body

@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Add project root to sys.path for imports to work from any directory
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -55,7 +54,6 @@ class BenchmarkResult:
     ttft_seconds: float
     prompt_tokens: int
     generated_tokens: int
-    prompt_generation_speed_tok_s: float
     generation_speed_tok_s: float
     # peak_memory_gb: float
     output_text: str
@@ -210,7 +208,6 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
     ttft_seconds = 0.0
     prompt_tokens = 0
     generated_tokens = 0
-    prompt_generation_speed_tok_s = 0.0
     generation_speed_tok_s = 0.0
     # peak_memory_gb = 0.0
     
@@ -224,11 +221,18 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
                 ttft_seconds = metrics.ttft_seconds
                 prompt_tokens = metrics.prompt_tokens
                 generated_tokens = metrics.generated_tokens
-                prompt_generation_speed_tok_s = metrics.prompt_generation_speed_tok_s
                 generation_speed_tok_s = metrics.generation_speed_tok_s
                 # peak_memory_gb = metrics.peak_memory_gb
         except Exception:
-            pass  
+            pass
+    
+    if generation_speed_tok_s == 0.0 and generated_tokens > 0:
+        if ttft_seconds > 0 and elapsed > ttft_seconds:
+            generation_time = elapsed - ttft_seconds
+        else:
+            generation_time = elapsed
+        if generation_time > 0:
+            generation_speed_tok_s = round(generated_tokens / generation_time, 2)  
 
     return BenchmarkResult(
         case_id=case.case_id,
@@ -245,7 +249,6 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
         ttft_seconds=ttft_seconds,
         prompt_tokens=prompt_tokens,
         generated_tokens=generated_tokens,
-        prompt_generation_speed_tok_s=prompt_generation_speed_tok_s,
         generation_speed_tok_s=generation_speed_tok_s,
         # peak_memory_gb=peak_memory_gb,
         output_text=final_output,
@@ -277,7 +280,7 @@ def write_results(results: list[BenchmarkResult], output_dir: Path) -> tuple[Pat
         "",
         "## Performance Metrics Summary",
         "",
-        "| Case | Route Match | Latency (s) | TTFT (s) | Prompt Tok | Gen Tok | Prompt Speed (tok/s) | Gen Speed (tok/s) | ",
+        "| Case | Route Match | Latency (s) | TTFT (s) | Prompt Tok | Gen Tok |  Gen Speed (tok/s) | ",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
@@ -285,8 +288,7 @@ def write_results(results: list[BenchmarkResult], output_dir: Path) -> tuple[Pat
         lines.append(
             "| "
             f"{row.case_id} | {'YES' if row.routing_match else 'NO'} | {row.latency_seconds} | "
-            f"{row.ttft_seconds} | {row.prompt_tokens} | {row.generated_tokens} | "
-            f"{row.prompt_generation_speed_tok_s} | {row.generation_speed_tok_s} | "
+            f"{row.ttft_seconds} | {row.prompt_tokens} | {row.generated_tokens} | {row.generation_speed_tok_s} |"
         )
 
     lines.append("")
