@@ -21,6 +21,10 @@ from langgraph_orchestration.prompts.supervisor import (
 class SupervisorAgent(SyncBaseAgent):
     DOMAIN_OPTIONS = ("software_dev", "reverse_engineering")
     LABEL_OPTIONS = ("SOFTWARE_DEV", "REVERSE_ENGINEERING", "BOTH")
+    """Memory safety limit for routing decisions - 
+     automatically clears entire dict (when cache reaches 1000 entries) 
+     to prevent unbounded memory growth"""
+    _CACHE_MAX_SIZE = 1000
 
     def __init__(self, inference_engine: Optional[MLXInferenceEngine] = None):
         super().__init__(
@@ -30,39 +34,35 @@ class SupervisorAgent(SyncBaseAgent):
         self.inference_engine = inference_engine
         self._decision_cache: dict[str, dict] = {}
 
+    def _remove_thinking_blocks(self, text: str) -> str:
+        """Remove internal reasoning blocks from text"""
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
     def _build_label_prompt(self, user_input: str) -> str:
-        """Build label-based routing prompt."""
         return build_label_routing_prompt(self.inference_engine, user_input)
 
     def _parse_label(self, raw_output: str) -> Optional[str]:
-        cleaned = raw_output.strip()
-        cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
-        cleaned_upper = cleaned.upper()
+        cleaned_upper = self._remove_thinking_blocks(raw_output).upper()
 
-        # Exact match first.
-        for label in self.LABEL_OPTIONS:
-            if cleaned_upper == label:
-                return label
+        # Exact match first
+        if cleaned_upper in self.LABEL_OPTIONS:
+            return cleaned_upper
 
-        # Then line-based match
+        # Line-based match
         for line in cleaned_upper.splitlines():
             token = line.strip().strip("`*_-. ")
             if token in self.LABEL_OPTIONS:
                 return token
 
-        # fallback to last mention in text (decision usually appears at the end).
-        mentions: list[tuple[int, str]] = []
+        # Fallback: return last mention (decision usually at end)
+        last_match = None
         for label in self.LABEL_OPTIONS:
-            for m in re.finditer(rf"\b{re.escape(label)}\b", cleaned_upper):
-                mentions.append((m.start(), label))
-        if mentions:
-            mentions.sort(key=lambda x: x[0])
-            return mentions[-1][1]
-
-        return None
+            if label in cleaned_upper:
+                last_match = label
+        return last_match
 
     def _extract_split_tasks(self, user_input: str) -> dict[str, str]:
-        """Extract domain-specific subtasks from a multi-domain request."""
+        """Extract domain-specific subtasks from a multi-domain request"""
         normalized_input = re.sub(r"\s+", " ", user_input).strip()
 
         # Prefer a deterministic split when the request explicitly chains
@@ -119,25 +119,27 @@ class SupervisorAgent(SyncBaseAgent):
         return {}
     
     def _extract_code_blocks(self, text: str) -> str:
+        """Extract code blocks from text (markdown, labelled sections, indented blocks)"""
+        seen = set()
         code_blocks = []
         
         # Extract markdown code fences
-        markdown_fences = re.findall(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
-        code_blocks.extend([block.strip() for block in markdown_fences if block.strip()])
+        for match in re.finditer(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL):
+            block = match.group(1).strip()
+            if block and block not in seen:
+                seen.add(block)
+                code_blocks.append(block)
         
-        # Extract text after any label ending with : (code sections)
-        sections = re.split(r"\n(?=[A-Z]|\Z)", text)
-        for section in sections:
+        # Extract labelled sections 
+        for section in re.split(r"\n(?=[A-Z]|\Z)", text):
             if ":" in section:
-                parts = section.split(":", 1)
-                if len(parts) == 2:
-                    content = parts[1].strip()
-                    # Include multi-line content after labels (likely code)
-                    if "\n" in content or any(c in content for c in "(){}[];"):
-                        if content not in code_blocks:
-                            code_blocks.append(content)
+                _, content = section.split(":", 1)
+                content = content.strip()
+                if content and ("\n" in content or any(c in content for c in "(){}[];")) and content not in seen:
+                    seen.add(content)
+                    code_blocks.append(content)
         
-        # Extract heavily indented blocks
+        # Extract indented blocks
         lines = text.split("\n")
         indented_block = []
         for line in lines:
@@ -145,56 +147,53 @@ class SupervisorAgent(SyncBaseAgent):
                 indented_block.append(line)
             elif indented_block:
                 block_text = "\n".join(indented_block).strip()
-                if block_text and block_text not in code_blocks:
+                if block_text and block_text not in seen:
+                    seen.add(block_text)
                     code_blocks.append(block_text)
                 indented_block = []
         
         if indented_block:
             block_text = "\n".join(indented_block).strip()
-            if block_text and block_text not in code_blocks:
+            if block_text and block_text not in seen:
                 code_blocks.append(block_text)
         
-        return "\n\n".join(code_blocks) if code_blocks else ""
+        return "\n\n".join(code_blocks)
+
+    def _build_decision(self, primary_domain: str, execution_domains: list, split_tasks: dict = None) -> dict:
+        return {
+            "primary_domain": primary_domain,
+            "execution_domains": execution_domains,
+            "split_tasks": split_tasks or {},
+        }
 
     def _extract_decision(self, raw_output: str) -> Optional[dict]:
         cleaned = raw_output.strip()
         parsed = self._parse_json_from_text(cleaned)
-        if parsed is not None:
-            execution_domains = parsed.get("execution_domains")
-            if execution_domains is None:
-                return None
-            if not isinstance(execution_domains, list):
-                return None
+        if parsed is None:
+            return None
+        
+        execution_domains = parsed.get("execution_domains")
+        if not isinstance(execution_domains, list) or not execution_domains:
+            return None
 
-            normalized_domains = [
-                d for d in [str(x).strip().lower() for x in execution_domains]
-                if d in self.DOMAIN_OPTIONS
-            ]
-            normalized_domains = list(dict.fromkeys(normalized_domains))
-            if not normalized_domains:
-                return None
+        # Normalize and deduplicate domains
+        normalized_domains = [
+            str(d).strip().lower() for d in execution_domains if str(d).strip().lower() in self.DOMAIN_OPTIONS
+        ]
+        normalized_domains = list(dict.fromkeys(normalized_domains))
+        
+        if not normalized_domains:
+            return None
 
-            primary_domain = str(parsed.get("primary_domain", "")).strip().lower()
-            if primary_domain not in self.DOMAIN_OPTIONS:
-                primary_domain = normalized_domains[0]
+        primary_domain = str(parsed.get("primary_domain", "")).strip().lower()
+        if primary_domain not in self.DOMAIN_OPTIONS:
+            primary_domain = normalized_domains[0]
 
-            split_tasks = parsed.get("split_tasks", {})
-            if not isinstance(split_tasks, dict):
-                split_tasks = {}
+        split_tasks = parsed.get("split_tasks", {})
+        if not isinstance(split_tasks, dict):
+            split_tasks = {}
 
-            normalized_split_tasks = {
-                domain: str(split_tasks.get(domain, "")).strip()
-                for domain in self.DOMAIN_OPTIONS
-                if str(split_tasks.get(domain, "")).strip()
-            }
-
-            return {
-                "primary_domain": primary_domain,
-                "execution_domains": normalized_domains,
-                "split_tasks": normalized_split_tasks,
-            }
-
-        return None
+        return self._build_decision(primary_domain, normalized_domains, split_tasks)
     
     def invoke(
         self,
@@ -224,109 +223,78 @@ class SupervisorAgent(SyncBaseAgent):
                     )
 
                 # Use generate_with_metrics for the first attempt to capture metrics
-                if attempt == 0:
-                    output, metrics = self.inference_engine.generate_with_metrics(
-                        prompt=attempt_prompt,
-                        config=config,
-                    )
-                else:
-                    output = self.inference_engine.generate(
-                        prompt=attempt_prompt,
-                        config=config,
-                        stream=False,
-                    )
+                output = self.inference_engine.generate_with_metrics(
+                    prompt=attempt_prompt,
+                    config=config,
+                )[0] if attempt == 0 else self.inference_engine.generate(
+                    prompt=attempt_prompt,
+                    config=config,
+                    stream=False,
+                )
                     
                 label = self._parse_label(output)
                 if label == "SOFTWARE_DEV":
-                    decision = {
-                        "primary_domain": "software_dev",
-                        "execution_domains": ["software_dev"],
-                        "split_tasks": {},
-                    }
-                    self._decision_cache[user_input] = decision
-                    return decision
-                if label == "REVERSE_ENGINEERING":
-                    decision = {
-                        "primary_domain": "reverse_engineering",
-                        "execution_domains": ["reverse_engineering"],
-                        "split_tasks": {},
-                    }
-                    self._decision_cache[user_input] = decision
-                    return decision
-                if label == "BOTH":
+                    decision = self._build_decision("software_dev", ["software_dev"])
+                elif label == "REVERSE_ENGINEERING":
+                    decision = self._build_decision("reverse_engineering", ["reverse_engineering"])
+                elif label == "BOTH":
                     split_tasks = self._extract_split_tasks(user_input)
-                    decision = {
-                        "primary_domain": "software_dev",
-                        "execution_domains": ["software_dev", "reverse_engineering"],
-                        "split_tasks": split_tasks,
-                    }
-                    self._decision_cache[user_input] = decision
-                    return decision
+                    decision = self._build_decision("software_dev", ["software_dev", "reverse_engineering"], split_tasks)
+                else:
+                    continue
+                
+                # Cache with size limit
+                if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
+                    self._decision_cache.clear()
+                self._decision_cache[user_input] = decision
+                return decision
             except Exception:
                 continue
 
         raise RuntimeError("Supervisor routing failed: could not obtain a valid route label from model")
 
-    @staticmethod
-    def _parse_json_from_text(text: str) -> Optional[dict]:
-        candidates: list[str] = []
-        stripped = text.strip()
+    def _parse_json_from_text(self, text: str) -> Optional[dict]:
+        stripped = self._remove_thinking_blocks(text)
 
-        # Remove Qwen reasoning wrappers when present
-        stripped = re.sub(r"<think>.*?</think>", "", stripped, flags=re.DOTALL).strip()
-
+        # Remove code fence markers
         if stripped.startswith("```"):
             stripped = re.sub(r"^```(?:json)?", "", stripped).strip()
             stripped = re.sub(r"```$", "", stripped).strip()
-        candidates.append(stripped)
-
-        block = SupervisorAgent._extract_first_braced_block(stripped)
-        if block:
-            candidates.append(block)
-
-        reverse_block = SupervisorAgent._extract_last_braced_block(stripped)
-        if reverse_block and reverse_block != block:
-            candidates.append(reverse_block)
+        
+        candidates = [stripped]
+        
+        # Try first and last braced blocks
+        for block in [self._extract_braced_block(stripped), self._extract_braced_block(stripped, from_end=True)]:
+            if block and block not in candidates:
+                candidates.append(block)
 
         for candidate in candidates:
-            try:
-                parsed = json.loads(candidate)
-                if isinstance(parsed, dict):
-                    return parsed
-            except Exception:
-                continue
+            if candidate:
+                try:
+                    parsed = json.loads(candidate)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except Exception:
+                    continue
         return None
 
     @staticmethod
-    def _extract_first_braced_block(text: str) -> str:
-        """Extract first balanced {...} block from text."""
-        start = text.find("{")
-        if start == -1:
+    def _extract_braced_block(text: str, from_end: bool = False) -> str:
+        search_pos = text.rfind("}") if from_end else text.find("{")
+        if search_pos == -1:
             return ""
+        
         depth = 0
-        for idx in range(start, len(text)):
-            char = text[idx]
-            if char == "{":
-                depth += 1
-            elif char == "}":
-                depth -= 1
-                if depth == 0:
-                    return text[start : idx + 1]
-        return ""
-
-    @staticmethod
-    def _extract_last_braced_block(text: str) -> str:
-        """Extract last balanced {...} block from text."""
-        end = text.rfind("}")
-        if end == -1:
-            return ""
-        depth = 0
-        for idx in range(end, -1, -1):
+        step = -1 if from_end else 1
+        range_iter = range(search_pos, -1 if from_end else len(text), step)
+        
+        for idx in range_iter:
             char = text[idx]
             if char == "}":
                 depth += 1
             elif char == "{":
                 depth -= 1
                 if depth == 0:
-                    return text[idx : end + 1]
+                    return text[idx : search_pos + 1] if from_end else text[search_pos : idx + 1]
+        
         return ""
