@@ -80,6 +80,14 @@ class SupervisorAgent(SyncBaseAgent):
             reverse_part = normalized_input[match.end() :].strip(" ,;:-\n\t")
 
             if software_part and reverse_part:
+                # Extract any code snippets from the entire input to include in both tasks
+                code_snippets = self._extract_code_blocks(user_input)
+                
+                # Include in both split tasks for context
+                if code_snippets:
+                    software_part = f"{software_part}\n\n{code_snippets}"
+                    reverse_part = f"{reverse_part}\n\n{code_snippets}"
+                
                 return {
                     "software_dev": software_part,
                     "reverse_engineering": reverse_part,
@@ -109,6 +117,44 @@ class SupervisorAgent(SyncBaseAgent):
             pass
         
         return {}
+    
+    def _extract_code_blocks(self, text: str) -> str:
+        code_blocks = []
+        
+        # Extract markdown code fences
+        markdown_fences = re.findall(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+        code_blocks.extend([block.strip() for block in markdown_fences if block.strip()])
+        
+        # Extract text after any label ending with : (code sections)
+        sections = re.split(r"\n(?=[A-Z]|\Z)", text)
+        for section in sections:
+            if ":" in section:
+                parts = section.split(":", 1)
+                if len(parts) == 2:
+                    content = parts[1].strip()
+                    # Include multi-line content after labels (likely code)
+                    if "\n" in content or any(c in content for c in "(){}[];"):
+                        if content not in code_blocks:
+                            code_blocks.append(content)
+        
+        # Extract heavily indented blocks
+        lines = text.split("\n")
+        indented_block = []
+        for line in lines:
+            if line.startswith(("    ", "\t")):
+                indented_block.append(line)
+            elif indented_block:
+                block_text = "\n".join(indented_block).strip()
+                if block_text and block_text not in code_blocks:
+                    code_blocks.append(block_text)
+                indented_block = []
+        
+        if indented_block:
+            block_text = "\n".join(indented_block).strip()
+            if block_text and block_text not in code_blocks:
+                code_blocks.append(block_text)
+        
+        return "\n\n".join(code_blocks) if code_blocks else ""
 
     def _extract_decision(self, raw_output: str) -> Optional[dict]:
         cleaned = raw_output.strip()

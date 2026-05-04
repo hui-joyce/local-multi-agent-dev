@@ -41,10 +41,11 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
         # If software_dev already ran, include the generated code in the analysis
         software_dev_output = state.branch_outputs.get("software_dev", "")
         if software_dev_output:
+            clean_output = StateManager.sanitize_output(software_dev_output)
             # Combine the split task with the generated code for contextual analysis
             re_state["user_input"] = (
                 f"Analyze and assess this generated code from development:\n\n"
-                f"{software_dev_output}\n\n"
+                f"{clean_output}\n\n"
                 f"Focus your analysis on: {re_task}"
             )
         elif re_task:
@@ -58,7 +59,7 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
         re_output = state.branch_outputs.get("reverse_engineering")
 
         if dev_output and re_output:
-            state.final_output = (
+            state.final_output = StateManager.sanitize_output(
                 "# Integrated Multi-Agent Report\n\n"
                 "## User Request\n"
                 f"{state.user_input}\n\n"
@@ -72,11 +73,11 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
                 "3. Validate remediation with targeted tests and follow-up code inspection."
             )
         elif dev_output:
-            state.final_output = dev_output
+            state.final_output = StateManager.sanitize_output(dev_output)
         elif re_output:
-            state.final_output = re_output
+            state.final_output = StateManager.sanitize_output(re_output)
         elif state.final_output is None:
-            state.final_output = StateManager.format_agent_outputs(state)
+            state.final_output = StateManager.sanitize_output(StateManager.format_agent_outputs(state))
 
         state.agent_chain.append("final_synthesis")
         return state

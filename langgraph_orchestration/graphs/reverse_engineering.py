@@ -166,7 +166,7 @@ Comprehensive reverse engineering analysis completed with planning,
 structural analysis, and vulnerability assessment. All findings documented
 with remediation recommendations where applicable.
 """
-        state.branch_outputs["reverse_engineering"] = final
+        state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(final)
         state.agent_chain.append("reverse_engineering_synthesize")
         return state
 
