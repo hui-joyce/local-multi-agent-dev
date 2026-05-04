@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+from langgraph_orchestration.retrievers.config import RAGConfigManager
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -64,6 +66,18 @@ class AgentResponse(BaseModel):
     agent_chain: list[str]
     final_output: str
     intermediate_outputs: list[str]
+
+# RAG admin/search models
+class AddDocumentRequest(BaseModel):
+    text: str
+    domain: str
+    metadata: Optional[dict] = None
+
+
+class SearchRequest(BaseModel):
+    query: str
+    domain: Optional[str] = None
+    top_k: Optional[int] = 5
 
 # /root, /info, /invoke, /domains, /assistants, /assistants/search, /graph, /assistants/{assistant_id}/schemas, /threads, /threads/{thread_id}/messages endpoints
 @app.get("/")
@@ -323,6 +337,39 @@ async def get_assistant_schemas(assistant_id: str):
 @app.get("/threads")
 async def list_threads():
     return {"threads": []}
+
+
+# RAG admin endpoints for IDE plugin integration
+@app.post("/rag/add")
+async def rag_add(doc: AddDocumentRequest):
+    try:
+        RAGConfigManager.initialize()
+        admin = RAGConfigManager.get_admin_service()
+        result = admin.add_document(doc.text, doc.domain, metadata=doc.metadata)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/rag/search")
+async def rag_search(req: SearchRequest):
+    try:
+        RAGConfigManager.initialize()
+        rag = RAGConfigManager.get_rag_manager()
+        results = rag.retrieve_for_agent(req.query, domain=req.domain, top_k=req.top_k)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/rag/stats")
+async def rag_stats():
+    try:
+        RAGConfigManager.initialize()
+        admin = RAGConfigManager.get_admin_service()
+        return admin.get_statistics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/threads/{thread_id}/messages")
 async def send_message(thread_id: str, request: AgentRequest):
