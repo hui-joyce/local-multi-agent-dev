@@ -131,8 +131,6 @@ class RAGAdminService:
     
     def export_documents(self, domain: Optional[str] = None) -> dict:
         try:
-            # For now, we can export via search API
-            # In production, you might want direct access to vector DB
             export_data = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "domains": {},
@@ -141,8 +139,39 @@ class RAGAdminService:
             domains = [domain] if domain else ["software_dev", "reverse_engineering", "shared"]
             
             for d in domains:
-                info = self.retriever.get_collection_info(d)
-                export_data["domains"][d] = info
+                collection_name = self.retriever.domain_collections.get(d)
+                if not collection_name:
+                    export_data["domains"][d] = {"error": f"Unknown domain: {d}"}
+                    continue
+
+                documents = []
+                next_page = None
+
+                while True:
+                    points, next_page = self.retriever.client.scroll(
+                        collection_name=collection_name,
+                        limit=500,
+                        offset=next_page,
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+
+                    for point in points:
+                        payload = point.payload or {}
+                        documents.append({
+                            "id": point.id,
+                            "text": payload.get("text", ""),
+                            "metadata": payload.get("metadata", {}),
+                        })
+
+                    if next_page is None:
+                        break
+
+                export_data["domains"][d] = {
+                    "collection": collection_name,
+                    "document_count": len(documents),
+                    "documents": documents,
+                }
             
             return {
                 "status": "success",

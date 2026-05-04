@@ -97,7 +97,7 @@ class QdrantRetriever(BaseRetriever):
         domain: Optional[str] = None,
         score_threshold: float = 0.3,
     ) -> list[str]:
-=        if not query or not isinstance(query, str):
+        if not query or not isinstance(query, str):
             logger.warning("Invalid query provided to retrieve")
             return []
         

@@ -11,7 +11,7 @@ from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
-from langgraph_orchestration.retrievers.qdrant_client import QdrantRetriever
+from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.prompts.reverse_engineering import (
     REVERSE_ENGINEERING_TASKS,
@@ -86,13 +86,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
-        # RAG retrieval intentionally commented out for baseline LLM-only testing.
-        # context = retriever.retrieve(
-        #     query=state.user_input,
-        #     top_k=5,
-        #     domain="reverse_engineering",
-        # )
-        context = []
+        RAGConfigManager.initialize()
+        rag_manager = RAGConfigManager.get_rag_manager()
+        config = RAGConfigManager.get_config()
+        context = rag_manager.retrieve_reverse_engineering_context(
+            query=state.user_input,
+            top_k=config.default_top_k,
+        )
         state.re_context = context
         
         # When analyzing generated code from software_dev domain, skip planning and code_analysis
