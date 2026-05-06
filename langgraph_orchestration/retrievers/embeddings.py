@@ -7,6 +7,8 @@ import os
 from typing import Optional
 import numpy as np
 from pathlib import Path
+# sentence-transformers 22MB model 
+# semantic search, clustering, sentence similarity 
 MODEL = "all-MiniLM-L6-v2"
 
 def _detect_default_device(preferred: Optional[str] = None) -> str:
