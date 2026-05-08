@@ -1,71 +1,109 @@
 # Local Multi-Agent Development System
 
-Local-first, LangGraph-based orchestration for two domains: software development and reverse engineering. A supervisor model routes requests to one or both branches and produces a unified result.
+Local-first, LangGraph-based orchestration for two domains: software development and reverse engineering. A supervisor routes requests to one or both branches and returns a unified result.
 
-## What This Provides
+## What This Repository Provides
 - Domain routing with optional dual-branch execution
 - Software development workflow: code generation, testing loop, architecture review
 - Reverse engineering workflow: planning, code analysis, vulnerability detection
-- FastAPI service for local use and integration with LangSmith Studio
+- FastAPI service for local use and LangSmith Studio integration
 - MLX-based local inference on Apple Silicon
+- Embedded Qdrant retrieval with hybrid transformer embeddings
 
 ## Tech Stack
 
 | Component | Technology |
 |---|---|
-| **Orchestration** | LangGraph |
-| **LLM Inference** | MLX + MLX-LM |
-| **State Management** | Pydantic |
-| **Vector Database** | Qdrant (Embedded) |
-| **Embeddings** | Sentence Transformers (all-MiniLM-L6-v2) |
-| **API Server** | FastAPI |
-| **Runtime** | Python 3.11+ |
+| Orchestration | LangGraph |
+| LLM inference | MLX + MLX-LM |
+| State management | Pydantic |
+| Vector database | Qdrant (embedded) |
+| Embeddings | Hybrid transformer embeddings (all-MiniLM, BGE, UniXcoder) |
+| API server | FastAPI |
+| Runtime | Python 3.11+ |
 
-## Flow (High-Level)
+## Architecture
+
+### System Architecture
 ![System Architecture](assets/system-architecture.png)
+
+### High-Level Flow
+![High-Level Flow](assets/high-level-flow.png)
+
+### LangGraph Flow
 ![LangGraph Flow](assets/langgraph.png)
 
-**Supervisor**
-- Classifies the request and selects execution domains
-- Splits tasks when both domains are relevant
+## Quickstart
 
-**Software Development Branch**
-- `retrieve_dev_context` 
-- `code_generation` → `unit_testing` (loop until pass or iteration cap)
-- `architectural_review` → `synthesize`
-
-**Reverse Engineering Branch**
-- `retrieve_re_context`
-- `planning` → `code_analysis` → `vulnerability_detection` → `synthesize`
-
-**Final Synthesis**
-- Merges branch outputs when both ran, otherwise returns the selected branch result
-
-## Quick Start
-
-Install:
+Create a virtual environment and install dependencies:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
 ```
 
-Run examples:
+Run the example script:
 ```bash
 source venv/bin/activate
 python3 examples.py
 ```
 
-Run API server:
+API default address: `http://localhost:8000` (`API_HOST` and `API_PORT` are changeable)
+
+## How To Communicate With The Model
+
+1. Gradio chat interface (interactive local UI)
+2. CLI via API (`curl` to FastAPI `POST /invoke`)
+3. Direct Python graph invocation (run inside your own scripts/tests)
+
+### 1) Gradio chat interface
+
+Use this for quick local experimentation with a chat UX.
+
+```bash
+source venv/bin/activate
+python3 app.py
+```
+
+The UI includes:
+- Domain selector (`Software Dev` or `Reverse Engineering`)
+- Optional `Enable RAG Context` toggle
+- Chat interface with starter prompts
+
+Open: `http://127.0.0.1:7860`
+
+### 2) CLI via API endpoint
+
+Use this for scriptable calls, shell workflows, and external tool integration.
+
+First start the API server:
 ```bash
 source venv/bin/activate
 python3 api.py
 ```
 
-API default address: `http://localhost:8000`
+Then invoke the model from CLI:
+```bash
+curl -X POST http://localhost:8000/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"user_input":"Implement an API auth flow and inspect it for vulnerabilities"}'
+```
 
-## Python Usage
+Example response shape:
+```json
+{
+  "selected_domain": "software_dev",
+  "agent_chain": ["retrieve_dev_context", "code_generation", "unit_testing"],
+  "final_output": "...",
+  "intermediate_outputs": ["..."]
+}
+```
+
+### 3) Direct Python graph invocation
+
+Use this when you want the orchestration flow embedded directly in Python code.
+
 ```python
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
@@ -90,36 +128,55 @@ print(result["final_output"])
 - `GET /assistants/{assistant_id}/schemas` input/output schemas
 - `GET /graph` graph nodes and edges
 - `GET /graph/schema` runnable schema
-- `POST /langgraph` LangSmith-friendly invocation
+- `POST /langgraph` LangSmith invocation
 - `GET /test-graph` LangSmith registration check
-- `GET /threads` list threads (placeholder)
+- `GET /threads` list threads placeholder
 - `POST /threads/{thread_id}/messages` send a message
 
-Example request:
-```bash
-curl -X POST http://localhost:8000/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"user_input": "Implement an API auth flow and inspect it for vulnerabilities"}'
+## Embedding Models And Retrieval
+
+Hybrid embedding architecture with one model per retrieval purpose.
+
+| Purpose | Embedding Model | Where It Is Active |
+|---|---|---|
+| General docs | [all-MiniLM-L6-v2](https://huggingface.co/mlx-community/all-MiniLM-L6-v2-4bit) | - Used during ingestion for shared knowledge base<br>- Used at runtime to embed `agents_shared` queries for retrieval |
+| Code retrieval | [bge-small-en-v1.5-6bit](https://huggingface.co/mlx-community/bge-small-en-v1.5-6bit) | - Used during ingestion for `agents_software_dev` code index<br>- Used at runtime to embed `agents_software_dev` queries for semantic code search |
+| Reverse engineering | [UniXcoder](https://huggingface.co/microsoft/unixcoder-base) | - Used during ingestion for RE corpus<br>- Used at runtime to embed `agents_reverse_engineering` queries for program-understanding search |
+
+Qdrant storage layout (embedded local DB):
+```text
+~/.local/share/qdrant/
+├── agents_software_dev (code retrieval)
+├── agents_reverse_engineering (RE)
+└── agents_shared (general docs)
 ```
 
 ## Configuration Notes
 - Inference uses MLX/MLX-LM and expects a compatible local model
 - LangSmith tracing is enabled when `LANGSMITH_TRACING=true`
 - API host and port are controlled by `API_HOST` and `API_PORT`
+- If you see `Model type qwen3_5 not supported`, upgrade `mlx-lm` or select a model supported by your current runtime
 
-If you see `Model type qwen3_5 not supported`, upgrade `mlx-lm` or select a model supported by your current runtime.
-
-## Dev and Benchmarks
+## Dev And Benchmarks
 - Compile check: `python3 -m compileall langgraph_orchestration api.py`
 - No-RAG benchmark harness: `python3 benchmarks/no_rag_harness.py`
 - Harness validation: `python3 benchmarks/validate_harness.py`
+- LangGraph local dev server with tracing UI:
+  1. Create a LangSmith account and generate an API key.
+  2. Set tracing env vars in `.env` (used by `langgraph.json`):
+     - `LANGSMITH_API_KEY=<your_key>`
+     - `LANGSMITH_TRACING=true`
+     - `LANGSMITH_PROJECT=local-multi-agent-dev` 
+  3. Stop other local API servers first (e.g. `python3 api.py`/other service bound to the same ports).
+  4. Start dev server from repo root: `langgraph dev`
+  5. Open the local LangGraph Studio URL printed in terminal to inspect traces and runs.
 
 ## References
-- **LangGraph**: https://langchain-ai.github.io/langgraph/
-- **Pydantic**: https://docs.pydantic.dev/
-- **Qdrant**: https://qdrant.tech/documentation/
-- **Sentence Transformers**: https://www.sbert.net/
-- **MLX**: https://ml-explore.github.io/mlx/
-- **FastAPI**: https://fastapi.tiangolo.com/
+- LangGraph: https://langchain-ai.github.io/langgraph/
+- Pydantic: https://docs.pydantic.dev/
+- Qdrant: https://qdrant.tech/documentation/
+- Sentence Transformers: https://www.sbert.net/
+- MLX: https://ml-explore.github.io/mlx/
+- FastAPI: https://fastapi.tiangolo.com/
 
 Last updated: May 2026
