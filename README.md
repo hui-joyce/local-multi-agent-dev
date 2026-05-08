@@ -8,7 +8,7 @@ Local-first, LangGraph-based orchestration for two domains: software development
 - Reverse engineering workflow: planning, code analysis, vulnerability detection
 - FastAPI service for local use and LangSmith Studio integration
 - MLX-based local inference on Apple Silicon
-- Embedded Qdrant retrieval with hybrid transformer embeddings
+- Embedded Qdrant retrieval with Qwen embeddings
 
 ## Tech Stack
 
@@ -18,7 +18,7 @@ Local-first, LangGraph-based orchestration for two domains: software development
 | LLM inference | MLX + MLX-LM |
 | State management | Pydantic |
 | Vector database | Qdrant (embedded) |
-| Embeddings | Hybrid transformer embeddings (all-MiniLM, BGE, UniXcoder) |
+| Embeddings | Qwen3 Embeddings |
 | API server | FastAPI |
 | Runtime | Python 3.11+ |
 
@@ -135,13 +135,12 @@ print(result["final_output"])
 
 ## Embedding Models And Retrieval
 
-Hybrid embedding architecture with one model per retrieval purpose.
-
-| Purpose | Embedding Model | Where It Is Active |
+Embedding Model: [Qwen3-Embedding-0.6B-4bit-DWQ](https://huggingface.co/mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ)
+| Purpose | Where It Is Active |
 |---|---|---|
-| General docs | [all-MiniLM-L6-v2](https://huggingface.co/mlx-community/all-MiniLM-L6-v2-4bit) | - Used during ingestion for shared knowledge base<br>- Used at runtime to embed `agents_shared` queries for retrieval |
-| Code retrieval | [bge-small-en-v1.5-6bit](https://huggingface.co/mlx-community/bge-small-en-v1.5-6bit) | - Used during ingestion for `agents_software_dev` code index<br>- Used at runtime to embed `agents_software_dev` queries for semantic code search |
-| Reverse engineering | [UniXcoder](https://huggingface.co/microsoft/unixcoder-base) | - Used during ingestion for RE corpus<br>- Used at runtime to embed `agents_reverse_engineering` queries for program-understanding search |
+| General docs | - Used during ingestion for shared knowledge base<br>- Used at runtime to embed `agents_shared` queries for retrieval (base model) |
+| Code retrieval | - Used during ingestion for `agents_software_dev` code index<br>- Used at runtime to embed `agents_software_dev` queries for semantic code search (base model) |
+| Reverse engineering | - Used during ingestion for RE corpus<br>- Used at runtime to embed `agents_reverse_engineering` queries for program-understanding search (fine-tuned model) |
 
 Qdrant storage layout (embedded local DB):
 ```text
@@ -175,7 +174,7 @@ Qdrant storage layout (embedded local DB):
 - LangGraph: https://langchain-ai.github.io/langgraph/
 - Pydantic: https://docs.pydantic.dev/
 - Qdrant: https://qdrant.tech/documentation/
-- Sentence Transformers: https://www.sbert.net/
+- Qwen3 Embeddings: https://huggingface.co/mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ
 - MLX: https://ml-explore.github.io/mlx/
 - FastAPI: https://fastapi.tiangolo.com/
 
