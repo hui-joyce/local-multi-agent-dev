@@ -48,31 +48,42 @@ def run_orchestration_example(user_input: str) -> None:
 
 
 def run_all_examples() -> None:    
-    # Example 1: Software development request
-    print("\n\nEXAMPLE 1: Software Development Assistant")
+    # Software development - rate limiter with tests (SD-01)
+    print("\n\nEXAMPLE 1: Software Development - Feature Implementation")
     run_orchestration_example(
-        "I need to generate a Python function for sorting and then write unit tests for it. "
-        "Also review the architecture."
+        "Implement a Python rate limiter using token bucket logic and include "
+        "unit tests for burst and refill behavior."
     )
     
-    # Example 2: Reverse engineering request
-    print("\n\nEXAMPLE 2: Reverse Engineering Assistant")
+    # Reverse engineering - code analysis (RE-01)
+    print("\n\nEXAMPLE 2: Reverse Engineering - Code Behavior Analysis")
     run_orchestration_example(
-        "Analyze this binary for vulnerabilities and security issues. "
-        "Perform a comprehensive reverse engineering assessment."
-    )
-    
-    # Example 3: Code implementation request
-    print("\n\nEXAMPLE 3: Code Generation Focus")
-    run_orchestration_example(
-        "Implement a REST API endpoint for user authentication with proper error handling"
-    )
-    
-    # Example 4: Security analysis request
-    print("\n\nEXAMPLE 4: Security Vulnerability Detection")
-    run_orchestration_example(
-        "I found suspicious assembly code with potential buffer overflow. "
-        "Analyze it for security threats."
+        "Reverse engineer the following pseudo-code and explain likely intent, "
+        "state transitions, hidden assumptions, and possible abuse cases.\n\n"
+        "Pseudo-code:\n"
+        "function verify_and_execute(input, key):\n"
+        "    state = INIT\n"
+        "    idx = 0\n"
+        "    checksum = 0\n"
+        "    while idx < len(input):\n"
+        "        b = input[idx]\n"
+        "        checksum = (checksum + ((b XOR key[idx % len(key)]) * 17)) & 0xFFFF\n"
+        "        if state == INIT and b == 0x7B:\n"
+        "            state = HEADER\n"
+        "        else if state == HEADER and b == 0x3A:\n"
+        "            state = BODY\n"
+        "        else if state == BODY and b == 0x7D:\n"
+        "            state = DONE\n"
+        "        idx = idx + 1\n"
+        "\n"
+        "    if state != DONE:\n"
+        "        return ERR_FORMAT\n"
+        "\n"
+        "    if checksum == 0xBEEF:\n"
+        "        call privileged_operation(input)\n"
+        "        return OK\n"
+        "\n"
+        "    return ERR_AUTH\n"
     )
 
 if __name__ == "__main__":

@@ -52,3 +52,6 @@ share/python-wheels/
 # Graph visualizations
 graph_diagram.md
 graph_diagram.png
+documents/
+knowledge_base/
+*.pdf

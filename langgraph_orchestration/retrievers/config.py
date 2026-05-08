@@ -8,6 +8,9 @@ class RAGConfig:
     db_path: str
     db_mode: str
     embedding_model: str
+    embedding_model_shared: str
+    embedding_model_software_dev: str
+    embedding_model_reverse_engineering: str
     embedding_device: str
     embedding_cache_dir: str
     default_top_k: int
@@ -22,13 +25,23 @@ class RAGConfig:
     
     @classmethod
     def from_env(cls) -> "RAGConfig":
+        embedding_model = os.getenv(
+            "RAG_EMBEDDING_MODEL",
+            "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ",
+        )
         return cls(
             db_path=os.getenv("RAG_DB_PATH", "~/.local/share/qdrant"),
             db_mode=os.getenv("RAG_DB_MODE", "embedded"),
             db_url=os.getenv("RAG_DB_URL"),
-            embedding_model=os.getenv("RAG_EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+            embedding_model=embedding_model,
+            embedding_model_shared=os.getenv("RAG_EMBEDDING_MODEL_SHARED", embedding_model),
+            embedding_model_software_dev=os.getenv("RAG_EMBEDDING_MODEL_SOFTWARE_DEV", embedding_model),
+            embedding_model_reverse_engineering=os.getenv(
+                "RAG_EMBEDDING_MODEL_REVERSE_ENGINEERING",
+                embedding_model,
+            ),
             embedding_device=os.getenv("RAG_EMBEDDING_DEVICE") or "",  # Empty string for auto-detection
-            embedding_cache_dir=os.getenv("RAG_EMBEDDING_CACHE_DIR", "~/.cache/sentence-transformers"),
+            embedding_cache_dir=os.getenv("RAG_EMBEDDING_CACHE_DIR", "~/.cache/huggingface"),
             default_top_k=int(os.getenv("RAG_DEFAULT_TOP_K", "5")),
             score_threshold=float(os.getenv("RAG_SCORE_THRESHOLD", "0.3")),
             enable_fallback=os.getenv("RAG_ENABLE_FALLBACK", "true").lower() == "true",
@@ -62,6 +75,15 @@ class RAGConfig:
             errors.append(f"Invalid log_level: {self.log_level}")
         
         return errors
+
+    def get_embedding_model(self, domain: Optional[str] = None) -> str:
+        if domain == "software_dev":
+            return self.embedding_model_software_dev
+        if domain == "reverse_engineering":
+            return self.embedding_model_reverse_engineering
+        if domain == "shared":
+            return self.embedding_model_shared
+        return self.embedding_model
 
 
 class RAGConfigManager:
@@ -120,6 +142,13 @@ class RAGConfigManager:
             manager._retriever = QdrantRetriever(
                 db_path=config.db_path,
                 embedding_model=config.embedding_model,
+                domain_embedding_models={
+                    "shared": config.embedding_model_shared,
+                    "software_dev": config.embedding_model_software_dev,
+                    "reverse_engineering": config.embedding_model_reverse_engineering,
+                },
+                embedding_cache_dir=config.embedding_cache_dir,
+                embedding_device=config.embedding_device or None,
                 enable_fallback=config.enable_fallback,
             )
         else:
