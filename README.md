@@ -14,6 +14,7 @@ Local-first, LangGraph-based orchestration for two domains: software development
 
 | Component | Technology |
 |---|---|
+| Model | Qwen3.5-9B-4bit |
 | Orchestration | LangGraph |
 | LLM inference | MLX + MLX-LM |
 | State management | Pydantic |
@@ -136,11 +137,12 @@ print(result["final_output"])
 ## Embedding Models And Retrieval
 
 Embedding Model: [Qwen3-Embedding-0.6B-4bit-DWQ](https://huggingface.co/mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ)
+
 | Purpose | Where It Is Active |
-|---|---|---|
-| General docs | - Used during ingestion for shared knowledge base<br>- Used at runtime to embed `agents_shared` queries for retrieval (base model) |
-| Code retrieval | - Used during ingestion for `agents_software_dev` code index<br>- Used at runtime to embed `agents_software_dev` queries for semantic code search (base model) |
-| Reverse engineering | - Used during ingestion for RE corpus<br>- Used at runtime to embed `agents_reverse_engineering` queries for program-understanding search (fine-tuned model) |
+|---|---|
+| General docs (base model) | - Used during ingestion for shared knowledge base<br>- Used at runtime to embed `agents_shared` queries for retrieval |
+| Code retrieval (base model) | - Used during ingestion for `agents_software_dev` code index<br>- Used at runtime to embed `agents_software_dev` queries for semantic code search |
+| Reverse engineering (fine-tuned model) | - Used during ingestion for RE corpus<br>- Used at runtime to embed `agents_reverse_engineering` queries for program-understanding search |
 
 Qdrant storage layout (embedded local DB):
 ```text
@@ -149,6 +151,64 @@ Qdrant storage layout (embedded local DB):
 ├── agents_reverse_engineering (RE)
 └── agents_shared (general docs)
 ```
+
+Ingesting documents & chunking
+--------------------------------
+Documents are converted and chunked before embedding and storage. Use the helper scripts in `scripts/`:
+
+- `scripts/load_documents_to_qdrant.py` — load `.md`, `.txt`, and simple PDFs (text-extraction) into a collection.
+- `scripts/pdf_to_qdrant.py` — PDF-first pipeline with optional `pymupdf4llm` or other converters for better markdown output.
+
+Chunking behavior (defaults):
+- Word-based chunking: `--chunk-size 512` words, `--overlap 100` words.
+- Markdown-aware chunking: splits on headers and groups into chunks up to the chunk size when a `.md` file is detected.
+
+Example commands:
+```bash
+python scripts/load_documents_to_qdrant.py --file README.md --domain shared
+python scripts/load_documents_to_qdrant.py --dir ./docs --domain software_dev --chunk-size 512 --overlap 100
+python scripts/load_documents_to_qdrant.py --pdf research.pdf --domain reverse_engineering
+```
+
+What gets stored
+- Each chunk is embedded and written to the domain collection (`agents_<domain>`).
+- Default metadata fields: `source_file`, `chunk_index`, `total_chunks`, `file_type`.
+- Insertion is batched (default `batch_size=32`) to balance memory and throughput.
+
+Adding embeddings to Qdrant
+---------------------------
+Pre-cache the models to use. The base and RE fine-tuned models are in separate cache folders. Example using `huggingface_hub`:
+
+```python 
+from huggingface_hub import snapshot_download
+snapshot_download("mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ", cache_dir="$HOME/.cache/huggingface/qwen-base")
+snapshot_download("your-org/qwen3-embedding-re-ft", cache_dir="$HOME/.cache/huggingface/qwen-re-ft")
+PY
+```
+
+- Route models by domain with these env vars:
+  - `RAG_EMBEDDING_MODEL_SHARED` for `shared`
+  - `RAG_EMBEDDING_MODEL_SOFTWARE_DEV` for `software_dev`
+  - `RAG_EMBEDDING_MODEL_REVERSE_ENGINEERING` for `reverse_engineering`
+
+- Ingestion pattern:
+  1. For each domain, choose model id or local cache dir (`RAG_EMBEDDING_MODEL` or `--embedding-model`).
+  2. Warm the model: call `retriever.embedding_service.preload()` before bulk `add_documents`.
+  3. Ingest documents per-domain into `agents_<domain>` collections so each collection stays consistent with the model used to create vectors.
+
+- Quick examples:
+
+```bash
+# Use base model for shared/code ingestion
+RAG_EMBEDDING_MODEL="mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ" \
+  python scripts/load_documents_to_qdrant.py --dir ./docs --domain software_dev
+
+# Use fine-tuned RE model for reverse engineering corpus
+RAG_EMBEDDING_MODEL="your-org/qwen3-embedding-re-ft" \
+  python scripts/load_documents_to_qdrant.py --dir ./re_corpus --domain reverse_engineering
+```
+
+- Note: keep embedding dimension consistent across queries and ingestion for a given collection. If fine-tuned model changes dimension, create a separate collection.
 
 ## Configuration Notes
 - Inference uses MLX/MLX-LM and expects a compatible local model

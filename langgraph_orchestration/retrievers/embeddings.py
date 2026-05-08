@@ -1,5 +1,5 @@
 """
-Local embedding service using sentence-transformers.
+Local embedding service.
 Provides semantic embeddings for RAG.
 """
 
@@ -7,9 +7,9 @@ import os
 from typing import Optional
 import numpy as np
 from pathlib import Path
-# sentence-transformers 22MB model 
-# semantic search, clustering, sentence similarity 
-MODEL = "all-MiniLM-L6-v2"
+
+# semantic search, document retrieval, query embedding
+MODEL = "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
 
 def _detect_default_device(preferred: Optional[str] = None) -> str:
     if preferred:
@@ -38,7 +38,7 @@ class EmbeddingService:
         self.embedding_dim = None
         # Set cache directory
         if cache_dir is None:
-            cache_dir = os.path.expanduser("~/.cache/sentence-transformers")
+            cache_dir = os.path.expanduser("~/.cache/huggingface")
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
