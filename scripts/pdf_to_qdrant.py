@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 
 @dataclass

@@ -5,7 +5,7 @@ import sys, argparse, re
 from pathlib import Path
 from typing import List
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 
 def load_file(file_path: Path) -> str:
