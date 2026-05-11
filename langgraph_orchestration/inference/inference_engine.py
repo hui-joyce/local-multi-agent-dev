@@ -32,6 +32,7 @@ class GenerationMetrics:
 
 class MLXInferenceEngine:
     """MLX-backed inference engine with prompt formatting and metrics"""
+    """MLX-backed inference engine with prompt formatting and metrics"""
     
     # Default system prompt for agents
     DEFAULT_SYSTEM_PROMPT = (
@@ -136,6 +137,14 @@ class MLXInferenceEngine:
         try:
             if stream:
                 return self._generate_stream(prompt, config)
+            generated_text = generate(
+                self.model,
+                self.tokenizer,
+                prompt=prompt,
+                max_tokens=config.max_tokens,
+                verbose=False,
+            )
+            return generated_text
             generated_text = generate(
                 self.model,
                 self.tokenizer,

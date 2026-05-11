@@ -101,6 +101,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         state.re_context = context
         
         # Skip planning when analyzing generated code from software_dev
+        # Skip planning when analyzing generated code from software_dev
         software_dev_output = state.branch_outputs.get("software_dev", "")
         if software_dev_output:
             state.re_task_plan = ["vulnerability_detection"]
@@ -233,6 +234,7 @@ with remediation recommendations where applicable.
     graph.add_node("vulnerability_detection_tools", tool_executor_node)
     graph.add_node("synthesize", synthesize_output)
     
+    # Add edges
     # Add edges
     graph.add_conditional_edges(
         "retrieve_re_context",
