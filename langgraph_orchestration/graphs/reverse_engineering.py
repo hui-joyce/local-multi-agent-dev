@@ -41,7 +41,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     analysis_agent = factory.create_code_analysis_agent()
     vuln_agent = factory.create_vulnerability_detection_agent()
     inference_engine = factory.inference_engine
-    # disable RAG for no-RAG benchmark runs
     retriever = QdrantRetriever()
     
     # Create graph
@@ -100,14 +99,11 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         )
         state.re_context = context
         
-        # When analyzing generated code from software_dev domain, skip planning and code_analysis
-        # Go directly to vulnerability detection since we already have structured code
+        # Skip planning when analyzing generated code from software_dev
         software_dev_output = state.branch_outputs.get("software_dev", "")
         if software_dev_output:
-            # For generated code security analysis only
             state.re_task_plan = ["vulnerability_detection"]
         else:
-            # For standalone reverse engineering, use LLM-selected task plan
             state.re_task_plan = _select_re_task_plan(state.user_input)
 
         state.tool_policy.allowed_tools = get_allowed_tools("reverse_engineering")
@@ -150,7 +146,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     
     def code_analysis_node(state: AgentState) -> AgentState:
         planning_output = state.intermediate_outputs.get("planning", "")
-        # Check if there's generated code from previous software_dev domain
         generated_code = state.branch_outputs.get("software_dev", "")
         prompt = build_code_analysis_prompt(
             user_input=state.user_input,
@@ -237,7 +232,7 @@ with remediation recommendations where applicable.
     graph.add_node("vulnerability_detection_tools", tool_executor_node)
     graph.add_node("synthesize", synthesize_output)
     
-    # Add edges - sequential pipeline
+    # Add edges
     graph.add_conditional_edges(
         "retrieve_re_context",
         route_after_retrieve,
@@ -280,7 +275,6 @@ with remediation recommendations where applicable.
     )
     graph.add_edge("synthesize", END)
     
-    # Set entry point
     graph.set_entry_point("retrieve_re_context")
     
     compiled = graph.compile()

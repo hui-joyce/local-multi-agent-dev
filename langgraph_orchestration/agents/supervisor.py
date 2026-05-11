@@ -1,9 +1,4 @@
-"""
-Supervisor agent for domain routing and orchestration.
-
-The Supervisor analyzes incoming requests and routes them to the
-appropriate domain (software development or reverse engineering).
-"""
+"""Supervisor agent for domain routing"""
 
 import json
 import re
@@ -21,9 +16,7 @@ from langgraph_orchestration.prompts.supervisor import (
 class SupervisorAgent(SyncBaseAgent):
     DOMAIN_OPTIONS = ("software_dev", "reverse_engineering")
     LABEL_OPTIONS = ("SOFTWARE_DEV", "REVERSE_ENGINEERING", "BOTH")
-    """Memory safety limit for routing decisions - 
-     automatically clears entire dict (when cache reaches 1000 entries) 
-     to prevent unbounded memory growth"""
+    # Clear cache when it reaches this size to cap memory usage.
     _CACHE_MAX_SIZE = 1000
 
     def __init__(self, inference_engine: Optional[MLXInferenceEngine] = None):
@@ -65,8 +58,7 @@ class SupervisorAgent(SyncBaseAgent):
         """Extract domain-specific subtasks from a multi-domain request"""
         normalized_input = re.sub(r"\s+", " ", user_input).strip()
 
-        # Prefer a deterministic split when the request explicitly chains
-        # implementation work followed by analysis/review work.
+        # Prefer deterministic splits for explicit "and then" requests.
         split_markers = (
             r"\band then\b",
             r"\bthen\b",
@@ -80,10 +72,8 @@ class SupervisorAgent(SyncBaseAgent):
             reverse_part = normalized_input[match.end() :].strip(" ,;:-\n\t")
 
             if software_part and reverse_part:
-                # Extract any code snippets from the entire input to include in both tasks
                 code_snippets = self._extract_code_blocks(user_input)
                 
-                # Include in both split tasks for context
                 if code_snippets:
                     software_part = f"{software_part}\n\n{code_snippets}"
                     reverse_part = f"{reverse_part}\n\n{code_snippets}"
@@ -123,14 +113,12 @@ class SupervisorAgent(SyncBaseAgent):
         seen = set()
         code_blocks = []
         
-        # Extract markdown code fences
         for match in re.finditer(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL):
             block = match.group(1).strip()
             if block and block not in seen:
                 seen.add(block)
                 code_blocks.append(block)
         
-        # Extract labelled sections 
         for section in re.split(r"\n(?=[A-Z]|\Z)", text):
             if ":" in section:
                 _, content = section.split(":", 1)
@@ -139,7 +127,6 @@ class SupervisorAgent(SyncBaseAgent):
                     seen.add(content)
                     code_blocks.append(content)
         
-        # Extract indented blocks
         lines = text.split("\n")
         indented_block = []
         for line in lines:
@@ -212,7 +199,6 @@ class SupervisorAgent(SyncBaseAgent):
         prompt = self._build_label_prompt(user_input)
         config = GenerationConfig(max_tokens=1200, temperature=0.0)
 
-        # Try twice before failing
         for attempt in range(2):
             try:
                 attempt_prompt = prompt
@@ -222,7 +208,7 @@ class SupervisorAgent(SyncBaseAgent):
                         + "\n\nIMPORTANT: Output one label only: SOFTWARE_DEV or REVERSE_ENGINEERING or BOTH."
                     )
 
-                # Use generate_with_metrics for the first attempt to capture metrics
+                # Capture generation metrics on the first attempt
                 output = self.inference_engine.generate_with_metrics(
                     prompt=attempt_prompt,
                     config=config,
@@ -243,7 +229,6 @@ class SupervisorAgent(SyncBaseAgent):
                 else:
                     continue
                 
-                # Cache with size limit
                 if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
                     self._decision_cache.clear()
                 self._decision_cache[user_input] = decision
@@ -256,14 +241,12 @@ class SupervisorAgent(SyncBaseAgent):
     def _parse_json_from_text(self, text: str) -> Optional[dict]:
         stripped = self._remove_thinking_blocks(text)
 
-        # Remove code fence markers
         if stripped.startswith("```"):
             stripped = re.sub(r"^```(?:json)?", "", stripped).strip()
             stripped = re.sub(r"```$", "", stripped).strip()
         
         candidates = [stripped]
         
-        # Try first and last braced blocks
         for block in [self._extract_braced_block(stripped), self._extract_braced_block(stripped, from_end=True)]:
             if block and block not in candidates:
                 candidates.append(block)

@@ -14,11 +14,9 @@ def test_vscode_executor():
     print("\n[TEST] VSCode Tool Executor")
     print("-" * 50)
     
-    # Create temp workspace
     with tempfile.TemporaryDirectory() as tmpdir:
         executor = VSCodeToolExecutor(workspace_root=tmpdir)
         
-        # Test 1: Create file
         print("1. Testing create_file...")
         req = ToolRequest(
             tool_name="create_file",
@@ -31,7 +29,6 @@ def test_vscode_executor():
         assert os.path.exists(os.path.join(tmpdir, "test.py"))
         print("   ✓ File created")
         
-        # Test 2: Read file
         print("2. Testing read_file...")
         req = ToolRequest(
             tool_name="read_file",
@@ -44,7 +41,6 @@ def test_vscode_executor():
         assert "hello" in result.output
         print("   ✓ File read successfully")
         
-        # Test 3: Edit file
         print("3. Testing edit_file...")
         req = ToolRequest(
             tool_name="edit_file",
@@ -63,7 +59,6 @@ def test_vscode_executor():
             assert "hello_world" in content
         print("   ✓ File edited successfully")
         
-        # Test 4: Search repository
         print("4. Testing search_repository...")
         req = ToolRequest(
             tool_name="search_repository",
@@ -72,10 +67,8 @@ def test_vscode_executor():
             arguments={"pattern": "hello"},
         )
         result = executor.execute(req)
-        # search may not find anything in temp dir, but should succeed
         print(f"   ✓ Search completed (found: {bool(result.output)})")
         
-        # Test 5: Get errors (should pass)
         print("5. Testing get_errors...")
         req = ToolRequest(
             tool_name="get_errors",
@@ -94,7 +87,6 @@ def test_ida_executor():
     with tempfile.TemporaryDirectory() as tmpdir:
         executor = IDAToolExecutor(workspace_root=tmpdir)
         
-        # Test 1: read_decompilation (should fail gracefully)
         print("1. Testing read_decompilation (offline)...")
         req = ToolRequest(
             tool_name="read_decompilation",
@@ -107,7 +99,6 @@ def test_ida_executor():
         assert "IDA Pro" in result.error or "offline" in result.error.lower()
         print(f"   ✓ Correctly reported offline: {result.error[:50]}...")
         
-        # Test 2: xrefs_to (should fail - no IDA)
         print("2. Testing xrefs_to (offline)...")
         req = ToolRequest(
             tool_name="xrefs_to",
@@ -119,9 +110,7 @@ def test_ida_executor():
         assert not result.success, "Should fail in offline mode"
         print(f"   ✓ Correctly reported offline: {result.error[:50]}...")
         
-        # Test 3: read_file (should work - reuses VSCode executor)
         print("3. Testing read_file (shared implementation)...")
-        # Create a test file first
         test_file = os.path.join(tmpdir, "test.py")
         with open(test_file, "w") as f:
             f.write("# IDA test\n")
@@ -179,14 +168,12 @@ def test_tool_request_parsing():
     assert req.target == "main.py"
     print("   ✓ Successfully parsed JSON code block")
     
-    # Test 2: No tool request
     print("2. Testing output without tool request...")
     output = "This is just normal agent output without any tool requests."
     req = parse_tool_request_from_output(output)
     assert req is None, "Should not find tool request"
     print("   ✓ Correctly identified no tool request")
     
-    # Test 3: Inline JSON
     print("3. Testing inline JSON parsing...")
     output = 'I need to read the file. {"type": "tool_request", "tool_name": "read_file", "target": "test.py", "reason": "test", "arguments": {}} here it is.'
     req = parse_tool_request_from_output(output)

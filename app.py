@@ -15,8 +15,6 @@ from langgraph_orchestration.agents.mlx_agents import (
     MLXVulnerabilityDetectionAgent,
 )
 RAGConfigManager.initialize()
-
-# Global states
 rag_enabled = False
 current_agent_type = "Software Dev"
 _agents_cache = {}
@@ -37,7 +35,6 @@ def _worker_thread():
         _response_queue.put(f"Init error: {e}")
         return
     
-    # Process requests sequentially
     while True:
         try:
             request = _request_queue.get()
@@ -50,7 +47,6 @@ def _worker_thread():
         except Exception as e:
             _response_queue.put(f"Error: {e}")
 
-# Start worker thread
 _worker = threading.Thread(target=_worker_thread, daemon=True)
 _worker.start()
 
@@ -64,7 +60,6 @@ def respond(message, history):
     try:
         domain = "software_dev" if current_agent_type == "Software Dev" else "reverse_engineering"
         
-        # Get RAG context
         context_str = ""
         context_text = None
         if rag_enabled:
@@ -77,7 +72,6 @@ def respond(message, history):
             except Exception as e:
                 print(f"RAG error: {e}")
         
-        # Select agent
         if current_agent_type == "Software Dev":
             if any(w in message.lower() for w in ['generate', 'write', 'create', 'code']):
                 agent = _agents_cache['code_gen']
@@ -96,7 +90,6 @@ def respond(message, history):
                 agent = _agents_cache['code_analysis']
                 agent_name = "Analysis"
         
-        # Queue request to worker thread
         _request_queue.put((agent, message, context_text))
         response = _response_queue.get(timeout=60)
         
@@ -105,7 +98,7 @@ def respond(message, history):
     except Exception as e:
         return f"Error: {str(e)}"
 
-# Gradio interface
+# Gradio
 with gr.Blocks(title="RAG Agent Chat - Testing") as demo:
     gr.Markdown("RAG Agent Chat Interface (Testing)")    
     with gr.Row():
@@ -123,7 +116,6 @@ with gr.Blocks(title="RAG Agent Chat - Testing") as demo:
             info="Retrieve context from knowledge base"
         )
     
-    # Update globals
     def update_agent(agent_val):
         global current_agent_type
         current_agent_type = agent_val

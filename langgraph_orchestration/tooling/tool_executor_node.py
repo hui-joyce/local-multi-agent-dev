@@ -1,9 +1,5 @@
 # STILL IN DEV
-"""Tool executor node integration for LangGraph orchestration.
-
-Provides the tool_executor_node function that can be inserted into any LangGraph
-to handle tool requests, validate policies, and execute tools locally.
-"""
+"""Tool executor node integration for LangGraph orchestration"""
 
 import json
 import re
@@ -15,20 +11,10 @@ from langgraph_orchestration.tooling.tool_executor import get_tool_executor
 
 
 def parse_tool_request_from_output(output: str) -> Optional[ToolRequest]:
-    """
-    Extract a ToolRequest JSON block from agent output.
-    
-    Agents may embed tool requests as JSON in their response:
-    - In a code block: ```json {...} ```
-    - As inline JSON: {"type": "tool_request", ...}
-    - In a structured section: "TOOL REQUEST: {...}"
-    
-    Returns: ToolRequest if found, None otherwise
-    """
+    """Extract a ToolRequest JSON block from agent output"""
     if not output:
         return None
 
-    # Try to find JSON code block
     json_blocks = re.findall(r"```(?:json)?\s*(\{[^`]*\})\s*```", output)
     for block in json_blocks:
         try:
@@ -38,8 +24,6 @@ def parse_tool_request_from_output(output: str) -> Optional[ToolRequest]:
         except (json.JSONDecodeError, ValueError):
             continue
 
-    # Try inline JSON (more robust parsing)
-    # Look for { and track nesting to find complete JSON objects
     in_string = False
     escape_next = False
     depth = 0
@@ -100,24 +84,11 @@ def parse_tool_request_from_output(output: str) -> Optional[ToolRequest]:
 
 
 def tool_executor_node(state: AgentState) -> AgentState:
-    """    
-    Flow:
-    1. Check if max tool iterations reached
-    2. Extract tool request from last agent output
-    3. Validate against tool policy
-    4. Execute tool locally
-    5. Record result in state
-    6. Update tool iteration counter
-    7. Return updated state (LangGraph will re-invoke agent if needed)
+    """Execute one tool request and record the result in state"""
 
-    The agent sees the tool result and can make new requests or finalize output.
-    """
-
-    # Stop if we've hit max iterations
     if state.tool_iteration >= state.max_tool_iterations:
         return state
 
-    # Get the last agent output
     last_agent = state.agent_chain[-1] if state.agent_chain else None
     if not last_agent:
         return state
@@ -126,13 +97,10 @@ def tool_executor_node(state: AgentState) -> AgentState:
     if not last_output:
         return state
 
-    # Try to parse a tool request
     tool_request = parse_tool_request_from_output(last_output)
     if not tool_request:
-        # No tool request - agent is done
         return state
 
-    # Set domain on tool request if not already set
     if not tool_request.domain:
         tool_request.domain = state.selected_domain or "software_dev"
 
@@ -160,7 +128,6 @@ def tool_executor_node(state: AgentState) -> AgentState:
             source="policy_check",
         )
     else:
-        # Execute the tool
         try:
             executor = get_tool_executor(
                 domain=tool_request.domain or "software_dev",
@@ -176,27 +143,19 @@ def tool_executor_node(state: AgentState) -> AgentState:
                 source="executor",
             )
 
-    # Record request and result
     tool_request.status = "executed" if result.success else "failed"
     state.register_tool_request(tool_request)
     state.register_tool_result(result)
 
-    # register_tool_request/register_tool_result increments twice.
-    # Keep one logical iteration per request/result pair.
+    # One logical iteration per request/result pair.
     state.tool_iteration -= 1
 
-    # Add observation to analysis notes for agent context
     observation = (
         f"Tool '{tool_request.tool_name}' result: {result.output[:500]}"
         if result.success
         else f"Tool '{tool_request.tool_name}' failed: {result.error}"
     )
     state.analysis_notes.append(observation)
-
-    # State is returned; LangGraph will route based on conditional edges
-    # Typically: if tool_iteration < max_tool_iterations, loop back to agent
-    #            else, move to next stage
-
     return state
 
 
@@ -204,7 +163,6 @@ def should_continue_tool_loop(state: AgentState) -> bool:
     if state.tool_iteration >= state.max_tool_iterations:
         return False
 
-    # Check if last output has a tool request
     last_agent = state.agent_chain[-1] if state.agent_chain else None
     if not last_agent:
         return False
@@ -231,21 +189,18 @@ def build_agent_with_tools_subgraph(
     _ = agent_callable
     graph.add_node(f"{agent_node_name}__executor", tool_executor_node)
 
-    # Edge: agent -> tool executor
     graph.add_edge(agent_node_name, f"{agent_node_name}__executor")
 
-    # Conditional: tool executor -> agent (loop) or next node
     if next_node_name:
         graph.add_conditional_edges(
             f"{agent_node_name}__executor",
             should_continue_tool_loop,
             {
-                True: agent_node_name,  # Loop back to agent
-                False: next_node_name,   # Move to next stage
+                True: agent_node_name,
+                False: next_node_name,
             },
         )
     elif next_node_name is None:
-        # No explicit next node, default to looping for compatibility.
         graph.add_edge(f"{agent_node_name}__executor", agent_node_name)
 
     return graph

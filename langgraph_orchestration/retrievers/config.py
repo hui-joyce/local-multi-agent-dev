@@ -21,7 +21,7 @@ class RAGConfig:
     enable_logging: bool
     log_level: str
     
-    db_url: Optional[str] = None  # For remote mode
+    db_url: Optional[str] = None
     
     @classmethod
     def from_env(cls) -> "RAGConfig":
@@ -40,7 +40,7 @@ class RAGConfig:
                 "RAG_EMBEDDING_MODEL_REVERSE_ENGINEERING",
                 embedding_model,
             ),
-            embedding_device=os.getenv("RAG_EMBEDDING_DEVICE") or "",  # Empty string for auto-detection
+            embedding_device=os.getenv("RAG_EMBEDDING_DEVICE") or "",
             embedding_cache_dir=os.getenv("RAG_EMBEDDING_CACHE_DIR", "~/.cache/huggingface"),
             default_top_k=int(os.getenv("RAG_DEFAULT_TOP_K", "5")),
             score_threshold=float(os.getenv("RAG_SCORE_THRESHOLD", "0.3")),
@@ -108,19 +108,16 @@ class RAGConfigManager:
         if config is None:
             config = RAGConfig.from_env()
         
-        # Validate configuration
         errors = config.validate()
         if errors:
             raise ValueError(f"Configuration errors: {errors}")
         
         manager._config = config
         
-        # Setup logging
         if config.enable_logging:
             import logging
             logging.basicConfig(level=config.log_level)
         
-        # Initialize retriever
         manager._init_retriever()
     
     @classmethod
@@ -152,7 +149,6 @@ class RAGConfigManager:
                 enable_fallback=config.enable_fallback,
             )
         else:
-            # Remote mode would require different client
             raise NotImplementedError("Remote Qdrant mode not yet implemented")
     
     @classmethod

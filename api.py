@@ -14,8 +14,6 @@ from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.tooling.contracts import ToolRequest, ToolResult
 
 load_dotenv()
-
-# Cache the graph for LangSmith discovery
 @lru_cache(maxsize=1)
 def get_cached_graph():
     graph = build_orchestration_graph()
@@ -23,10 +21,8 @@ def get_cached_graph():
     graph.description = "Supervisor-based multi-agent system routing to software development or reverse engineering domains"
     return graph
 
-# Initialize LangSmith tracing on startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize LangSmith if enabled
     if os.getenv("LANGSMITH_TRACING", "false").lower() == "true":
         try:
             from langsmith import Client
@@ -35,12 +31,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"⚠ LangSmith warning: {e}")
     
-    # Preload the graph to ensure it's cached and discoverable
     get_cached_graph()
     print("✓ Graph loaded and cached for LangSmith discovery")
     
     yield
-    # Shutdown (no cleanup needed)
 
 app = FastAPI(
     title="Multi-Agent Orchestration API",
@@ -58,10 +52,8 @@ def _is_loopback_host(host: str) -> bool:
     except ValueError:
         return False
 
-
 app.add_middleware(
     CORSMiddleware,
-    # Local-only origins for offline operation.
     allow_origins=[
         "http://localhost",
         "http://127.0.0.1",
@@ -75,10 +67,9 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# Request/Response models
 class AgentRequest(BaseModel):
     user_input: str
-    domain: Optional[str] = None  # "software_dev" or "reverse_engineering"
+    domain: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -90,7 +81,6 @@ class AgentResponse(BaseModel):
     tool_results: list[ToolResult] = Field(default_factory=list)
     analysis_notes: list[str] = Field(default_factory=list)
 
-# RAG admin/search models
 class AddDocumentRequest(BaseModel):
     text: str
     domain: str
@@ -182,7 +172,6 @@ async def list_domains():
         }
     }
 
-# LangSmith Studio compatible endpoints
 @app.get("/assistants")
 async def list_assistants():
     return {
@@ -365,7 +354,6 @@ async def list_threads():
     return {"threads": []}
 
 
-# RAG admin endpoints for IDE plugin integration
 @app.post("/rag/add")
 async def rag_add(doc: AddDocumentRequest):
     try:
