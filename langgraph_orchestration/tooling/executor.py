@@ -1,4 +1,3 @@
-# STILL IN DEV
 from __future__ import annotations
 
 import importlib
@@ -7,20 +6,23 @@ import os
 import re
 import subprocess
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from langgraph_orchestration.tooling.contracts import ToolRequest, ToolResult
+from langgraph_orchestration.tooling.parser import parse_agent_output
+from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 
+if TYPE_CHECKING:
+    from langgraph_orchestration.schemas.state import AgentState
 
 class BaseToolExecutor(ABC):
-    """Abstract base for host-side tool execution."""
+    """Abstract base for host-side tool execution"""
 
     def __init__(self, workspace_root: Optional[str] = None):
         self.workspace_root = os.path.realpath(workspace_root or os.getcwd())
 
     @abstractmethod
     def execute(self, tool_request: ToolRequest) -> ToolResult:
-        """Execute a single request and return a structured result."""
+        ...
 
     def _normalize_path(self, path: str) -> str:
         if os.path.isabs(path):
@@ -34,10 +36,8 @@ class BaseToolExecutor(ABC):
         except (OSError, ValueError):
             return False
 
-
 class VSCodeToolExecutor(BaseToolExecutor):
-    """Tool executor for software development workflows."""
-
+    """Tool executor for software dev workflows"""
     def execute(self, tool_request: ToolRequest) -> ToolResult:
         handlers = {
             "read_file": self._read_file,
@@ -158,7 +158,6 @@ class VSCodeToolExecutor(BaseToolExecutor):
 
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            # rg exits 1 when no matches are found
             if proc.returncode not in (0, 1):
                 return ToolResult(
                     tool_name="search_repository",
@@ -191,7 +190,11 @@ class VSCodeToolExecutor(BaseToolExecutor):
                 tool_name="search_repository",
                 success=True,
                 output="\n".join(limited),
-                metadata={"match_count": len(lines), "limited": len(lines) > max_results, "backend": "grep"},
+                metadata={
+                    "match_count": len(lines),
+                    "limited": len(lines) > max_results,
+                    "backend": "grep",
+                },
             )
 
     def _get_errors(self, req: ToolRequest) -> ToolResult:
@@ -310,7 +313,7 @@ class VSCodeToolExecutor(BaseToolExecutor):
 
 
 class IDAToolExecutor(BaseToolExecutor):
-    """Tool executor for reverse engineering workflows in IDA Pro."""
+    """Tool executor for RE workflows"""
 
     def __init__(self, workspace_root: Optional[str] = None, ida_instance: Optional[Any] = None):
         super().__init__(workspace_root)
@@ -681,7 +684,141 @@ def get_tool_executor(
     workspace_root: Optional[str] = None,
     ida_instance: Optional[Any] = None,
 ) -> BaseToolExecutor:
-    """Return the appropriate tool executor for the current domain."""
     if domain == "reverse_engineering":
         return IDAToolExecutor(workspace_root=workspace_root, ida_instance=ida_instance)
     return VSCodeToolExecutor(workspace_root=workspace_root)
+
+
+def tool_executor_node(state: AgentState) -> AgentState:
+    if state.tool_iteration >= state.max_tool_iterations:
+        return state
+
+    last_agent = state.agent_chain[-1] if state.agent_chain else None
+    if not last_agent:
+        return state
+
+    last_output = state.intermediate_outputs.get(last_agent)
+    if not last_output:
+        return state
+
+    parsed = parse_agent_output(last_output)
+
+    if parsed.has_errors() and not parsed.tool_calls:
+        lines = ["Tool call processing encountered errors. Please correct and retry:\n"]
+        if parsed.parse_errors:
+            lines.append("Parse Errors:")
+            for err in parsed.parse_errors:
+                lines.append(f"  - {err.error_type}: {err.message}")
+                if err.context:
+                    lines.append(f"    Context: {err.context}")
+            lines.append("")
+        lines.append("Format reminder:")
+        lines.append(
+            """
+Emit tool calls like this:
+<tool_call>
+{
+  "tool_name": "read_file",
+  "arguments": {
+    "path": "main.py"
+  },
+  "target": "main.py",
+  "reason": "Understand entry point"
+}
+</tool_call>
+
+Continue with your analysis after the tool call.
+""".strip()
+        )
+        error_feedback = "\n".join(lines)
+
+        state.analysis_notes.append(f"Tool parsing error: {parsed.error_summary()}")
+        agent_retry_prompt = (
+            f"Your previous response had tool call formatting issues:\n"
+            f"{error_feedback}\n\n"
+            f"Please retry with corrected tool call format."
+        )
+        state.intermediate_outputs[f"{last_agent}__error_feedback"] = agent_retry_prompt
+        return state
+
+    for tool_call in parsed.tool_calls:
+        tool_request = ToolRequest(
+            type="tool_request",
+            tool_name=tool_call.tool_name,
+            arguments=tool_call.arguments,
+            target=tool_call.target,
+            reason=tool_call.reason or "",
+            needs_confirmation=tool_call.needs_confirmation,
+            expected_outcome=tool_call.expected_outcome,
+        )
+
+        if not tool_request.domain:
+            tool_request.domain = state.selected_domain or "software_dev"
+
+        allowed_tools = state.tool_policy.allowed_tools or []
+        if allowed_tools and tool_request.tool_name not in allowed_tools:
+            result = ToolResult(
+                tool_name=tool_request.tool_name,
+                success=False,
+                error=(
+                    f"Tool '{tool_request.tool_name}' not allowed. "
+                    f"Allowed tools: {', '.join(allowed_tools)}"
+                ),
+                output="",
+                source="policy_check",
+            )
+        elif state.requires_tool_confirmation and tool_request.needs_confirmation:
+            result = ToolResult(
+                tool_name=tool_request.tool_name,
+                success=False,
+                error="Tool requires confirmation; no approval mechanism configured",
+                output="",
+                source="policy_check",
+            )
+        else:
+            try:
+                executor = get_tool_executor(
+                    domain=tool_request.domain or "software_dev",
+                    workspace_root=state.workspace_root,
+                )
+                result = executor.execute(tool_request)
+            except Exception as exc:
+                result = ToolResult(
+                    tool_name=tool_request.tool_name,
+                    success=False,
+                    error=f"Execution failed: {str(exc)}",
+                    output="",
+                    source="executor",
+                )
+
+        tool_request.status = "executed" if result.success else "failed"
+        state.register_tool_request(tool_request)
+        state.register_tool_result(result)
+
+        status = "OK" if result.success else "ERR"
+        observation = (
+            f"{status} {tool_request.tool_name}: {result.output[:500]}"
+            if result.success
+            else f"{status} {tool_request.tool_name} failed: {result.error}"
+        )
+        state.analysis_notes.append(observation)
+
+    if parsed.tool_calls:
+        state.tool_iteration -= len(parsed.tool_calls)
+
+    return state
+
+def should_continue_tool_loop(state: AgentState) -> bool:
+    if state.tool_iteration >= state.max_tool_iterations:
+        return False
+
+    last_agent = state.agent_chain[-1] if state.agent_chain else None
+    if not last_agent:
+        return False
+
+    last_output = state.intermediate_outputs.get(last_agent)
+    if not last_output:
+        return False
+
+    parsed = parse_agent_output(last_output)
+    return parsed.has_tool_calls()

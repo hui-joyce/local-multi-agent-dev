@@ -6,7 +6,7 @@ tool-call history for local agentic workflows.
 """
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-from langgraph_orchestration.tooling.contracts import ToolPolicy, ToolRequest, ToolResult
+from langgraph_orchestration.tooling.tool import ToolPolicy, ToolRequest, ToolResult
 
 class AgentState(BaseModel):
     user_input: str = Field(description="The original user request/query")

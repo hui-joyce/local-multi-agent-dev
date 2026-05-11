@@ -14,7 +14,7 @@ from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.tooling.prompts import get_allowed_tools
-from langgraph_orchestration.tooling.tool_executor_node import (
+from langgraph_orchestration.tooling.executor import (
     should_continue_tool_loop,
     tool_executor_node,
 )
