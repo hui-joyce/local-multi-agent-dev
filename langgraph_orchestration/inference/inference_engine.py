@@ -28,10 +28,10 @@ class GenerationMetrics:
     generated_tokens: int
     prompt_generation_speed_tok_s: float  # tokens/second for prompt building
     generation_speed_tok_s: float  # tokens/second for generation
-    # peak_memory_gb: float
     total_generation_seconds: float
 
 class MLXInferenceEngine:
+    """MLX-backed inference engine with prompt formatting and metrics"""
     """MLX-backed inference engine with prompt formatting and metrics"""
     
     # Default system prompt for agents
@@ -39,8 +39,8 @@ class MLXInferenceEngine:
         "You are a specialized AI assistant. "
         "Provide concise, actionable responses. "
         "Use provided context to inform your answers. "
-        "Do not use extended thinking or <think> tags. "
-        "Respond directly without internal reasoning tags."
+        "Do not expose internal reasoning traces or <think> tags in your responses. "
+        "Respond clearly and directly to the user's request."
     )
     
     def __init__(
@@ -137,6 +137,14 @@ class MLXInferenceEngine:
         try:
             if stream:
                 return self._generate_stream(prompt, config)
+            generated_text = generate(
+                self.model,
+                self.tokenizer,
+                prompt=prompt,
+                max_tokens=config.max_tokens,
+                verbose=False,
+            )
+            return generated_text
             generated_text = generate(
                 self.model,
                 self.tokenizer,

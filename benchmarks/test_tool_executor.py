@@ -8,7 +8,7 @@ from langgraph_orchestration.tooling import (
     IDAToolExecutor,
     get_tool_executor,
 )
-from langgraph_orchestration.tooling.contracts import ToolRequest
+from langgraph_orchestration.tooling.tool import ToolRequest
 
 def test_vscode_executor():
     print("\n[TEST] VSCode Tool Executor")
@@ -143,43 +143,36 @@ def test_factory_function():
 def test_tool_request_parsing():
     print("\n[TEST] Tool Request Parsing")
     print("-" * 50)
-    
-    from langgraph_orchestration.tooling.tool_executor_node import parse_tool_request_from_output
-    
-    print("1. Testing JSON code block parsing...")
+    from langgraph_orchestration.tooling import parse_agent_output
+
+    print("1. Testing structured tool_call parsing...")
     output = """
     Here's my analysis:
-    
-    ```json
+
+    <tool_call>
     {
-        "type": "tool_request",
         "tool_name": "read_file",
         "target": "main.py",
         "reason": "Need to understand entry point",
         "arguments": {"path": "main.py"}
     }
-    ```
-    
+    </tool_call>
+
     This file contains...
     """
-    req = parse_tool_request_from_output(output)
-    assert req is not None, "Failed to parse tool request"
-    assert req.tool_name == "read_file"
-    assert req.target == "main.py"
-    print("   ✓ Successfully parsed JSON code block")
-    
+    parsed = parse_agent_output(output)
+    assert parsed.tool_calls, "Failed to parse tool call"
+    tool_call = parsed.tool_calls[0]
+    assert tool_call.tool_name == "read_file"
+    assert tool_call.target == "main.py"
+    print("   ✓ Successfully parsed tool_call envelope")
+
+    # Test 2: No tool request
     print("2. Testing output without tool request...")
     output = "This is just normal agent output without any tool requests."
-    req = parse_tool_request_from_output(output)
-    assert req is None, "Should not find tool request"
-    print("   ✓ Correctly identified no tool request")
-    
-    print("3. Testing inline JSON parsing...")
-    output = 'I need to read the file. {"type": "tool_request", "tool_name": "read_file", "target": "test.py", "reason": "test", "arguments": {}} here it is.'
-    req = parse_tool_request_from_output(output)
-    assert req is not None, "Failed to parse inline tool request"
-    assert req.tool_name == "read_file"
-    print("   ✓ Successfully parsed inline JSON")
+    parsed = parse_agent_output(output)
+    assert not parsed.tool_calls, "Should not find tool call"
+    print("   ✓ Correctly identified no tool call")
 
 if __name__ == "__main__":
     try:

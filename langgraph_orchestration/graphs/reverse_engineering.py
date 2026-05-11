@@ -14,7 +14,7 @@ from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.tooling.prompts import get_allowed_tools
-from langgraph_orchestration.tooling.tool_executor_node import (
+from langgraph_orchestration.tooling.executor import (
     should_continue_tool_loop,
     tool_executor_node,
 )
@@ -41,6 +41,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     analysis_agent = factory.create_code_analysis_agent()
     vuln_agent = factory.create_vulnerability_detection_agent()
     inference_engine = factory.inference_engine
+    # disable for no rag test
     retriever = QdrantRetriever()
     
     # Create graph
@@ -99,6 +100,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         )
         state.re_context = context
         
+        # Skip planning when analyzing generated code from software_dev
         # Skip planning when analyzing generated code from software_dev
         software_dev_output = state.branch_outputs.get("software_dev", "")
         if software_dev_output:
@@ -232,6 +234,7 @@ with remediation recommendations where applicable.
     graph.add_node("vulnerability_detection_tools", tool_executor_node)
     graph.add_node("synthesize", synthesize_output)
     
+    # Add edges
     # Add edges
     graph.add_conditional_edges(
         "retrieve_re_context",

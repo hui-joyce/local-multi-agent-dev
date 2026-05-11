@@ -14,7 +14,7 @@ from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.tooling.prompts import get_allowed_tools
-from langgraph_orchestration.tooling.tool_executor_node import (
+from langgraph_orchestration.tooling.executor import (
     should_continue_tool_loop,
     tool_executor_node,
 )
@@ -40,6 +40,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     test_agent = factory.create_unit_testing_agent()
     arch_agent = factory.create_architectural_review_agent()
     inference_engine = factory.inference_engine
+    # disable for no rag test
     retriever = QdrantRetriever()
     
     # Create graph

@@ -1,8 +1,9 @@
-# STILL IN DEV
-"""Provide a stable schema for IDE plugins"""
-
 from __future__ import annotations
+
+from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
+from uuid import uuid4
+
 from pydantic import BaseModel, Field
 
 ToolStatus = Literal["requested", "approved", "executed", "failed", "skipped"]
@@ -31,8 +32,8 @@ class ToolRequest(BaseModel):
         description="Optional repo, workspace, or database identifier for the host to bind",
     )
 
+
 class ToolResult(BaseModel):
-    """Structured response returned by a host-side tool executor"""
     type: Literal["tool_result"] = "tool_result"
     tool_name: str = Field(description="Tool that produced this result")
     success: bool = True
@@ -50,3 +51,48 @@ class ToolPolicy(BaseModel):
     max_iterations: int = 8
     allowed_tools: list[str] = Field(default_factory=list)
     read_only_until_context_complete: bool = True
+
+@dataclass(slots=True)
+class ToolCall:
+    tool_name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+    target: Optional[str] = None
+    reason: Optional[str] = None
+    needs_confirmation: bool = False
+    expected_outcome: Optional[str] = None
+    id: str = field(default_factory=lambda: str(uuid4()))
+
+
+@dataclass(slots=True)
+class ParseError:
+    error_type: Literal[
+        "malformed_envelope",
+        "invalid_json",
+        "missing_required_field",
+        "unexpected_format",
+    ]
+    message: str
+    context: Optional[str] = None
+    recoverable: bool = True
+
+
+@dataclass(slots=True)
+class ParsedAgentOutput:
+    raw_output: str
+    assistant_message: str
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    parse_errors: list[ParseError] = field(default_factory=list)
+
+    def has_tool_calls(self) -> bool:
+        return bool(self.tool_calls)
+
+    def has_errors(self) -> bool:
+        return bool(self.parse_errors)
+
+    def error_summary(self) -> str:
+        lines: list[str] = []
+        if self.parse_errors:
+            lines.append(f"Parse errors ({len(self.parse_errors)}):")
+            for err in self.parse_errors:
+                lines.append(f"  - {err.error_type}: {err.message}")
+        return "\n".join(lines)

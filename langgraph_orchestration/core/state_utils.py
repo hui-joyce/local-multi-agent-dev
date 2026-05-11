@@ -1,6 +1,6 @@
 import re
 from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.tooling.contracts import ToolRequest, ToolResult
+from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 
 class StateManager:
     @staticmethod

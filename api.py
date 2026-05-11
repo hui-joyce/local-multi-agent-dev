@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 from langgraph_orchestration.retrievers.config import RAGConfigManager
-from langgraph_orchestration.tooling.contracts import ToolRequest, ToolResult
+from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 
 load_dotenv()
 @lru_cache(maxsize=1)
