@@ -2,9 +2,10 @@
 name: unit_testing
 description: Create a focused unit test suite for the provided code or component.
 expertise: testing strategy, edge case analysis, regression prevention
-tools: read_file, write_file, read_many_files
+tools: read_file, read_many_files, get_errors, create_file, edit_file
 ---
 Task:
+Inspect the implementation and adjacent context first, then request more files or test outputs if the behavior under test is still unclear.
 Design focused unit tests for the provided code or component.
 Prioritize critical paths, edge cases, and failure behavior.
 

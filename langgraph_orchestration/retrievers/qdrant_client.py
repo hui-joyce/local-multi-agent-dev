@@ -24,6 +24,13 @@ class QdrantRetriever(BaseRetriever):
     DEFAULT_DB_PATH = "~/.local/share/qdrant"
     DEFAULT_COLLECTION_PREFIX = "agents_"
     
+    # Known model vector dimensions (to avoid loading models during init)
+    MODEL_VECTOR_SIZES = {
+        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": 384,
+        "sentence-transformers/all-MiniLM-L6-v2": 384,
+        # Add more as needed
+    }
+    
     def __init__(
         self,
         db_path: Optional[str] = None,
@@ -60,9 +67,9 @@ class QdrantRetriever(BaseRetriever):
         for domain in self.domain_collections:
             self._ensure_collection(domain)
 
-        # Backwards-compatible default service reference
-        self.embedding_service = self._get_embedding_service("shared")
-        self.embedding_dim = self.embedding_service.get_embedding_dimension()
+        # Backwards-compatible default service reference (lazy loaded)
+        self._embedding_service = None
+        self._embedding_dim = None
         
         logger.info(f"✓ Qdrant retriever initialized at {self.db_path}")
 
@@ -78,6 +85,21 @@ class QdrantRetriever(BaseRetriever):
                 device=self.embedding_device,
             )
         return self.embedding_services[domain_key]
+
+    @property
+    def embedding_dim(self) -> int:
+        """Lazy-load embedding dimension on first access"""
+        if self._embedding_dim is None:
+            service = self._get_embedding_service("shared")
+            self._embedding_dim = service.get_embedding_dimension()
+        return self._embedding_dim
+
+    @property
+    def embedding_service(self) -> EmbeddingService:
+        """Lazy-load embedding service on first access"""
+        if self._embedding_service is None:
+            self._embedding_service = self._get_embedding_service("shared")
+        return self._embedding_service
 
     def _get_collection_name(self, domain: str) -> str:
         if domain not in self.domain_collections:
@@ -121,7 +143,15 @@ class QdrantRetriever(BaseRetriever):
 
     def _ensure_collection(self, domain: str) -> None:
         collection_name = self._get_collection_name(domain)
-        vector_size = self._get_embedding_service(domain).get_embedding_dimension()
+        
+        # Get vector size without loading the model
+        embedding_model = self.domain_embedding_models.get(domain, self.domain_embedding_models.get("shared"))
+        vector_size = self.MODEL_VECTOR_SIZES.get(embedding_model)
+        
+        if vector_size is None:
+            # Only load model if we don't know the vector size
+            vector_size = self._get_embedding_service(domain).get_embedding_dimension()
+        
         try:
             collection_info = self.client.get_collection(collection_name)
         except Exception:

@@ -16,7 +16,8 @@ def _detect_default_device(preferred: Optional[str] = None) -> str:
         return preferred
     try:
         import torch
-        if hasattr(torch, "has_mps") and torch.has_mps:
+        # Check for MPS support on Apple Silicon
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_built():
             return "mps"
         if torch.cuda.is_available():
             return "cuda"
@@ -50,22 +51,38 @@ class EmbeddingService:
 
     def _load_model(self):
         try:
-            from sentence_transformers import SentenceTransformer
+            from transformers import AutoTokenizer, AutoModel
+            import torch
         except ImportError as e:
             raise ImportError(
-                "sentence-transformers is required for embeddings. "
-                "Install with: pip install sentence-transformers"
+                "transformers and torch are required for embeddings. "
+                "Install with: pip install transformers torch"
             ) from e
 
         try:
-            self.model = SentenceTransformer(
+            # Load tokenizer and model from HuggingFace
+            # use_fast=False allows use of slow tokenizer when fast tokenizer backend unavailable
+            self.tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
-                cache_folder=str(self.cache_dir),
-                device=self.device,
+                cache_dir=str(self.cache_dir),
+                trust_remote_code=True,
+                use_fast=False,  # Fallback to slow tokenizer if sentencepiece/tiktoken unavailable
             )
+            # Load the quantized model (Qwen3-Embedding-0.6B is 4-bit quantized)
+            device_map = self.device if self.device != "cpu" else None
+            self.model = AutoModel.from_pretrained(
+                self.model_name,
+                cache_dir=str(self.cache_dir),
+                trust_remote_code=True,
+                device_map=device_map,
+            )
+            if self.device == "cpu":
+                self.model = self.model.to(self.device)
+            self.model.eval()
+            
             # Determine embedding dimension by encoding a small test
-            test_embedding = self.model.encode("test", convert_to_numpy=True)
-            self.embedding_dim = int(np.asarray(test_embedding).shape[-1])
+            test_embedding = self.embed_text("test", normalize=False)
+            self.embedding_dim = int(test_embedding.shape[-1])
             self._loaded = True
             print(
                 f"✓ Embedding model loaded: {self.model_name} "
@@ -85,11 +102,37 @@ class EmbeddingService:
         if not text or not isinstance(text, str):
             raise ValueError("Input must be a non-empty string")
         self._ensure_loaded()
-        embedding = self.model.encode(
+        
+        import torch
+        
+        # Tokenize input
+        inputs = self.tokenizer(
             text,
-            convert_to_numpy=True,
-            normalize_embeddings=normalize,
-        )
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=512,
+        ).to(self.device)
+        
+        # Get model output
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        
+        # Mean pooling (mean of all token embeddings)
+        embeddings = outputs.last_hidden_state
+        attention_mask = inputs["attention_mask"]
+        mask_expanded = attention_mask.unsqueeze(-1).float()
+        sum_embeddings = torch.sum(embeddings * mask_expanded, 1)
+        sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+        mean_pooled = sum_embeddings / sum_mask
+        
+        embedding = mean_pooled.detach().cpu().numpy()[0]
+        
+        if normalize:
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = embedding / norm
+        
         return np.asarray(embedding)
 
     def embed_batch(
@@ -102,18 +145,45 @@ class EmbeddingService:
             return []
 
         self._ensure_loaded()
-        embeddings = self.model.encode(
-            texts,
-            batch_size=batch_size,
-            convert_to_numpy=True,
-            normalize_embeddings=normalize,
-            show_progress_bar=False,
-        )
-
-        embeddings = np.asarray(embeddings)
-        if embeddings.ndim == 2:
-            return [embeddings[i] for i in range(embeddings.shape[0])]
-        return list(embeddings)
+        
+        import torch
+        
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i : i + batch_size]
+            
+            # Tokenize batch
+            inputs = self.tokenizer(
+                batch_texts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=512,
+            ).to(self.device)
+            
+            # Get model output
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+            
+            # Mean pooling for batch
+            embeddings = outputs.last_hidden_state
+            attention_mask = inputs["attention_mask"]
+            mask_expanded = attention_mask.unsqueeze(-1).float()
+            sum_embeddings = torch.sum(embeddings * mask_expanded, 1)
+            sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+            mean_pooled = sum_embeddings / sum_mask
+            
+            batch_embeddings = mean_pooled.detach().cpu().numpy()
+            
+            if normalize:
+                norms = np.linalg.norm(batch_embeddings, axis=1, keepdims=True)
+                norms[norms == 0] = 1e-9
+                batch_embeddings = batch_embeddings / norms
+            
+            all_embeddings.extend(batch_embeddings)
+        
+        return all_embeddings
 
     def get_embedding_dimension(self) -> int:
         """Get the dimensionality of embeddings produced by this model"""

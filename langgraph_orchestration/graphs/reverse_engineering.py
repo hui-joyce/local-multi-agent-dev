@@ -13,6 +13,11 @@ from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.core.state_utils import StateManager
+from langgraph_orchestration.tooling.prompts import get_allowed_tools
+from langgraph_orchestration.tooling.tool_executor_node import (
+    should_continue_tool_loop,
+    tool_executor_node,
+)
 from langgraph_orchestration.prompts.reverse_engineering import (
     REVERSE_ENGINEERING_TASKS,
     ROUTER_SYSTEM_PROMPT,
@@ -36,8 +41,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     analysis_agent = factory.create_code_analysis_agent()
     vuln_agent = factory.create_vulnerability_detection_agent()
     inference_engine = factory.inference_engine
-    # RAG disabled for no-RAG benchmark runs
-    # retriever = QdrantRetriever()
+    # disable RAG for no-RAG benchmark runs
+    retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
@@ -104,13 +109,37 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         else:
             # For standalone reverse engineering, use LLM-selected task plan
             state.re_task_plan = _select_re_task_plan(state.user_input)
+
+        state.tool_policy.allowed_tools = get_allowed_tools("reverse_engineering")
+        state.max_tool_iterations = state.tool_policy.max_iterations
         
         return StateManager.add_retrieved_context(state, context)
+
+    def _tool_observation_block(state: AgentState) -> str:
+        if not state.tool_results:
+            return ""
+        recent = state.tool_results[-2:]
+        lines = ["Tool observations from prior step(s):"]
+        for result in recent:
+            if result.success:
+                excerpt = (result.output or "")[:1200]
+                lines.append(f"- {result.tool_name}: {excerpt}")
+            else:
+                lines.append(f"- {result.tool_name} failed: {result.error}")
+        lines.append("Use this evidence directly. Do not re-request the same tool unless data is missing.")
+        return "\n".join(lines)
+
+    def _augment_prompt_with_tools(prompt: str, state: AgentState) -> str:
+        observation = _tool_observation_block(state)
+        if not observation:
+            return prompt
+        return f"{prompt}\n\n{observation}"
     
     # Define node functions
     def planning_node(state: AgentState) -> AgentState:
+        prompt = build_planning_prompt(state.user_input)
         plan = planning_agent.invoke(
-            user_input=build_planning_prompt(state.user_input),
+            user_input=_augment_prompt_with_tools(prompt, state),
             context=state.re_context,
         )
         return StateManager.add_intermediate_output(
@@ -123,12 +152,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         planning_output = state.intermediate_outputs.get("planning", "")
         # Check if there's generated code from previous software_dev domain
         generated_code = state.branch_outputs.get("software_dev", "")
+        prompt = build_code_analysis_prompt(
+            user_input=state.user_input,
+            planning_output=planning_output,
+            generated_code=generated_code,
+        )
         output = analysis_agent.invoke(
-            user_input=build_code_analysis_prompt(
-                user_input=state.user_input,
-                planning_output=planning_output,
-                generated_code=generated_code,
-            ),
+            user_input=_augment_prompt_with_tools(prompt, state),
             context=state.re_context,
         )
         return StateManager.add_intermediate_output(
@@ -139,11 +169,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     
     def vulnerability_detection_node(state: AgentState) -> AgentState:
         analysis_output = state.intermediate_outputs.get("code_analysis", "")
+        prompt = build_vulnerability_detection_prompt(
+            user_input=state.user_input,
+            analysis_output=analysis_output,
+        )
         output = vuln_agent.invoke(
-            user_input=build_vulnerability_detection_prompt(
-                user_input=state.user_input,
-                analysis_output=analysis_output,
-            ),
+            user_input=_augment_prompt_with_tools(prompt, state),
             context=state.re_context,
         )
         return StateManager.add_intermediate_output(
@@ -180,12 +211,30 @@ with remediation recommendations where applicable.
 
     def route_after_analysis(state: AgentState) -> str:
         return _next_step_from_plan(state.re_task_plan, "code_analysis")
+
+    def route_after_planning_tools(state: AgentState) -> str:
+        if should_continue_tool_loop(state):
+            return "planning"
+        return route_after_planning(state)
+
+    def route_after_analysis_tools(state: AgentState) -> str:
+        if should_continue_tool_loop(state):
+            return "code_analysis"
+        return route_after_analysis(state)
+
+    def route_after_vuln_tools(state: AgentState) -> str:
+        if should_continue_tool_loop(state):
+            return "vulnerability_detection"
+        return "synthesize"
     
     # Add nodes
     graph.add_node("retrieve_re_context", retrieve_re_context_node)
     graph.add_node("planning", planning_node)
+    graph.add_node("planning_tools", tool_executor_node)
     graph.add_node("code_analysis", code_analysis_node)
+    graph.add_node("code_analysis_tools", tool_executor_node)
     graph.add_node("vulnerability_detection", vulnerability_detection_node)
+    graph.add_node("vulnerability_detection_tools", tool_executor_node)
     graph.add_node("synthesize", synthesize_output)
     
     # Add edges - sequential pipeline
@@ -199,24 +248,36 @@ with remediation recommendations where applicable.
             "synthesize": "synthesize",
         },
     )
+    graph.add_edge("planning", "planning_tools")
     graph.add_conditional_edges(
-        "planning",
-        route_after_planning,
+        "planning_tools",
+        route_after_planning_tools,
+        {
+            "planning": "planning",
+            "code_analysis": "code_analysis",
+            "vulnerability_detection": "vulnerability_detection",
+            "synthesize": "synthesize",
+        },
+    )
+    graph.add_edge("code_analysis", "code_analysis_tools")
+    graph.add_conditional_edges(
+        "code_analysis_tools",
+        route_after_analysis_tools,
         {
             "code_analysis": "code_analysis",
             "vulnerability_detection": "vulnerability_detection",
             "synthesize": "synthesize",
         },
     )
+    graph.add_edge("vulnerability_detection", "vulnerability_detection_tools")
     graph.add_conditional_edges(
-        "code_analysis",
-        route_after_analysis,
+        "vulnerability_detection_tools",
+        route_after_vuln_tools,
         {
             "vulnerability_detection": "vulnerability_detection",
             "synthesize": "synthesize",
         },
     )
-    graph.add_edge("vulnerability_detection", "synthesize")
     graph.add_edge("synthesize", END)
     
     # Set entry point

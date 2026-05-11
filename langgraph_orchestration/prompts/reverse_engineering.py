@@ -1,4 +1,5 @@
 from langgraph_orchestration.prompts import render_prompt
+from langgraph_orchestration.tooling.prompts import build_tooling_block
 
 REVERSE_ENGINEERING_TASKS = ["planning", "code_analysis", "vulnerability_detection"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
@@ -14,12 +15,25 @@ def build_re_task_router_prompt(user_input: str) -> str:
     )
     return body
 
+
+def _prepend_tooling_block(user_input: str, task_focus: str, body: str) -> str:
+    tooling_block = build_tooling_block(
+        domain="reverse_engineering",
+        user_input=user_input,
+        task_focus=task_focus,
+    )
+    return f"{tooling_block}\n\n{body}"
+
 def build_planning_prompt(user_input: str) -> str:
     _, body = render_prompt(
         "reverse_engineering/planning.md",
         user_input=user_input,
     )
-    return body
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Plan an evidence-driven analysis and request missing decompilation, disassembly, or metadata before deeper work.",
+        body=body,
+    )
 
 def build_code_analysis_prompt(user_input: str, planning_output: str = "", generated_code: str = "") -> str:
     if generated_code and planning_output:
@@ -55,7 +69,11 @@ def build_code_analysis_prompt(user_input: str, planning_output: str = "", gener
         analysis_block=analysis_block,
         user_input=user_input,
     )
-    return body
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Trace control flow, data flow, and surrounding evidence before finalizing conclusions.",
+        body=body,
+    )
 
 def build_vulnerability_detection_prompt(user_input: str, analysis_output: str = "") -> str:
     if analysis_output:
@@ -77,4 +95,8 @@ def build_vulnerability_detection_prompt(user_input: str, analysis_output: str =
         analysis_block=analysis_block,
         user_input=user_input,
     )
-    return body
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Validate exploitability with direct evidence and request additional binary context when needed.",
+        body=body,
+    )
