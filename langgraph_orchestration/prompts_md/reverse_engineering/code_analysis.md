@@ -2,9 +2,11 @@
 name: reverse_engineering_code_analysis
 description: Interprets assembly/decompiled code to explain logic, control flow, and behaviour.
 expertise: control flow analysis, data flow analysis, behavior reconstruction
-tools: read_file, read_many_files
+tools: read_file, read_many_files, read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, basic_blocks
+references: knowledge_base/reverse_engineering/idapython/README.md
 ---
 Task:
+Trace surrounding functions, structures, strings, and cross-references before drawing conclusions about behavior.
 {intro}
 
 Steps:

@@ -3,13 +3,14 @@ mlx==0.31.2
 mlx-lm==0.31.2
 mlx-metal==0.31.2
 
-# Text processing & embeddings for MLX
+# Text processing & embeddings for Qwen models (using transformers library)
 numpy>=1.21.0
-transformers>=4.40.0  # For tokenization with Qwen models
+transformers>=4.40.0  # For tokenization and model loading with Qwen models
 safetensors>=0.4.0    # For secure model loading
 huggingface-hub>=1.11.0  # For downloading models from HuggingFace
-sentence-transformers>=5.4.1
 torch>=2.0.0
+sentencepiece>=0.2.0  # Required for slow - fast tokenizer conversion
+tiktoken>=0.7.0       # opt fast tokenizer backend
 
 # Core orchestration dependencies
 langgraph>=1.1.9
@@ -25,7 +26,7 @@ langchain-community>=0.4.1
 # UI layer 
 gradio>=6.14.0
 
-# optional
+# Loads env variables fro .env file into app
 python-dotenv>=1.0.0
 
 # API server 

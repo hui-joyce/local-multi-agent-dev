@@ -1,16 +1,17 @@
 import os
+import ipaddress
 from typing import Optional
 from functools import lru_cache
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 from langgraph_orchestration.retrievers.config import RAGConfigManager
-from pydantic import BaseModel
+from langgraph_orchestration.tooling.contracts import ToolRequest, ToolResult
 
 load_dotenv()
 
@@ -47,12 +48,31 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    # Local-only origins for offline operation.
+    allow_origins=[
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:7860",
+        "http://127.0.0.1:7860",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Request/Response models
@@ -65,7 +85,10 @@ class AgentResponse(BaseModel):
     selected_domain: str
     agent_chain: list[str]
     final_output: str
-    intermediate_outputs: list[str]
+    intermediate_outputs: dict[str, str]
+    tool_requests: list[ToolRequest] = Field(default_factory=list)
+    tool_results: list[ToolResult] = Field(default_factory=list)
+    analysis_notes: list[str] = Field(default_factory=list)
 
 # RAG admin/search models
 class AddDocumentRequest(BaseModel):
@@ -123,6 +146,9 @@ async def invoke_orchestration(request: AgentRequest):
             agent_chain=final_state.agent_chain,
             final_output=final_state.final_output,
             intermediate_outputs=final_state.intermediate_outputs,
+            tool_requests=final_state.tool_requests,
+            tool_results=final_state.tool_results,
+            analysis_notes=final_state.analysis_notes,
         )
     
     except Exception as e:
@@ -386,6 +412,9 @@ async def send_message(thread_id: str, request: AgentRequest):
                 agent_chain=final_state.agent_chain,
                 final_output=final_state.final_output,
                 intermediate_outputs=final_state.intermediate_outputs,
+                tool_requests=final_state.tool_requests,
+                tool_results=final_state.tool_results,
+                analysis_notes=final_state.analysis_notes,
             )
         }
     
@@ -399,10 +428,10 @@ if __name__ == "__main__":
     import uvicorn
     
     port = int(os.getenv("API_PORT", "8000"))
-    host = os.getenv("API_HOST", "0.0.0.0")
+    host = os.getenv("API_HOST", "127.0.0.1")
     
     print(f"\n{'='*60}")
-    print(f"  Server: http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+    print(f"  Server: http://{host}:{port}")
     print(f"{'='*60}\n")
     
     uvicorn.run(

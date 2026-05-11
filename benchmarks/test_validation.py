@@ -39,7 +39,7 @@ def validate_imports() -> bool:
 def validate_test_cases() -> bool:
     """Load and validate test cases from harness"""
     try:
-        from benchmarks.no_rag_harness import get_benchmark_cases
+        from benchmarks.test_no_rag import get_benchmark_cases
         
         cases = get_benchmark_cases()
         print(f"✓ Loaded {len(cases)} test cases:")
@@ -124,7 +124,7 @@ def main() -> None:
     
     if passed == total:
         print("\n✓ All structural checks passed. Ready to run full harness:")
-        print("  python3 benchmarks/no_rag_harness.py")
+        print("  python3 benchmarks/test_no_rag.py")
     else:
         print("\n✗ Some checks failed. Review errors above and fix before running harness.")
     

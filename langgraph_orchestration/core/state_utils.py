@@ -1,5 +1,6 @@
 import re
 from langgraph_orchestration.schemas.state import AgentState
+from langgraph_orchestration.tooling.contracts import ToolRequest, ToolResult
 
 class StateManager:
     @staticmethod
@@ -40,10 +41,49 @@ class StateManager:
     ) -> AgentState:
         state.retrieved_context.extend(context)
         return state
+
+    @staticmethod
+    def add_tool_request(state: AgentState, request: ToolRequest) -> AgentState:
+        state.register_tool_request(request)
+        return state
+
+    @staticmethod
+    def add_tool_result(state: AgentState, result: ToolResult) -> AgentState:
+        state.register_tool_result(result)
+        return state
+
+    @staticmethod
+    def add_analysis_note(state: AgentState, note: str) -> AgentState:
+        state.record_analysis_note(note)
+        return state
     
     @staticmethod
     def format_agent_outputs(state: AgentState) -> str:
         outputs = []
         for agent_name, output in state.intermediate_outputs.items():
             outputs.append(f"\n## {agent_name.upper()}\n{output}")
+        if state.tool_results:
+            outputs.append(StateManager.format_tool_activity(state))
         return "\n".join(outputs)
+
+    @staticmethod
+    def format_tool_activity(state: AgentState) -> str:
+        if not state.tool_requests and not state.tool_results:
+            return ""
+
+        sections = ["\n## TOOL ACTIVITY"]
+
+        if state.tool_requests:
+            sections.append("\n### Requested Tools")
+            for index, request in enumerate(state.tool_requests, start=1):
+                sections.append(
+                    f"{index}. {request.tool_name} -> target={request.target or 'n/a'} | confirmation={request.needs_confirmation}"
+                )
+
+        if state.tool_results:
+            sections.append("\n### Tool Results")
+            for index, result in enumerate(state.tool_results, start=1):
+                status = "ok" if result.success else "error"
+                sections.append(f"{index}. {result.tool_name} [{status}]\n{result.output}")
+
+        return "\n".join(sections)

@@ -10,6 +10,14 @@ Local-first, LangGraph-based orchestration for two domains: software development
 - MLX-based local inference on Apple Silicon
 - Embedded Qdrant retrieval with Qwen embeddings
 
+## Tool Calling
+
+Tool loop flow:
+1. Agent requests a tool action.
+2. Host executes the local tool.
+3. Output is added to state and returned to the agent.
+4. Repeat until completion or iteration limit.
+
 ## Tech Stack
 
 | Component | Technology |
@@ -218,8 +226,8 @@ RAG_EMBEDDING_MODEL="your-org/qwen3-embedding-re-ft" \
 
 ## Dev And Benchmarks
 - Compile check: `python3 -m compileall langgraph_orchestration api.py`
-- No-RAG benchmark harness: `python3 benchmarks/no_rag_harness.py`
-- Harness validation: `python3 benchmarks/validate_harness.py`
+- No-RAG benchmark harness: `python3 benchmarks/test_no_rag.py`
+- Harness validation: `python3 benchmarks/test_validation.py`
 - LangGraph local dev server with tracing UI:
   1. Create a LangSmith account and generate an API key.
   2. Set tracing env vars in `.env` (used by `langgraph.json`):
