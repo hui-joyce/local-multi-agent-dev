@@ -36,12 +36,11 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
     
-    # Initialize agents using factory
     code_gen_agent = factory.create_code_generation_agent()
     test_agent = factory.create_unit_testing_agent()
     arch_agent = factory.create_architectural_review_agent()
     inference_engine = factory.inference_engine
-    # disable RAG for no-RAG benchmark runs
+    # disable for no rag test
     retriever = QdrantRetriever()
     
     # Create graph
@@ -281,7 +280,6 @@ Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.
     )
     graph.add_edge("synthesize", END)
     
-    # Set entry point
     graph.set_entry_point("retrieve_dev_context")
     
     compiled = graph.compile()

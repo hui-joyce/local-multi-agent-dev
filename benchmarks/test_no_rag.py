@@ -58,7 +58,6 @@ class BenchmarkResult:
     prompt_tokens: int
     generated_tokens: int
     generation_speed_tok_s: float
-    # peak_memory_gb: float
     output_text: str
     output_preview: str
 
@@ -212,7 +211,6 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
     prompt_tokens = 0
     generated_tokens = 0
     generation_speed_tok_s = 0.0
-    # peak_memory_gb = 0.0
     
     if factory is not None:
         try:
@@ -225,7 +223,6 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
                 prompt_tokens = metrics.prompt_tokens
                 generated_tokens = metrics.generated_tokens
                 generation_speed_tok_s = metrics.generation_speed_tok_s
-                # peak_memory_gb = metrics.peak_memory_gb
         except Exception:
             pass
     
@@ -253,7 +250,6 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
         prompt_tokens=prompt_tokens,
         generated_tokens=generated_tokens,
         generation_speed_tok_s=generation_speed_tok_s,
-        # peak_memory_gb=peak_memory_gb,
         output_text=final_output,
         output_preview=final_output[:500],
     )

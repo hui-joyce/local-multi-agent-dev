@@ -8,7 +8,6 @@ from typing import Optional
 import numpy as np
 from pathlib import Path
 
-# semantic search, document retrieval, query embedding
 MODEL = "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
 
 def _detect_default_device(preferred: Optional[str] = None) -> str:
@@ -16,7 +15,6 @@ def _detect_default_device(preferred: Optional[str] = None) -> str:
         return preferred
     try:
         import torch
-        # Check for MPS support on Apple Silicon
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_built():
             return "mps"
         if torch.cuda.is_available():
@@ -37,7 +35,6 @@ class EmbeddingService:
         self.device = _detect_default_device(device)
         self.model = None
         self.embedding_dim = None
-        # Set cache directory
         if cache_dir is None:
             cache_dir = os.path.expanduser("~/.cache/huggingface")
         self.cache_dir = Path(cache_dir)
@@ -60,15 +57,12 @@ class EmbeddingService:
             ) from e
 
         try:
-            # Load tokenizer and model from HuggingFace
-            # use_fast=False allows use of slow tokenizer when fast tokenizer backend unavailable
             self.tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
                 cache_dir=str(self.cache_dir),
                 trust_remote_code=True,
-                use_fast=False,  # Fallback to slow tokenizer if sentencepiece/tiktoken unavailable
+                use_fast=False,
             )
-            # Load the quantized model (Qwen3-Embedding-0.6B is 4-bit quantized)
             device_map = self.device if self.device != "cpu" else None
             self.model = AutoModel.from_pretrained(
                 self.model_name,
@@ -80,7 +74,6 @@ class EmbeddingService:
                 self.model = self.model.to(self.device)
             self.model.eval()
             
-            # Determine embedding dimension by encoding a small test
             test_embedding = self.embed_text("test", normalize=False)
             self.embedding_dim = int(test_embedding.shape[-1])
             self._loaded = True
@@ -105,7 +98,6 @@ class EmbeddingService:
         
         import torch
         
-        # Tokenize input
         inputs = self.tokenizer(
             text,
             return_tensors="pt",
@@ -114,11 +106,10 @@ class EmbeddingService:
             max_length=512,
         ).to(self.device)
         
-        # Get model output
         with torch.no_grad():
             outputs = self.model(**inputs)
         
-        # Mean pooling (mean of all token embeddings)
+        # Mean-pool token embeddings
         embeddings = outputs.last_hidden_state
         attention_mask = inputs["attention_mask"]
         mask_expanded = attention_mask.unsqueeze(-1).float()
@@ -153,7 +144,6 @@ class EmbeddingService:
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i : i + batch_size]
             
-            # Tokenize batch
             inputs = self.tokenizer(
                 batch_texts,
                 return_tensors="pt",
@@ -162,11 +152,9 @@ class EmbeddingService:
                 max_length=512,
             ).to(self.device)
             
-            # Get model output
             with torch.no_grad():
                 outputs = self.model(**inputs)
             
-            # Mean pooling for batch
             embeddings = outputs.last_hidden_state
             attention_mask = inputs["attention_mask"]
             mask_expanded = attention_mask.unsqueeze(-1).float()

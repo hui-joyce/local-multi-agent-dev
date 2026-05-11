@@ -53,11 +53,9 @@ class MLXCodeGenerationAgent(MLXAgent, SyncBaseAgent):
         context: Optional[list[str]] = None,
     ) -> str:
         prompt = self._build_agent_prompt(user_input, context)
-        
-        # Customize generation for code
         config = GenerationConfig(
             max_tokens=4096,
-            temperature=0.3,  # Lower temp for code
+            temperature=0.3,
         )
         
         response = self._generate_response(prompt, config)
@@ -81,21 +79,11 @@ class MLXUnitTestingAgent(MLXAgent, SyncBaseAgent):
         user_input: str,
         context: Optional[list[str]] = None,
     ) -> str:
-        """
-        Generate unit tests.
-        
-        Args:
-            user_input: Code or requirements to test
-            context: Testing best practices from RAG
-            
-        Returns:
-            Generated test suite
-        """
         prompt = self._build_agent_prompt(user_input, context)
         
         config = GenerationConfig(
             max_tokens=4096,
-            temperature=0.2,  # Lower temp for tests
+            temperature=0.2,
         )
         
         response = self._generate_response(prompt, config)
@@ -199,7 +187,7 @@ class MLXVulnerabilityDetectionAgent(MLXAgent, SyncBaseAgent):
         
         config = GenerationConfig(
             max_tokens=4096,
-            temperature=0.3,  # Lower for security analysis
+            temperature=0.3,
         )
         
         response = self._generate_response(prompt, config)

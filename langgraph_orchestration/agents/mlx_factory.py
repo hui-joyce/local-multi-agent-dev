@@ -34,15 +34,11 @@ class MLXAgentFactory:
     
     def load_model(self) -> MLXInferenceEngine:
         print(f"Loading MLX model: {self.model_name}")
-        
-        # Load model
         loader = MLXModelLoader(
             model_name=self.model_name,
             quantization=self.quantization,
         )
         model, tokenizer = loader.load()
-        
-        # Create inference engine
         self.inference_engine = MLXInferenceEngine(
             model=model,
             tokenizer=tokenizer,

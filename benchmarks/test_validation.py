@@ -13,7 +13,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Add project root to sys.path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -76,7 +75,6 @@ def validate_prompt_templates() -> bool:
             build_code_analysis_prompt,
         )
         
-        # Test each builder
         test_input = "Test request"
         
         prompts = {
