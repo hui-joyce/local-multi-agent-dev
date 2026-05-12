@@ -1,5 +1,5 @@
 from langgraph_orchestration.prompts import render_prompt
-from langgraph_orchestration.tooling.prompts import build_tooling_block
+from langgraph_orchestration.prompts.shared import build_tooling_block
 
 REVERSE_ENGINEERING_TASKS = ["planning", "code_analysis", "vulnerability_detection"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
