@@ -15,43 +15,17 @@ Allowed labels:
 - REVERSE_ENGINEERING
 - BOTH
 
-## PHASE 1: EXTRACT INTENT (MANDATORY)
+## CLASSIFICATION RULES
 
-**Step 1a: Identify all implementation/development keywords**
-Search for: implementation, code, build, feature, refactor, test, architecture, design, API, service, endpoint, database, algorithm, library, framework, SDK, tool, script, automation, deployment, CI/CD, DevOps, containerization.
+Use semantic intent understanding (not fixed keyword matching).
 
-IF found → Record as IMPLEMENTATION_INTENT
+- Return **SOFTWARE_DEV** when the request is only implementation/design/testing/development work.
+- Return **REVERSE_ENGINEERING** when the request is only reverse-engineering/security-analysis work.
+- Return **BOTH** only when the request clearly requires work from both domains in the same task.
 
-**Step 1b: Identify all reverse-engineering/security keywords**
-Search for: reverse engineer, decompilation, disassembly, binary, assembly, vulnerability, exploit, CVE, malware, threat, security, pentesting, analysis, IDA, Ghidra, dynamic analysis, static analysis, behavior reconstruction, control flow, data flow.
-
-IF found → Record as SECURITY_INTENT
-
-**Step 1c: Check for multi-domain markers**
-Search for explicit connectors: "and then", "followed by", "after that", "also", "in addition", "next", "then also".
-
-IF found AND both intents present → Mark as MULTI_DOMAIN_REQUEST. Do NOT determine this dynamically. 
-
-## PHASE 2: CLASSIFY (DETERMINISTIC)
-
-**Decision Tree:**
-
-IF both IMPLEMENTATION_INTENT and SECURITY_INTENT found in same request:
-  - IF MULTI_DOMAIN_REQUEST markers present:
-    → Return: **BOTH**
-  - ELSE IF security keywords appear after implementation keywords (sequential):
-    → Return: **BOTH**
-  - ELSE (mixed or unclear order):
-    → Return: **BOTH**
-
-ELSE IF only IMPLEMENTATION_INTENT found:
-  → Return: **SOFTWARE_DEV**
-
-ELSE IF only SECURITY_INTENT found:
-  → Return: **REVERSE_ENGINEERING**
-
-ELSE (no clear intent found):
-  → Return: **UNABLE_TO_CLASSIFY** (reject and ask for clarification)
+Ambiguity handling:
+- You must still return one of the three allowed labels.
+- If uncertain between a single domain and BOTH, choose the single best primary domain unless both are explicitly required.
 
 ## OUTPUT CONTRACT
 

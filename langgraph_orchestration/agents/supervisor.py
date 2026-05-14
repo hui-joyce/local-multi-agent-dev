@@ -63,31 +63,56 @@ class SupervisorAgent(SyncBaseAgent):
 
     def _parse_label(self, raw_output: str) -> Optional[str]:
         cleaned = self._remove_thinking_blocks(raw_output).strip()
+        if not cleaned:
+            return None
         cleaned_upper = cleaned.upper()
 
-        # exact single-line match 
+        line_labels = []
         for line in cleaned.splitlines():
             stripped = line.strip().strip("`*_-. ")
             if stripped in self.LABEL_OPTIONS:
-                return stripped  # First exact match wins
+                line_labels.append(stripped)
+        if line_labels:
+            unique_line_labels = set(line_labels)
+            if len(unique_line_labels) == 1:
+                return line_labels[0]
+            return None
         
-        # all-caps full text match 
         if cleaned_upper in self.LABEL_OPTIONS:
             return cleaned_upper
-        
-        # single label appears exactly once 
-        label_counts = {label: cleaned_upper.count(label) for label in self.LABEL_OPTIONS}
-        single_mentions = {label: count for label, count in label_counts.items() if count == 1}
-        if len(single_mentions) == 1:
-            return list(single_mentions.keys())[0]
-        
-        # majority label
-        if label_counts:
-            max_label = max(label_counts, key=label_counts.get)
-            max_count = label_counts[max_label]
-            if max_count > 1 and all(label_counts[l] < max_count for l in label_counts if l != max_label):
-                return max_label
+
+        token_matches = re.findall(r"\b(?:SOFTWARE_DEV|REVERSE_ENGINEERING|BOTH)\b", cleaned_upper)
+        if token_matches:
+            unique_token_labels = set(token_matches)
+            if len(unique_token_labels) == 1:
+                return token_matches[0]
+
         return None
+
+    def _resolve_label_with_model(self, user_input: str, prior_output: str) -> Optional[str]:
+        if self.inference_engine is None:
+            return None
+
+        resolver_prompt = (
+            "You are a strict routing label resolver.\n"
+            "Choose exactly one label for the request below.\n"
+            "Allowed labels: SOFTWARE_DEV, REVERSE_ENGINEERING, BOTH.\n"
+            "Return only one label token and nothing else.\n\n"
+            f"Request:\n{user_input}\n\n"
+            "Classifier output to resolve (may be noisy):\n"
+            f"{prior_output}\n"
+        )
+
+        try:
+            output = self.inference_engine.generate(
+                prompt=resolver_prompt,
+                config=GenerationConfig(max_tokens=32, temperature=0.0),
+                stream=False,
+            )
+            output = self._sanitize_output(output)
+            return self._parse_label(output)
+        except Exception:
+            return None
 
     def _extract_split_tasks(self, user_input: str) -> dict[str, str]:
         """Extract domain-specific subtasks from a multi-domain request"""
@@ -232,7 +257,7 @@ class SupervisorAgent(SyncBaseAgent):
             )
 
         prompt = self._build_label_prompt(user_input)
-        config = GenerationConfig(max_tokens=1200, temperature=0.0)
+        config = GenerationConfig(max_tokens=64, temperature=0.0)
 
         for attempt in range(2):
             try:
@@ -255,6 +280,9 @@ class SupervisorAgent(SyncBaseAgent):
                 output = self._sanitize_output(output)
 
                 label = self._parse_label(output)
+                if label is None:
+                    label = self._resolve_label_with_model(user_input, output)
+
                 if label == "SOFTWARE_DEV":
                     decision = self._build_decision("software_dev", ["software_dev"])
                 elif label == "REVERSE_ENGINEERING":
