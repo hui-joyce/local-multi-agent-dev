@@ -31,28 +31,63 @@ class SupervisorAgent(SyncBaseAgent):
         """Remove internal reasoning blocks from text"""
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
+    def _sanitize_output(self, text: str) -> str:
+        if not isinstance(text, str):
+            try:
+                text = str(text)
+            except Exception:
+                return ""
+
+        text = self._remove_thinking_blocks(text)
+
+        # Remove fenced JSON blocks that include diagnostic keys
+        def _remove_block(match):
+            block = match.group(0)
+            if re.search(r"\b(tool|metric|trace|langgraph|orchestration|diagnostic|tool_result|metrics)\b", block, flags=re.IGNORECASE):
+                return ""
+            return block
+
+        text = re.sub(r"```json[\s\S]*?```", _remove_block, text, flags=re.IGNORECASE)
+
+        # Remove inline lines that look like tool traces
+        cleaned_lines = []
+        for line in text.splitlines():
+            if re.search(r"\b(tool|tool_call|tool_result|metrics|trace|langgraph)\b", line, flags=re.IGNORECASE):
+                continue
+            cleaned_lines.append(line)
+
+        return "\n".join(cleaned_lines).strip()
+
     def _build_label_prompt(self, user_input: str) -> str:
         return build_label_routing_prompt(self.inference_engine, user_input)
 
     def _parse_label(self, raw_output: str) -> Optional[str]:
-        cleaned_upper = self._remove_thinking_blocks(raw_output).upper()
+        cleaned = self._remove_thinking_blocks(raw_output).strip()
+        cleaned_upper = cleaned.upper()
 
-        # Exact match first
+        # exact single-line match 
+        for line in cleaned.splitlines():
+            stripped = line.strip().strip("`*_-. ")
+            if stripped in self.LABEL_OPTIONS:
+                return stripped  # First exact match wins
+        
+        # all-caps full text match 
         if cleaned_upper in self.LABEL_OPTIONS:
             return cleaned_upper
-
-        # Line-based match
-        for line in cleaned_upper.splitlines():
-            token = line.strip().strip("`*_-. ")
-            if token in self.LABEL_OPTIONS:
-                return token
-
-        # Fallback: return last mention (decision usually at end)
-        last_match = None
-        for label in self.LABEL_OPTIONS:
-            if label in cleaned_upper:
-                last_match = label
-        return last_match
+        
+        # single label appears exactly once 
+        label_counts = {label: cleaned_upper.count(label) for label in self.LABEL_OPTIONS}
+        single_mentions = {label: count for label, count in label_counts.items() if count == 1}
+        if len(single_mentions) == 1:
+            return list(single_mentions.keys())[0]
+        
+        # majority label
+        if label_counts:
+            max_label = max(label_counts, key=label_counts.get)
+            max_count = label_counts[max_label]
+            if max_count > 1 and all(label_counts[l] < max_count for l in label_counts if l != max_label):
+                return max_label
+        return None
 
     def _extract_split_tasks(self, user_input: str) -> dict[str, str]:
         """Extract domain-specific subtasks from a multi-domain request"""
@@ -94,7 +129,7 @@ class SupervisorAgent(SyncBaseAgent):
                 config=config,
                 stream=False,
             )
-            
+            output = self._sanitize_output(output)
             parsed = self._parse_json_from_text(output)
             if parsed is not None:
                 split_tasks = {}
@@ -217,7 +252,8 @@ class SupervisorAgent(SyncBaseAgent):
                     config=config,
                     stream=False,
                 )
-                    
+                output = self._sanitize_output(output)
+
                 label = self._parse_label(output)
                 if label == "SOFTWARE_DEV":
                     decision = self._build_decision("software_dev", ["software_dev"])

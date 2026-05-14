@@ -233,6 +233,16 @@ class VSCodeToolExecutor(BaseToolExecutor):
                 metadata={"path": path, "line": exc.lineno, "error_type": "SyntaxError"},
             )
 
+    def _validate_app_code_path(self, path: str) -> tuple[bool, Optional[str]]:
+        if not path:
+            return False, "File path cannot be empty"
+        
+        _, ext = os.path.splitext(path)
+        if not ext:
+            return False, f"File must have an extension (e.g., .py, .json, .md)"
+        
+        return True, None
+
     def _create_file(self, req: ToolRequest) -> ToolResult:
         path = req.arguments.get("path") or req.target
         content = req.arguments.get("content", "")
@@ -241,6 +251,15 @@ class VSCodeToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="create_file", success=False, output="", error="No path provided")
         if not self._validate_file_access(path):
             return ToolResult(tool_name="create_file", success=False, output="", error=f"Access denied: {path}")
+
+        is_valid, validation_error = self._validate_app_code_path(path)
+        if not is_valid:
+            return ToolResult(
+                tool_name="create_file",
+                success=False,
+                output="",
+                error=validation_error,
+            )
 
         normalized = self._normalize_path(path)
         try:

@@ -82,6 +82,7 @@ class ParsedAgentOutput:
     assistant_message: str
     tool_calls: list[ToolCall] = field(default_factory=list)
     parse_errors: list[ParseError] = field(default_factory=list)
+    context_complete: bool = False
 
     def has_tool_calls(self) -> bool:
         return bool(self.tool_calls)

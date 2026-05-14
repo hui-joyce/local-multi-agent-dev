@@ -5,12 +5,17 @@ from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 class StateManager:
     @staticmethod
     def sanitize_output(text: str) -> str:
-        """Remove internal reasoning blocks from user-facing output (e.g. <think>...</think>)"""
         if not text:
             return text
         
-        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-        text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL)
+        # Unwrap internal reasoning (extract content, don't delete)
+        text = re.sub(r'<think>(.*?)</think>', r'\1', text, flags=re.DOTALL)
+        text = re.sub(r'<thinking>(.*?)</thinking>', r'\1', text, flags=re.DOTALL)
+        
+        # Remove tool call envelopes
+        text = re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL)
+        text = re.sub(r'\[CONTEXT_COMPLETE\]', '', text, flags=re.DOTALL)
+        
         # Clean up excessive whitespace created by removal
         text = re.sub(r'\n\n\n+', '\n\n', text)
         
@@ -59,13 +64,32 @@ class StateManager:
     
     @staticmethod
     def format_agent_outputs(state: AgentState) -> str:
+        from langgraph_orchestration.tooling.parser import parse_agent_output
+
         outputs = []
-        for agent_name, output in state.intermediate_outputs.items():
-            outputs.append(f"\n## {agent_name.upper()}\n{output}")
+        for agent_name, raw_output in state.intermediate_outputs.items():
+            parsed = parse_agent_output(raw_output)
+            formatted_text = parsed.assistant_message.strip() if parsed.assistant_message else ""
+
+            # format tool calls extracted by parser
+            for tool_call in parsed.tool_calls:
+                if tool_call.tool_name in ["create_file", "edit_file"]:
+                    content = tool_call.arguments.get("content") or tool_call.arguments.get("file_text") or ""
+                    path = tool_call.arguments.get("path") or tool_call.target or "Generated Code"
+                    if content:
+                        formatted_text += f"\n\n**File: `{path}`**\n```python\n{content}\n```\n"
+
+            # fallback
+            if parsed.parse_errors:
+                formatted_text += "\n\n*(Parser encountered issues extracting tool calls. Please check your workspace for the files.)*"
+
+            outputs.append(f"\n## {agent_name.upper()}\n{formatted_text.strip()}")
+
         if state.tool_results:
             outputs.append(StateManager.format_tool_activity(state))
-        return "\n".join(outputs)
 
+        return "\n".join(outputs)
+        
     @staticmethod
     def format_tool_activity(state: AgentState) -> str:
         if not state.tool_requests and not state.tool_results:

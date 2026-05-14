@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+import re
 
 _PROMPT_ROOT = Path(__file__).resolve().parent.parent / "prompts_md"
 
@@ -35,7 +36,18 @@ def load_prompt_file(relative_path: str) -> tuple[dict[str, str], str]:
 
 
 def render_prompt(relative_path: str, **kwargs: Any) -> tuple[str, str]:
-	"""Render a markdown prompt file with format placeholders."""
 	frontmatter, body = load_prompt_file(relative_path)
 	system_prompt = frontmatter.get("system_prompt", "")
-	return system_prompt, body.format(**kwargs)
+
+	# Only replace simple identifier placeholders like {user_input}, {attempt}
+	pattern = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+	def _repl(match: re.Match) -> str:
+		key = match.group(1)
+		if key in kwargs:
+			return str(kwargs[key])
+		# leave unknown placeholders untouched to avoid accidental removal
+		return match.group(0)
+
+	rendered_body = pattern.sub(_repl, body)
+	return system_prompt, rendered_body

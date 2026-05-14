@@ -6,6 +6,7 @@ import re
 from langgraph_orchestration.tooling.tool import ParseError, ParsedAgentOutput, ToolCall
 
 TOOL_CALL_PATTERN = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+JSON_OBJECT_PATTERN = re.compile(r"\{(?:[^{}]|(?:\{[^{}]*\}))*\}", re.DOTALL)
 
 def parse_agent_output(agent_output: str) -> ParsedAgentOutput:
     if not agent_output:
@@ -14,15 +15,36 @@ def parse_agent_output(agent_output: str) -> ParsedAgentOutput:
             assistant_message="",
             tool_calls=[],
             parse_errors=[],
+            context_complete=False,
         )
 
+    # Check for context completion signal
+    context_complete = "[CONTEXT_COMPLETE]" in agent_output
+
     tool_call_matches = list(TOOL_CALL_PATTERN.finditer(agent_output))
+    
+    # fallback
+    if not tool_call_matches:
+        json_matches = list(JSON_OBJECT_PATTERN.finditer(agent_output))
+        fallback_matches = []
+        for match in json_matches:
+            try:
+                obj = json.loads(match.group(0))
+                if isinstance(obj, dict) and "tool_name" in obj:
+                    fallback_matches.append(match)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        
+        if fallback_matches:
+            tool_call_matches = fallback_matches
+    
     if not tool_call_matches:
         return ParsedAgentOutput(
             raw_output=agent_output,
             assistant_message=agent_output.strip(),
             tool_calls=[],
             parse_errors=[],
+            context_complete=context_complete,
         )
 
     assistant_message = _extract_prose(agent_output, tool_call_matches)
@@ -31,7 +53,11 @@ def parse_agent_output(agent_output: str) -> ParsedAgentOutput:
     parse_errors: list[ParseError] = []
 
     for match in tool_call_matches:
-        envelope_content = match.group(1).strip()
+        try:
+            envelope_content = match.group(1).strip()
+        except IndexError:
+            envelope_content = match.group(0).strip()
+        
         envelope_context = _trim_context(match.group(0))
         tool_call, parse_err = _parse_single_envelope(
             envelope_content,
@@ -48,6 +74,7 @@ def parse_agent_output(agent_output: str) -> ParsedAgentOutput:
         assistant_message=assistant_message,
         tool_calls=tool_calls,
         parse_errors=parse_errors,
+        context_complete=context_complete,
     )
 
 def _extract_prose(full_text: str, tool_call_matches: list[re.Match[str]]) -> str:
@@ -71,9 +98,19 @@ def _parse_single_envelope(
     try:
         data = json.loads(envelope_content)
     except json.JSONDecodeError as exc:
+        error_line = ""
+        if exc.lineno and exc.colno:
+            lines = envelope_content.split('\n')
+            if exc.lineno <= len(lines):
+                error_line = lines[exc.lineno - 1].strip()
+        
+        error_msg = f"Invalid JSON in tool_call envelope: {str(exc)}"
+        if error_line:
+            error_msg += f" | Problem line: {error_line[:60]}"
+        
         return None, ParseError(
             error_type="invalid_json",
-            message=f"Invalid JSON in tool_call envelope: {str(exc)}",
+            message=error_msg,
             context=envelope_context or None,
             recoverable=True,
         )
