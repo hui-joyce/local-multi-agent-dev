@@ -108,6 +108,9 @@ class StateManager:
             sections.append("\n### Tool Results")
             for index, result in enumerate(state.tool_results, start=1):
                 status = "ok" if result.success else "error"
-                sections.append(f"{index}. {result.tool_name} [{status}]\n{result.output}")
+                command = result.metadata.get("command") if result.metadata else None
+                command_line = f"\ncommand: {command}" if command else ""
+                body = result.output or (result.error or "")
+                sections.append(f"{index}. {result.tool_name} [{status}]{command_line}\n{body}")
 
         return "\n".join(sections)

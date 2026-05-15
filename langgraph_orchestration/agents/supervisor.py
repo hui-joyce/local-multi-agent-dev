@@ -250,6 +250,19 @@ class SupervisorAgent(SyncBaseAgent):
         if user_input in self._decision_cache:
             return self._decision_cache[user_input]
 
+        ipsw_keywords = [
+            "ipsw", "firmware", "download", "extract", "dyld_shared_cache",
+            "kernelcache", "kernel cache", "binary analysis", "entitlement", "framework diff",
+            "symbol analysis"
+        ]
+        user_input_lower = user_input.lower()
+        if any(keyword in user_input_lower for keyword in ipsw_keywords):
+            decision = self._build_decision("reverse_engineering", ["reverse_engineering"])
+            if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
+                self._decision_cache.clear()
+            self._decision_cache[user_input] = decision
+            return decision
+
         if self.inference_engine is None:
             raise RuntimeError(
                 "Supervisor inference engine is unavailable. "

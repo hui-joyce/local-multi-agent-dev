@@ -350,6 +350,10 @@ class IDAToolExecutor(BaseToolExecutor):
             "xrefs_from": self._xrefs_from,
             "lookup_funcs": self._lookup_funcs,
             "basic_blocks": self._basic_blocks,
+            "ipsw_cli": self._ipsw_cli,
+            "ipsw_download": self._ipsw_download,
+            "ipsw_extract": self._ipsw_extract,
+            "ipsw_diff": self._ipsw_diff,
         }
 
         tool_name = tool_request.tool_name
@@ -364,7 +368,7 @@ class IDAToolExecutor(BaseToolExecutor):
 
         try:
             result = handlers[tool_name](tool_request)
-            result.source = "ida"
+            result.source = "ipsw" if tool_name.startswith("ipsw") else "ida"
             return result
         except Exception as exc:
             return ToolResult(
@@ -372,7 +376,7 @@ class IDAToolExecutor(BaseToolExecutor):
                 success=False,
                 output="",
                 error=str(exc),
-                source="ida",
+                source="ipsw" if tool_name.startswith("ipsw") else "ida",
             )
 
     def _load_ida_modules(self, ida_instance: Optional[Any]) -> dict[str, Any]:
@@ -697,6 +701,134 @@ class IDAToolExecutor(BaseToolExecutor):
             metadata={"function": str(function_target), "ea": hex(ea), "block_count": count},
         )
 
+    def _run_ipsw(self, args: list[str], timeout: int = 120) -> ToolResult:
+        if not args:
+            return ToolResult(tool_name="ipsw_cli", success=False, output="", error="No ipsw arguments provided")
+
+        cmd = ["ipsw", *args]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=self.workspace_root,
+            )
+        except FileNotFoundError:
+            return ToolResult(
+                tool_name="ipsw_cli",
+                success=False,
+                output="",
+                error="ipsw CLI not found in PATH",
+            )
+        except subprocess.TimeoutExpired:
+            return ToolResult(
+                tool_name="ipsw_cli",
+                success=False,
+                output="",
+                error=f"ipsw command timed out after {timeout}s",
+            )
+
+        stdout = (proc.stdout or "").strip()
+        stderr = (proc.stderr or "").strip()
+        output = stdout if stdout else stderr
+
+        return ToolResult(
+            tool_name="ipsw_cli",
+            success=proc.returncode == 0,
+            output=output,
+            error=None if proc.returncode == 0 else (stderr or stdout or f"ipsw exited with code {proc.returncode}"),
+            metadata={"command": " ".join(cmd), "exit_code": proc.returncode},
+        )
+
+    def _ipsw_cli(self, req: ToolRequest) -> ToolResult:
+        raw_args = req.arguments.get("args", [])
+        timeout = int(req.arguments.get("timeout", 120))
+        if not isinstance(raw_args, list) or not all(isinstance(item, str) for item in raw_args):
+            return ToolResult(
+                tool_name="ipsw_cli",
+                success=False,
+                output="",
+                error="ipsw_cli requires arguments.args as a list of strings",
+            )
+        return self._run_ipsw(raw_args, timeout=timeout)
+
+    def _ipsw_download(self, req: ToolRequest) -> ToolResult:
+        device = req.arguments.get("device")
+        version = req.arguments.get("version")
+        output_dir = req.arguments.get("output_dir")
+        timeout = int(req.arguments.get("timeout", 600))
+
+        if not device or not version:
+            return ToolResult(
+                tool_name="ipsw_download",
+                success=False,
+                output="",
+                error="ipsw_download requires device and version arguments",
+            )
+
+        args = ["download", "--device", str(device), "--version", str(version)]
+        if output_dir:
+            args.extend(["--output", str(output_dir)])
+
+        base = self._run_ipsw(args, timeout=timeout)
+        return ToolResult(
+            tool_name="ipsw_download",
+            success=base.success,
+            output=base.output,
+            error=base.error,
+            metadata=base.metadata,
+        )
+
+    def _ipsw_extract(self, req: ToolRequest) -> ToolResult:
+        ipsw_path = req.arguments.get("ipsw") or req.arguments.get("ipsw_path") or req.target
+        artifact = req.arguments.get("artifact", "dyld")
+        timeout = int(req.arguments.get("timeout", 300))
+
+        if not ipsw_path:
+            return ToolResult(
+                tool_name="ipsw_extract",
+                success=False,
+                output="",
+                error="ipsw_extract requires ipsw or ipsw_path",
+            )
+
+        args = ["extract", "--ipsw", str(ipsw_path), str(artifact)]
+        base = self._run_ipsw(args, timeout=timeout)
+        return ToolResult(
+            tool_name="ipsw_extract",
+            success=base.success,
+            output=base.output,
+            error=base.error,
+            metadata=base.metadata,
+        )
+
+    def _ipsw_diff(self, req: ToolRequest) -> ToolResult:
+        old_dsc = req.arguments.get("old_dsc") or req.arguments.get("old")
+        new_dsc = req.arguments.get("new_dsc") or req.arguments.get("new")
+        json_output = bool(req.arguments.get("json", True))
+        timeout = int(req.arguments.get("timeout", 180))
+
+        if not old_dsc or not new_dsc:
+            return ToolResult(
+                tool_name="ipsw_diff",
+                success=False,
+                output="",
+                error="ipsw_diff requires old_dsc and new_dsc arguments",
+            )
+
+        args = ["dyld", "--dsc-path", str(old_dsc), "--diff", str(new_dsc)]
+        if json_output:
+            args.append("--json")
+
+        base = self._run_ipsw(args, timeout=timeout)
+        return ToolResult(
+            tool_name="ipsw_diff",
+            success=base.success,
+            output=base.output,
+            error=base.error,
+            metadata=base.metadata,
+        )
 
 def get_tool_executor(
     domain: str,

@@ -1,7 +1,8 @@
 from langgraph_orchestration.prompts import render_prompt
 from langgraph_orchestration.prompts.shared import build_tooling_block
+from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source
 
-REVERSE_ENGINEERING_TASKS = ["planning", "code_analysis", "vulnerability_detection"]
+REVERSE_ENGINEERING_TASKS = ["planning", "firmware_analysis", "code_analysis", "vulnerability_detection"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
     "reverse_engineering/task_router.md",
     user_input="",
@@ -98,5 +99,31 @@ def build_vulnerability_detection_prompt(user_input: str, analysis_output: str =
     return _prepend_tooling_block(
         user_input=user_input,
         task_focus="Validate exploitability with direct evidence and request additional binary context when needed.",
+        body=body,
+    )
+
+def build_firmware_analysis_prompt(user_input: str, planning_output: str = "") -> str:
+    planning_block = f"Structured Plan:\n{planning_output}\n\n" if planning_output else ""
+    ipsw_skill_block = load_ipsw_skill_context()
+    ipsw_skill_source = get_ipsw_skill_source()
+    _, body = render_prompt(
+        "reverse_engineering/firmware_analysis.md",
+        user_input=user_input,
+        planning_block=planning_block,
+    )
+    if ipsw_skill_block:
+        body = (
+            f"{body}\n\n"
+            "## IPSW Skill Pack (Loaded)\n"
+            "Use the following instructions and references as canonical command guidance.\n\n"
+            f"Source: {ipsw_skill_source or 'unknown'}\n\n"
+            f"{ipsw_skill_block}"
+        )
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus=(
+            "Use ipsw tools to collect concrete firmware evidence (download/extract/diff), "
+            "then prioritize IDA disassembly targets before concluding."
+        ),
         body=body,
     )

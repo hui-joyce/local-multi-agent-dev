@@ -49,9 +49,34 @@ share/python-wheels/
 .langsmith/
 .langgraph_api/
 
-# Graph visualizations
-graph_diagram.md
-graph_diagram.png
+# Knowledge Base
 documents/
 knowledge_base/
 *.pdf
+
+# IPSW Firmware Files and Downloads
+*.ipsw
+*.ipsw.partial
+.ipsw_downloads/
+.ipsw_cache/
+checksums.txt.sha1
+
+# Extracted Firmware Content
+dyld_shared_cache*
+kernelcache*
+Kernelcache*
+DeveloperDiskImage*
+*.dmg
+
+# Device-Specific Firmware Caches
+22G100__iPhone*/
+22G90__iPhone*/
+.device_fw_cache/
+.extracted_fw/
+
+# Firmware Analysis Artifacts
+*.dylddata
+*.dyldreadonly
+*.dyldlinkedit
+*.extracted
+firmware_analysis_*

@@ -19,13 +19,33 @@ Allowed labels:
 
 Use semantic intent understanding (not fixed keyword matching).
 
-- Return **SOFTWARE_DEV** when the request is only implementation/design/testing/development work.
-- Return **REVERSE_ENGINEERING** when the request is only reverse-engineering/security-analysis work.
-- Return **BOTH** only when the request clearly requires work from both domains in the same task.
+**SOFTWARE_DEV includes:**
+- Code generation, implementation, scripting
+- Design and architecture planning
+- Unit testing, code review
+- API design, refactoring
+- Documentation writing
 
-Ambiguity handling:
-- You must still return one of the three allowed labels.
-- If uncertain between a single domain and BOTH, choose the single best primary domain unless both are explicitly required.
+**REVERSE_ENGINEERING includes:**
+- IPSW firmware downloads, extraction, analysis
+- Binary analysis, disassembly, decompilation
+- Symbol analysis, diff generation
+- Vulnerability detection and security auditing
+- Entitlement/framework analysis
+- Dyld, kernel, and system library analysis
+- Firmware version comparisons
+
+**BOTH:**
+- Only when SAME request explicitly requires generating code AND analyzing firmware
+- Example: "Generate adapter for new iOS APIs AND analyze framework changes"
+- Single-domain requests default to primary domain
+
+## Special Rules
+
+**CRITICAL - IPSW Operations ALWAYS map to REVERSE_ENGINEERING:**
+- Any mention of "IPSW", "firmware", "download", "extract", "dyld_shared_cache", "kernelcache"
+- Immediately classify as REVERSE_ENGINEERING
+- Do NOT route IPSW workflows to SOFTWARE_DEV
 
 ## OUTPUT CONTRACT
 

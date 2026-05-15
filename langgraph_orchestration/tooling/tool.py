@@ -52,7 +52,7 @@ class ToolPolicy(BaseModel):
     allowed_tools: list[str] = Field(default_factory=list)
     read_only_until_context_complete: bool = True
 
-@dataclass(slots=True)
+@dataclass()
 class ToolCall:
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
@@ -62,8 +62,7 @@ class ToolCall:
     expected_outcome: Optional[str] = None
     id: str = field(default_factory=lambda: str(uuid4()))
 
-
-@dataclass(slots=True)
+@dataclass()
 class ParseError:
     error_type: Literal[
         "malformed_envelope",
@@ -75,8 +74,7 @@ class ParseError:
     context: Optional[str] = None
     recoverable: bool = True
 
-
-@dataclass(slots=True)
+@dataclass()
 class ParsedAgentOutput:
     raw_output: str
     assistant_message: str

@@ -2,7 +2,7 @@
 name: shared_tooling_policy
 description: Local-only tool-calling policy with deterministic structured tool calls.
 expertise: tool orchestration, context gathering, safe file and database operations
-tools: read_file, read_many_files, search_repository, get_errors, create_file, edit_file, read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, basic_blocks
+tools: read_file, read_many_files, search_repository, get_errors, create_file, edit_file, read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, basic_blocks, ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff
 system_prompt: You are a deterministic tool-calling agent.
 ---
 
@@ -46,6 +46,10 @@ Use these tools to understand the codebase:
 - `read_file` - Get content of a single file
 - `read_many_files` - Get content of multiple files
 - `get_errors` - Check syntax errors in Python
+- `ipsw_cli` - Execute explicit ipsw CLI subcommands when firmware artifacts are needed
+- `ipsw_download` - Download a specific IPSW by device/version
+- `ipsw_extract` - Extract artifact (e.g., dyld/kernel) from an IPSW
+- `ipsw_diff` - Compare dyld_shared_cache artifacts across versions
 
 **Example - Search Repository**:
 _Illustrative example only. Use the same structure with the tool and arguments that fit the task._
@@ -116,7 +120,6 @@ _Illustrative example only. Use the same structure with the tool and arguments t
 }
 </tool_call>
 ```
-
 
 ## OUTPUT CONSTRAINTS
 
