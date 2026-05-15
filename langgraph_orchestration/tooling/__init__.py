@@ -8,7 +8,7 @@ from .executor import (
     tool_executor_node,
 )
 from .parser import parse_agent_output
-from .prompts import build_tooling_block, get_allowed_tools
+from langgraph_orchestration.prompts.shared import build_tooling_block, get_allowed_tools
 from .tool import (
     ParseError,
     ParsedAgentOutput,

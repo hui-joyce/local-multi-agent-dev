@@ -1,5 +1,5 @@
 from langgraph_orchestration.prompts import render_prompt
-from langgraph_orchestration.tooling.prompts import build_tooling_block
+from langgraph_orchestration.prompts.shared import build_tooling_block
 
 SOFTWARE_DEV_TASKS = ["code_generation", "unit_testing", "architectural_review"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
