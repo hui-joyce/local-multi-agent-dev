@@ -12,6 +12,7 @@ Select the minimum required reverse engineering tasks.
 
 Allowed tasks:
 - planning
+- firmware_analysis
 - code_analysis
 - vulnerability_detection
 
@@ -19,6 +20,7 @@ Allowed tasks:
 
 Use:
 - planning → broad, unclear, or multi-step requests
+- firmware_analysis → IPSW/OTA/kernelcache/dyld_shared_cache comparisons, Apple firmware deltas, private framework evolution
 - code_analysis → assembly, decompiled code, behavior reconstruction, control flow analysis
 - vulnerability_detection → exploitability, unsafe operations, memory corruption, security assessment
 

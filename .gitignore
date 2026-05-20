@@ -23,35 +23,47 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 
 # MLX Model Cache
 .cache/
-~/.cache/mlx_models
+.mlx_cache/
 
 # LangSmith / LangChain / LangGraph
 .langchain/
 .langsmith/
 .langgraph_api/
 
-# Graph visualizations
-graph_diagram.md
-graph_diagram.png
+# Knowledge Base
 documents/
 knowledge_base/
 *.pdf
+
+# IPSW Firmware Files and Downloads
+*.ipsw
+*.ipsw.partial
+.ipsw_downloads/
+.ipsw_extracted/
+.ipsw_cache/
+checksums.txt.sha1
+
+# Extracted Firmware & Analysis Artifacts
+dyld_shared_cache*
+kernelcache*
+Kernelcache*
+DeveloperDiskImage*
+*.dmg
+22G100__iPhone*/
+22G90__iPhone*/
+.device_fw_cache/
+.extracted_fw/
+*.dylddata
+*.dyldreadonly
+*.dyldlinkedit
+*.extracted
+firmware_analysis_*
+
+# Others
+.DS_Store
