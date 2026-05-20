@@ -10,6 +10,13 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from langgraph_orchestration.tooling.parser import parse_agent_output
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
+from ipsw_service.cli import (
+    IpswCliRunner,
+    build_download_args,
+    build_extract_args,
+    build_diff_args,
+    build_dyld_diff_args,
+)
 
 if TYPE_CHECKING:
     from langgraph_orchestration.schemas.state import AgentState
@@ -704,41 +711,19 @@ class IDAToolExecutor(BaseToolExecutor):
     def _run_ipsw(self, args: list[str], timeout: int = 120) -> ToolResult:
         if not args:
             return ToolResult(tool_name="ipsw_cli", success=False, output="", error="No ipsw arguments provided")
-
-        cmd = ["ipsw", *args]
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=self.workspace_root,
-            )
-        except FileNotFoundError:
-            return ToolResult(
-                tool_name="ipsw_cli",
-                success=False,
-                output="",
-                error="ipsw CLI not found in PATH",
-            )
-        except subprocess.TimeoutExpired:
-            return ToolResult(
-                tool_name="ipsw_cli",
-                success=False,
-                output="",
-                error=f"ipsw command timed out after {timeout}s",
-            )
-
-        stdout = (proc.stdout or "").strip()
-        stderr = (proc.stderr or "").strip()
-        output = stdout if stdout else stderr
-
+        runner = IpswCliRunner(cwd=self.workspace_root)
+        result = runner.run(args, timeout=timeout)
+        output = result.stdout if result.stdout else result.stderr
         return ToolResult(
             tool_name="ipsw_cli",
-            success=proc.returncode == 0,
+            success=result.success,
             output=output,
-            error=None if proc.returncode == 0 else (stderr or stdout or f"ipsw exited with code {proc.returncode}"),
-            metadata={"command": " ".join(cmd), "exit_code": proc.returncode},
+            error=None if result.success else (result.stderr or result.stdout or f"ipsw exited with code {result.exit_code}"),
+            metadata={
+                "command": result.command,
+                "exit_code": result.exit_code,
+                "duration_seconds": result.duration_seconds,
+            },
         )
 
     def _ipsw_cli(self, req: ToolRequest) -> ToolResult:
@@ -756,20 +741,38 @@ class IDAToolExecutor(BaseToolExecutor):
     def _ipsw_download(self, req: ToolRequest) -> ToolResult:
         device = req.arguments.get("device")
         version = req.arguments.get("version")
+        build = req.arguments.get("build")
+        latest = bool(req.arguments.get("latest", False))
         output_dir = req.arguments.get("output_dir")
         timeout = int(req.arguments.get("timeout", 600))
+        include_kernel = bool(req.arguments.get("kernel", False))
+        include_dyld = bool(req.arguments.get("dyld", False))
 
-        if not device or not version:
+        if not device:
             return ToolResult(
                 tool_name="ipsw_download",
                 success=False,
                 output="",
-                error="ipsw_download requires device and version arguments",
+                error="ipsw_download requires a device identifier",
+            )
+        if not (version or build or latest):
+            return ToolResult(
+                tool_name="ipsw_download",
+                success=False,
+                output="",
+                error="ipsw_download requires version, build, or latest flag",
             )
 
-        args = ["download", "--device", str(device), "--version", str(version)]
-        if output_dir:
-            args.extend(["--output", str(output_dir)])
+        args = build_download_args(
+            device=str(device),
+            version=str(version) if version else None,
+            build=str(build) if build else None,
+            output_dir=str(output_dir) if output_dir else None,
+            resume_all=True,
+            latest=latest,
+            include_kernel=include_kernel,
+            include_dyld=include_dyld,
+        )
 
         base = self._run_ipsw(args, timeout=timeout)
         return ToolResult(
@@ -783,6 +786,10 @@ class IDAToolExecutor(BaseToolExecutor):
     def _ipsw_extract(self, req: ToolRequest) -> ToolResult:
         ipsw_path = req.arguments.get("ipsw") or req.arguments.get("ipsw_path") or req.target
         artifact = req.arguments.get("artifact", "dyld")
+        output_dir = req.arguments.get("output_dir")
+        dyld_arch = req.arguments.get("dyld_arch", "arm64e")
+        extra_args = req.arguments.get("extra_args", [])
+        pattern = req.arguments.get("pattern")
         timeout = int(req.arguments.get("timeout", 300))
 
         if not ipsw_path:
@@ -793,7 +800,27 @@ class IDAToolExecutor(BaseToolExecutor):
                 error="ipsw_extract requires ipsw or ipsw_path",
             )
 
-        args = ["extract", "--ipsw", str(ipsw_path), str(artifact)]
+        dyld = artifact in ("dyld", "dsc")
+        kernel = artifact == "kernel"
+        normalized_extra: list[str] = []
+        if isinstance(extra_args, list):
+            normalized_extra = [str(item) for item in extra_args]
+        if artifact == "files":
+            normalized_extra = ["--files"]
+            if pattern:
+                normalized_extra.extend(["--pattern", str(pattern)])
+        elif not dyld and not kernel and not normalized_extra and artifact:
+            flag = str(artifact)
+            normalized_extra = [flag if flag.startswith("--") else f"--{flag}"]
+
+        args = build_extract_args(
+            ipsw_path=str(ipsw_path),
+            output_dir=str(output_dir) if output_dir else None,
+            dyld=dyld,
+            kernel=kernel,
+            dyld_arch=str(dyld_arch),
+            extra_args=normalized_extra,
+        )
         base = self._run_ipsw(args, timeout=timeout)
         return ToolResult(
             tool_name="ipsw_extract",
@@ -804,22 +831,34 @@ class IDAToolExecutor(BaseToolExecutor):
         )
 
     def _ipsw_diff(self, req: ToolRequest) -> ToolResult:
-        old_dsc = req.arguments.get("old_dsc") or req.arguments.get("old")
-        new_dsc = req.arguments.get("new_dsc") or req.arguments.get("new")
-        json_output = bool(req.arguments.get("json", True))
+        old_dsc = req.arguments.get("old_dsc")
+        new_dsc = req.arguments.get("new_dsc")
+        old_ipsw = req.arguments.get("old_ipsw") or req.arguments.get("old_ipsw_path") or req.arguments.get("old")
+        new_ipsw = req.arguments.get("new_ipsw") or req.arguments.get("new_ipsw_path") or req.arguments.get("new")
+        json_output = bool(req.arguments.get("json", False))
         timeout = int(req.arguments.get("timeout", 180))
 
-        if not old_dsc or not new_dsc:
+        if old_dsc and new_dsc:
+            args = build_dyld_diff_args(str(old_dsc), str(new_dsc), json_output=json_output)
+        elif old_ipsw and new_ipsw:
+            args = build_diff_args(
+                old_ipsw=str(old_ipsw),
+                new_ipsw=str(new_ipsw),
+                output_dir=req.arguments.get("output_dir"),
+                markdown=bool(req.arguments.get("markdown", True)),
+                include_fw=bool(req.arguments.get("fw", False)),
+                include_launchd=bool(req.arguments.get("launchd", False)),
+                include_entitlements=bool(req.arguments.get("ent", False)),
+                low_memory=bool(req.arguments.get("low_memory", False)),
+                json_output=json_output,
+            )
+        else:
             return ToolResult(
                 tool_name="ipsw_diff",
                 success=False,
                 output="",
-                error="ipsw_diff requires old_dsc and new_dsc arguments",
+                error="ipsw_diff requires old/new IPSW paths or old_dsc/new_dsc arguments",
             )
-
-        args = ["dyld", "--dsc-path", str(old_dsc), "--diff", str(new_dsc)]
-        if json_output:
-            args.append("--json")
 
         base = self._run_ipsw(args, timeout=timeout)
         return ToolResult(

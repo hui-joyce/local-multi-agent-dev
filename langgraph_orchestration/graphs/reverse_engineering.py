@@ -1,6 +1,6 @@
 """
 Reverse-engineering graph for handling IPSW analysis tasks.
-resolution -> download -> extraction -> semantic analysis -> synthesis.
+resolution -> download -> extraction -> diff -> synthesis.
 """
 
 from __future__ import annotations
@@ -18,16 +18,19 @@ from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.tooling.executor import get_tool_executor
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
+from ipsw_service.agents.ipsw_extractor import IpswExtractorAgent
+from ipsw_service.cli import build_download_args
+from ipsw_service.firmware_diff_service import FirmwareDiffService
+from ipsw_service.models import FirmwareDiffRequest
+from ipsw_service.utils import read_text
+from ipsw_service.firmware_catalog import FirmwareCatalogService
 
 
 def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
 
-    analysis_agent = factory.create_code_analysis_agent()
     full_download_timeout = 4 * 60 * 60
-    dyld_extract_timeout = 4 * 60 * 60
-    kernel_extract_timeout = 60 * 60
 
     graph = StateGraph(AgentState)
 
@@ -95,6 +98,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         root = state.workspace_root or os.getcwd()
         return os.path.join(root, ".ipsw_downloads")
 
+    def _extract_output_dir(state: AgentState) -> str:
+        root = state.workspace_root or os.getcwd()
+        return os.path.join(root, ".ipsw_extracted")
+
     def _is_download_extract_only_request(user_input: str) -> bool:
         lowered = (user_input or "").lower()
         if not ("download" in lowered and "extract" in lowered):
@@ -122,6 +129,18 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 expected_path = os.path.join(download_dir, expected)
                 if os.path.isfile(expected_path):
                     artifacts.append(expected_path)
+                continue
+
+            if device and version:
+                prefix = f"{device}_{version}_"
+                for name in os.listdir(download_dir):
+                    if name.startswith(prefix) and name.endswith("_Restore.ipsw"):
+                        full_path = os.path.join(download_dir, name)
+                        if os.path.isfile(full_path):
+                            artifacts.append(full_path)
+
+        if targets:
+            return sorted(set(artifacts))
 
         for name in os.listdir(download_dir):
             if not name.endswith(".ipsw"):
@@ -132,23 +151,32 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
         return sorted(set(artifacts))
 
-    def _tool_observation_block(state: AgentState) -> str:
-        if not state.tool_results:
-            return ""
-        recent = state.tool_results[-3:]
-        lines = ["Recent execution evidence:"]
-        for result in recent:
-            if result.success:
-                lines.append(f"- {result.tool_name}: {(result.output or '')[:1200]}")
-            else:
-                lines.append(f"- {result.tool_name} failed: {result.error}")
-        return "\n".join(lines)
+    def _parse_version_tuple(version: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in version.split(".") if part.isdigit())
 
-    def _analysis_prompt(state: AgentState, instruction: str) -> str:
-        evidence = _tool_observation_block(state)
-        if not evidence:
-            return instruction
-        return f"{instruction}\n\n{evidence}"
+    def _order_ipsw_paths(paths: list[str]) -> list[str]:
+        def key(path: str) -> tuple[tuple[int, ...], str]:
+            name = os.path.basename(path)
+            match = re.search(r"_(\d+\.\d+(?:\.\d+)?)_([A-Za-z0-9]+)_Restore\.ipsw", name)
+            if not match:
+                return ((), name)
+            return (_parse_version_tuple(match.group(1)), match.group(2))
+
+        return sorted(paths, key=key)
+
+    def _select_diff_pair(paths: list[str]) -> tuple[str | None, str | None]:
+        if len(paths) < 2:
+            return None, None
+        ordered = _order_ipsw_paths(paths)
+        return ordered[0], ordered[-1]
+
+    def _format_version_from_ipsw(path: str) -> str | None:
+        name = os.path.basename(path)
+        match = re.search(r"_(\d+\.\d+(?:\.\d+)?)_([A-Za-z0-9]+)_Restore\.ipsw", name)
+        if not match:
+            return None
+        version, build = match.group(1), match.group(2)
+        return f"{version} ({build})"
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
         RAGConfigManager.initialize()
@@ -170,6 +198,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
     def firmware_locator_node(state: AgentState) -> AgentState:
         targets = _parse_firmware_targets(state.user_input)
+        if not targets and os.getenv("IPSW_DOWNLOADS_API_ENABLE") == "1":
+            catalog = FirmwareCatalogService()
+            identifier = catalog.resolve_by_model_hint(state.user_input)
+            if identifier:
+                resolved = catalog.resolve_latest_ipsw(identifier)
+                if resolved:
+                    targets = [{"device": resolved.get("device", ""), "version": resolved.get("version", ""), "build": resolved.get("build", "")}]
         if not targets:
             payload = {
                 "status": "unresolved",
@@ -193,16 +228,18 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         os.makedirs(output_dir, exist_ok=True)
 
         for target in targets:
-            base = ["download", "ipsw", "--device", target["device"]]
-            if target.get("build"):
-                base.extend(["--build", target["build"]])
-            else:
-                base.extend(["--version", target["version"]])
+            base = build_download_args(
+                device=target["device"],
+                version=target.get("version") or None,
+                build=target.get("build") or None,
+                output_dir=output_dir,
+                resume_all=True,
+            )
 
             requests.append(
                 ToolRequest(
                     tool_name="ipsw_cli",
-                    arguments={"args": base + ["--output", output_dir, "--resume-all"], "timeout": full_download_timeout},
+                    arguments={"args": base, "timeout": full_download_timeout},
                     target=f"{target['device']}:{target['version'] or target['build']}",
                     reason="Download firmware artifact.",
                 )
@@ -220,81 +257,58 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
     def ipsw_extractor_node(state: AgentState) -> AgentState:
         local_ipsws = _collect_confirmed_local_artifacts(state)
-        requests: list[ToolRequest] = []
+        extractor = IpswExtractorAgent(workspace_root=state.workspace_root)
+        output_dir = _extract_output_dir(state)
+        payload = extractor.extract(local_ipsws, output_dir)
+        if not local_ipsws:
+            payload["note"] = "No confirmed local artifacts available; extraction skipped."
+        return StateManager.add_intermediate_output(state, "ipsw_extractor", json.dumps(payload, ensure_ascii=True, indent=2))
 
-        for ipsw in local_ipsws:
-            requests.append(
-                ToolRequest(
-                    tool_name="ipsw_cli",
-                    arguments={"args": ["extract", "--dyld", "--dyld-arch", "arm64e", ipsw], "timeout": dyld_extract_timeout},
-                    target=ipsw,
-                    reason="Extract dyld_shared_cache.",
-                )
-            )
-            requests.append(
-                ToolRequest(
-                    tool_name="ipsw_cli",
-                    arguments={"args": ["extract", "--kernel", ipsw], "timeout": kernel_extract_timeout},
-                    target=ipsw,
-                    reason="Extract kernelcache.",
-                )
-            )
+    def firmware_diff_service_node(state: AgentState) -> AgentState:
+        local_ipsws = _collect_confirmed_local_artifacts(state)
+        old_ipsw, new_ipsw = _select_diff_pair(local_ipsws)
+        if not old_ipsw or not new_ipsw:
+            payload = {"status": "skipped", "reason": "Need two IPSW artifacts for firmware diff."}
+            return StateManager.add_intermediate_output(state, "firmware_diff_report", json.dumps(payload, ensure_ascii=True, indent=2))
 
-        _, summary = _run_tool_requests(state, requests)
-        if not requests:
-            summary.append("No confirmed local artifacts available; extraction skipped.")
-        return StateManager.add_intermediate_output(state, "ipsw_extractor", "\n".join(summary))
+        dyld_map: dict[str, str | None] = {}
+        kernel_map: dict[str, str | None] = {}
+        extractor_output = state.intermediate_outputs.get("ipsw_extractor", "")
+        if extractor_output:
+            try:
+                data = json.loads(extractor_output)
+                for entry in data.get("extractions", []):
+                    ipsw = entry.get("ipsw")
+                    if ipsw:
+                        dyld_paths = entry.get("dyld_paths", [])
+                        kernel_paths = entry.get("kernel_paths", [])
+                        dyld_map[ipsw] = dyld_paths[0] if dyld_paths else None
+                        kernel_map[ipsw] = kernel_paths[0] if kernel_paths else None
+            except Exception:
+                pass
 
-    def objc_class_analyzer_node(state: AgentState) -> AgentState:
-        prompt = _analysis_prompt(
-            state,
-            "Analyze extracted firmware artifacts for Objective-C class-level changes and impacted frameworks.",
+        request = FirmwareDiffRequest(
+            old_ipsw=old_ipsw,
+            new_ipsw=new_ipsw,
+            old_dyld=dyld_map.get(old_ipsw),
+            new_dyld=dyld_map.get(new_ipsw),
+            old_kernelcache=kernel_map.get(old_ipsw),
+            new_kernelcache=kernel_map.get(new_ipsw),
+            old_version=_format_version_from_ipsw(old_ipsw),
+            new_version=_format_version_from_ipsw(new_ipsw),
         )
-        output = analysis_agent.invoke(user_input=prompt, context=state.re_context)
-        return StateManager.add_intermediate_output(state, "objc_class_analyzer", output)
+        service = FirmwareDiffService(workspace_root=state.workspace_root)
+        result = service.run(request)
 
-    def framework_diff_engine_node(state: AgentState) -> AgentState:
-        prompt = _analysis_prompt(
-            state,
-            "Analyze framework-level deltas from extracted firmware artifacts and summarize concrete binary/resource changes.",
-        )
-        output = analysis_agent.invoke(user_input=prompt, context=state.re_context)
-        return StateManager.add_intermediate_output(state, "framework_diff_engine", output)
-
-    def entitlement_diff_engine_node(state: AgentState) -> AgentState:
-        prompt = _analysis_prompt(
-            state,
-            "Analyze entitlement-level changes from extracted artifacts and identify security-relevant policy shifts.",
-        )
-        output = analysis_agent.invoke(user_input=prompt, context=state.re_context)
-        return StateManager.add_intermediate_output(state, "entitlement_diff_engine", output)
-
-    def symbol_diff_engine_node(state: AgentState) -> AgentState:
-        prompt = _analysis_prompt(
-            state,
-            "Analyze symbol-level deltas from extracted kernel and dyld artifacts and prioritize high-signal changes.",
-        )
-        output = analysis_agent.invoke(user_input=prompt, context=state.re_context)
-        return StateManager.add_intermediate_output(state, "symbol_diff_engine", output)
-
-    def feature_inference_agent_node(state: AgentState) -> AgentState:
-        prompt = _analysis_prompt(
-            state,
-            "Infer likely platform changes from observed firmware deltas and clearly separate confirmed vs likely inferences.",
-        )
-        output = analysis_agent.invoke(user_input=prompt, context=state.re_context)
-        return StateManager.add_intermediate_output(state, "feature_inference_agent", output)
+        report_text = read_text(result.artifacts.report_markdown)
+        return StateManager.add_intermediate_output(state, "firmware_diff_report", report_text)
 
     def firmware_analysis_node(state: AgentState) -> AgentState:
         stage_keys = [
             "firmware_locator",
             "firmware_downloader",
             "ipsw_extractor",
-            "objc_class_analyzer",
-            "framework_diff_engine",
-            "entitlement_diff_engine",
-            "symbol_diff_engine",
-            "feature_inference_agent",
+            "firmware_diff_report",
         ]
 
         sections: list[str] = []
@@ -310,6 +324,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return StateManager.add_intermediate_output(state, "firmware_analysis", output)
 
     def synthesize_output(state: AgentState) -> AgentState:
+        report = state.intermediate_outputs.get("firmware_diff_report", "")
+        if report:
+            state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(report)
+            state.agent_chain.append("reverse_engineering_synthesize")
+            return state
+
         final = state.intermediate_outputs.get("firmware_analysis", "")
         if not final:
             final = "IPSW execution pipeline completed without synthesized content."
@@ -321,17 +341,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     def route_after_extractor(state: AgentState) -> str:
         if _is_download_extract_only_request(state.user_input):
             return "firmware_analysis"
-        return "objc_class_analyzer"
+        return "firmware_diff_service"
 
     graph.add_node("retrieve_re_context", retrieve_re_context_node)
     graph.add_node("firmware_locator", firmware_locator_node)
     graph.add_node("firmware_downloader", firmware_downloader_node)
     graph.add_node("ipsw_extractor", ipsw_extractor_node)
-    graph.add_node("objc_class_analyzer", objc_class_analyzer_node)
-    graph.add_node("framework_diff_engine", framework_diff_engine_node)
-    graph.add_node("entitlement_diff_engine", entitlement_diff_engine_node)
-    graph.add_node("symbol_diff_engine", symbol_diff_engine_node)
-    graph.add_node("feature_inference_agent", feature_inference_agent_node)
+    graph.add_node("firmware_diff_service", firmware_diff_service_node)
     graph.add_node("firmware_analysis", firmware_analysis_node)
     graph.add_node("synthesize", synthesize_output)
 
@@ -343,14 +359,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         route_after_extractor,
         {
             "firmware_analysis": "firmware_analysis",
-            "objc_class_analyzer": "objc_class_analyzer",
+            "firmware_diff_service": "firmware_diff_service",
         },
     )
-    graph.add_edge("objc_class_analyzer", "framework_diff_engine")
-    graph.add_edge("framework_diff_engine", "entitlement_diff_engine")
-    graph.add_edge("entitlement_diff_engine", "symbol_diff_engine")
-    graph.add_edge("symbol_diff_engine", "feature_inference_agent")
-    graph.add_edge("feature_inference_agent", "firmware_analysis")
+    graph.add_edge("firmware_diff_service", "firmware_analysis")
     graph.add_edge("firmware_analysis", "synthesize")
     graph.add_edge("synthesize", END)
 

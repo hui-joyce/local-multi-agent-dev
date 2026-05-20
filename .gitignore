@@ -45,6 +45,7 @@ knowledge_base/
 *.ipsw
 *.ipsw.partial
 .ipsw_downloads/
+.ipsw_extracted/
 .ipsw_cache/
 checksums.txt.sha1
 
@@ -63,3 +64,6 @@ DeveloperDiskImage*
 *.dyldlinkedit
 *.extracted
 firmware_analysis_*
+
+# Others
+.DS_Store

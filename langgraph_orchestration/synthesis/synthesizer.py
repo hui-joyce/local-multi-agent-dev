@@ -100,11 +100,8 @@ class Synthesizer:
                 sections.append(f"✓ Successfully downloaded {count} firmware artifacts")
         
         analysis_keys = [
-            "objc_class_analyzer",
-            "framework_diff_engine",
-            "entitlement_diff_engine",
-            "symbol_diff_engine",
-            "feature_inference_agent",
+            "firmware_diff_report",
+            "firmware_analysis",
         ]
         
         analysis_findings = []
@@ -259,6 +256,10 @@ class Synthesizer:
         return "\n".join(sections)
 
     def synthesize(self) -> str:
+        re_report = self.state.intermediate_outputs.get("firmware_diff_report", "")
+        if re_report and self.state.execution_domains == ["reverse_engineering"]:
+            return StateManager.sanitize_output(re_report)
+
         sections = []
         
         # Header

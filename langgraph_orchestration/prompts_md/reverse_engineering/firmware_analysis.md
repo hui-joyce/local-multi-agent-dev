@@ -20,11 +20,8 @@ firmware_analysis
 ├── firmware_locator
 ├── firmware_downloader
 ├── ipsw_extractor
-├── objc_class_analyzer
-├── framework_diff_engine
-├── entitlement_diff_engine
-├── symbol_diff_engine
-└── feature_inference_agent
+├── firmware_diff_service
+└── firmware_analysis
 
 You MUST gather concrete evidence before conclusions.
 
