@@ -1,0 +1,22 @@
+{
+  "generated_at_utc": "2026-05-26T03:13:31.383277+00:00",
+  "result": {
+    "case_id": "RE-FEATURE-ANALYSIS-26-4-2",
+    "description": "Feature analysis on 26.4.1 vs 26.4.2 diff report.",
+    "report_path": "artifacts/firmware_diff/20260520-021825/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md",
+    "agent_chain": [
+      "firmware_analysis",
+      "reverse_engineering_synthesize"
+    ],
+    "latency_seconds": 378.276,
+    "report_count": 6,
+    "report_paths": {
+      "iMessage": "artifacts/firmware_diff/20260520-021825/feature_analysis/iMessage_analysis.md",
+      "HeuristicInterpreter": "artifacts/firmware_diff/20260520-021825/feature_analysis/HeuristicInterpreter_analysis.md",
+      "AppPredictionIntentsHelperService": "artifacts/firmware_diff/20260520-021825/feature_analysis/AppPredictionIntentsHelperService_analysis.md",
+      "companionmessagesd": "artifacts/firmware_diff/20260520-021825/feature_analysis/companionmessagesd_analysis.md",
+      "com.apple.Siri.ActionPredictionNotifications": "artifacts/firmware_diff/20260520-021825/feature_analysis/com.apple.Siri.ActionPredictionNotifications_analysis.md",
+      "duetexpertd": "artifacts/firmware_diff/20260520-021825/feature_analysis/duetexpertd_analysis.md"
+    }
+  }
+}

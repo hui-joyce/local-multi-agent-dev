@@ -91,6 +91,26 @@ class AgentState(BaseModel):
         description="LLM-selected execution plan for reverse engineering branch",
     )
 
+    feature_analysis_targets: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Feature analysis targets selected from diff report",
+    )
+
+    feature_analysis_queue: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Pending feature analysis targets",
+    )
+
+    feature_analysis_current: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Active feature analysis target",
+    )
+
+    feature_analysis_reports: dict[str, str] = Field(
+        default_factory=dict,
+        description="Generated feature analysis reports keyed by feature name",
+    )
+
     intermediate_outputs: dict[str, str] = Field(
         default_factory=dict,
         description="Outputs from individual agents {agent_name: output}",
