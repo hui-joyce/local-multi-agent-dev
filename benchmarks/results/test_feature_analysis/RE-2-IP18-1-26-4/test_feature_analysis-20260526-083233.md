@@ -6,7 +6,7 @@
 - Diff report: artifacts/firmware_diff/20260520-021825/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md
 
 ## Execution
-- Latency: 378.276s
+- Latency: 358.442s
 - Agent chain: firmware_analysis, reverse_engineering_synthesize
 - Feature reports: 6
 

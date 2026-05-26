@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from typing import Iterable
+import json
+import os
+
+from ipsw_service.utils import read_text
 
 from ipsw_service.models import FirmwareDiffResult, Finding
 
@@ -66,6 +70,22 @@ def render_report(result: FirmwareDiffResult) -> str:
     lines.append(f"- KEXT diff summary: {counts.kext_changes} changes")
     lines.append(f"- launchd/service diff summary: {counts.launchd_changes} changes")
     lines.append(f"- dyld diff summary: {counts.dyld_changes} changes")
+    cstring_changes: list[str] = []
+    metadata_path = result.artifacts.symbol_metadata or ""
+    if metadata_path and os.path.isfile(metadata_path):
+        try:
+            data = json.loads(read_text(metadata_path))
+            cstring_changes = data.get("cstring_changes", []) or []
+        except Exception:
+            cstring_changes = []
+
+    lines.append(f"- cstring diff summary: {len(cstring_changes)} changes")
+    if cstring_changes:
+        lines.append("- cstring deltas:")
+        for entry in cstring_changes[:20]:
+            lines.append(f"  - {entry}")
+        if len(cstring_changes) > 20:
+            lines.append(f"  - ... {len(cstring_changes) - 20} more")
     lines.append(
         "- firmware component summary: "
         f"added={counts.firmware_added}, removed={counts.firmware_removed}, modified={counts.firmware_modified}"

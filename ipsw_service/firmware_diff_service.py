@@ -150,6 +150,7 @@ class FirmwareDiffService:
         
         cstring_changes = extract_cstring_diffs(diff_report_text) if diff_report_text else []
         cstring_changes = self._collect_cstring_changes(cstring_changes, diff_report_root)
+        diff_data["cstring_changes"] = cstring_changes
         macho_note = None
         if diff_report_path:
             macho_dir = os.path.join(diff_report_root, "MACHOS")

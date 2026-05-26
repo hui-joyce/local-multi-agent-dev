@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-05-26T03:13:31.383277+00:00",
+  "generated_at_utc": "2026-05-26T08:32:33.240026+00:00",
   "result": {
     "case_id": "RE-FEATURE-ANALYSIS-26-4-2",
     "description": "Feature analysis on 26.4.1 vs 26.4.2 diff report.",
@@ -8,7 +8,7 @@
       "firmware_analysis",
       "reverse_engineering_synthesize"
     ],
-    "latency_seconds": 378.276,
+    "latency_seconds": 358.442,
     "report_count": 6,
     "report_paths": {
       "iMessage": "artifacts/firmware_diff/20260520-021825/feature_analysis/iMessage_analysis.md",

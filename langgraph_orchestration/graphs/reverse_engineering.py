@@ -270,6 +270,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 idx += 1
                 continue
 
+            heading = line[5:].strip().lower()
+            if any(token in heading for token in ("updated", "modified", "changed")):
+                current_change = "updated"
+                idx += 1
+                continue
+            if any(token in heading for token in ("added", "new")):
+                current_change = "added"
+                idx += 1
+                continue
+
             if current_change not in {"updated", "added"}:
                 idx += 1
                 continue
@@ -334,8 +344,9 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             system_prompt = (
                 "You are a reverse engineering analyst specializing in call graph context. "
                 "Summarize likely callers, entry points, and connected components. "
-                "If evidence is insufficient, say what is missing."
-            )
+                "If evidence is insufficient, state what is missing. Be concise. "
+                "CRITICAL: Do not echo your role, task, or instructions. Output ONLY the final analysis."            
+                )
             user_input = (
                 "Describe how this feature is implemented and its call graph context. "
                 "Be concise and evidence-based.\n"
@@ -346,22 +357,23 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             system_prompt = (
                 "You are a reverse engineering analyst focusing on trigger conditions. "
                 "Describe how the feature is activated (IPC, launchd, user actions, configs). "
-                "If unknown, state that clearly and list missing evidence."
+                "If unknown, state that clearly. Be concise. "
+                "CRITICAL: Do not echo your role, task, or instructions. Output ONLY the final analysis."
             )
             user_input = (
-                "Explain how this feature is triggered. Be concise and evidence-based.\n"
+                "Explain how this feature is triggered. Be concise and evidence-based. "
                 f"Feature: {name}\n"
                 f"Type: {feature_type}"
             )
         else:
             system_prompt = (
                 "You are a reverse engineering analyst specializing in semantic extraction. "
-                "Infer the high-level purpose from the diff evidence. "
-                "If uncertain, state the confidence and missing evidence."
+                "Infer the high-level purpose from the diff evidence in 1-3 sentences. "
+                "If uncertain, state the confidence and missing evidence. "
+                "CRITICAL: Do not echo your role, task, or instructions. Output ONLY the final analysis."            
             )
             user_input = (
-                "Summarize what this feature does at a high level. "
-                "Be concise and evidence-based.\n"
+                "Summarize what this feature does at a high level. Be concise and evidence-based. "
                 f"Feature: {name}\n"
                 f"Type: {feature_type}"
             )
@@ -379,9 +391,49 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return _sanitize_model_output(output)
 
     def _render_feature_report(feature: dict[str, str]) -> str:
-        relation = feature.get("relation", "")
-        decipher = feature.get("decipher", "")
-        trigger = feature.get("trigger", "")
+        def _strip_thinking(text: str) -> str:
+            if not text:
+                return ""
+            
+            cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+            cleaned = re.sub(r"<tool_call>.*?(?:</tool_call>|$)", "", cleaned, flags=re.DOTALL)
+            
+            if "<think>" in cleaned:
+                parts = cleaned.split("<think>", 1)
+                before = parts[0]
+                after = parts[1]
+                match = re.search(r"(\n\s*#|\n\s*\d+\.\s+\*\*|\n\s*\*\*)", after)
+                if match:
+                    cleaned = before + after[match.start():]
+                else:
+                    cleaned = cleaned.replace("<think>", "")
+
+            lines = []
+            
+            meta_keywords = [
+                "Role:", "Task:", "Constraint:", "Input:", 
+                "Target Feature:", "Type:", "Path:", "Thinking Process:",
+                "Analyze the Request:", "Analyze the Evidence:", "Synthesize Findings:"
+            ]
+            
+            for line in cleaned.splitlines():
+                stripped_line = line.lstrip(" \t-*").strip()
+                if any(stripped_line.startswith(kw) for kw in meta_keywords):
+                    continue
+                if re.match(r"^\d+\.\s+(Synthesize|Determine|Analyze)", stripped_line):
+                    continue
+                if line.strip() in ["1.", "2.", "3.", "-", "*"]:
+                    continue
+                    
+                lines.append(line)
+            
+            result = "\n".join(lines).strip()
+            result = re.sub(r"\n{3,}", "\n\n", result)
+            return result if result else ""
+
+        relation = _strip_thinking(feature.get("relation", ""))
+        decipher = _strip_thinking(feature.get("decipher", ""))
+        trigger = _strip_thinking(feature.get("trigger", ""))
         lines = [
             f"# Feature Analysis: {feature.get('name', 'unknown')}",
             "",
