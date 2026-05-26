@@ -24,7 +24,7 @@ def render_report(result: FirmwareDiffResult) -> str:
         "- total binaries added/removed/modified: "
         f"{counts.added_binaries}/{counts.removed_binaries}/{counts.modified_binaries}"
     )
-    lines.append(f"- high-risk changes detected: {summary.high_risk_changes}")
+    lines.append(f"- high-fmrisk changes detected: {summary.high_risk_changes}")
     lines.append("")
 
     lines.append("# Critical Findings")
@@ -51,7 +51,7 @@ def render_report(result: FirmwareDiffResult) -> str:
     lines.append("- Validate launchd/service diffs against expected platform changes and patch notes.")
     lines.append("")
 
-    kernel_status = "available" if result.artifacts.kext_diff else "missing"
+    kernel_status = "available" if (result.artifacts.kernel_diff or result.artifacts.kext_diff) else "missing"
     dyld_status = "available" if result.artifacts.dyld_diff else "missing"
     lines.append("# Technical Details")
     lines.append(f"- kernelcache extraction summary: {kernel_status}")
@@ -64,8 +64,20 @@ def render_report(result: FirmwareDiffResult) -> str:
     lines.append(f"- entitlement diff summary: {counts.entitlement_changes} changes")
     lines.append(f"- sandbox diff summary: {counts.sandbox_changes} changes")
     lines.append(f"- KEXT diff summary: {counts.kext_changes} changes")
-    lines.append(f"- framework diff summary: {counts.framework_changes} changes")
     lines.append(f"- launchd/service diff summary: {counts.launchd_changes} changes")
+    lines.append(f"- dyld diff summary: {counts.dyld_changes} changes")
+    lines.append(
+        "- firmware component summary: "
+        f"added={counts.firmware_added}, removed={counts.firmware_removed}, modified={counts.firmware_modified}"
+    )
+    lines.append(
+        "- iBoot component summary: "
+        f"added={counts.iboot_added}, removed={counts.iboot_removed}, modified={counts.iboot_modified}"
+    )
+    if result.notes:
+        lines.append("- firmware highlights:")
+        for note in result.notes:
+            lines.append(f"  - {note}")
     lines.append("- evidence sources:")
     lines.append(f"  - report artifacts: {result.artifacts.report_markdown}")
     if result.gaps:

@@ -1,0 +1,44 @@
+{
+  "summary": {
+    "old_firmware": "26.2 (23C55)",
+    "new_firmware": "26.2.1 (23C71)",
+    "extraction_status": "complete",
+    "counts": {
+      "added_binaries": 1,
+      "removed_binaries": 1,
+      "modified_binaries": 37,
+      "entitlement_changes": 2,
+      "sandbox_changes": 0,
+      "kext_changes": 0,
+      "launchd_changes": 0,
+      "dyld_changes": 0,
+      "kernel_changes": 0,
+      "firmware_added": 0,
+      "firmware_removed": 0,
+      "firmware_modified": 3,
+      "iboot_added": 1,
+      "iboot_removed": 1,
+      "iboot_modified": 0
+    },
+    "high_risk_changes": 0
+  },
+  "findings": [],
+  "artifacts": {
+    "output_dir": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907",
+    "report_markdown": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/report.md",
+    "report_json": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/report.json",
+    "binary_inventory": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/binary_inventory.json",
+    "entitlement_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/entitlements/26_2_23C55_vs_26_2_1_23C71.idiff",
+    "sandbox_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/artifacts/sandbox_diff.txt",
+    "kext_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/artifacts/kext_diff.txt",
+    "dyld_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/artifacts/dyld_diff.txt",
+    "kernel_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/artifacts/kernel_diff.txt",
+    "framework_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/diff/26_2_23C55_vs_26_2_1_23C71/README.md",
+    "diff_json": "",
+    "launchd_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/artifacts/launchd_diff.txt",
+    "raw_diff_dir": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/diff",
+    "symbol_metadata": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/symbol_metadata.json"
+  },
+  "gaps": [],
+  "notes": []
+}

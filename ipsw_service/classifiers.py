@@ -21,6 +21,9 @@ PRIVILEGED_PATH_HINTS = [
     "/System/Library/PrivateFrameworks",
 ]
 
+# Keywords that indicate an IPC/XPC surface within a sandbox policy line
+_IPC_KEYWORDS = ("mach-lookup", "xpc")
+
 class ChangeClassifier:
     def __init__(self) -> None:
         self.high_risk_entitlements = list(HIGH_RISK_ENTITLEMENTS)
@@ -34,16 +37,22 @@ class ChangeClassifier:
             entitlement_changes=len(diff_data.get("entitlement_changes", [])),
             sandbox_changes=len(diff_data.get("sandbox_changes", [])),
             kext_changes=len(diff_data.get("kext_changes", [])),
-            framework_changes=len(diff_data.get("framework_changes", [])),
             launchd_changes=len(diff_data.get("launchd_changes", [])),
             dyld_changes=len(diff_data.get("dyld_changes", [])),
             kernel_changes=len(diff_data.get("kernel_changes", [])),
+            firmware_added=len(diff_data.get("firmware_added", [])),
+            firmware_removed=len(diff_data.get("firmware_removed", [])),
+            firmware_modified=len(diff_data.get("firmware_modified", [])),
+            iboot_added=len(diff_data.get("iboot_added", [])),
+            iboot_removed=len(diff_data.get("iboot_removed", [])),
+            iboot_modified=len(diff_data.get("iboot_modified", [])),
         )
 
         findings: list[Finding] = []
         findings.extend(self._classify_entitlements(diff_data.get("entitlement_changes", [])))
+        # Sandbox classifier sub-tags IPC lines instead of emitting a separate
+        # IPC finding for each, avoiding double-counting.
         findings.extend(self._classify_sandbox(diff_data.get("sandbox_changes", [])))
-        findings.extend(self._classify_ipc_exposure(diff_data.get("sandbox_changes", [])))
         findings.extend(self._classify_privileged_binaries(diff_data.get("added_binaries", [])))
         findings.extend(self._classify_launchd(diff_data.get("launchd_changes", [])))
 
@@ -69,16 +78,30 @@ class ChangeClassifier:
     def _classify_sandbox(self, changes: Iterable[str]) -> list[Finding]:
         findings: list[Finding] = []
         for line in changes:
-            findings.append(
-                Finding(
-                    title="Potential sandbox policy change",
-                    change_type="sandbox",
-                    impact="Sandbox operations changed; may introduce new IPC or file access paths.",
-                    mitigation="Review sandbox op diff and validate protections for affected services.",
-                    confidence=0.6,
-                    evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
+            lowered = line.lower()
+            is_ipc = any(kw in lowered for kw in _IPC_KEYWORDS)
+            if is_ipc:
+                findings.append(
+                    Finding(
+                        title="Potential sandbox IPC/XPC exposure change",
+                        change_type="ipc",
+                        impact="Sandbox policy may allow new IPC/XPC endpoints.",
+                        mitigation="Review mach service and XPC exposure for affected profiles.",
+                        confidence=0.65,
+                        evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
+                    )
                 )
-            )
+            else:
+                findings.append(
+                    Finding(
+                        title="Potential sandbox policy change",
+                        change_type="sandbox",
+                        impact="Sandbox operations changed; may introduce new IPC or file access paths.",
+                        mitigation="Review sandbox op diff and validate protections for affected services.",
+                        confidence=0.6,
+                        evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
+                    )
+                )
         return findings
 
     def _classify_privileged_binaries(self, binaries: Iterable[str]) -> list[Finding]:
@@ -110,23 +133,6 @@ class ChangeClassifier:
                     evidence=[EvidenceItem(source="launchd_diff", summary=line)],
                 )
             )
-        return findings
-
-    def _classify_ipc_exposure(self, changes: Iterable[str]) -> list[Finding]:
-        findings: list[Finding] = []
-        for line in changes:
-            lowered = line.lower()
-            if "mach-lookup" in lowered or "xpc" in lowered:
-                findings.append(
-                    Finding(
-                        title="Potential IPC/XPC exposure change",
-                        change_type="ipc",
-                        impact="Sandbox policy may allow new IPC/XPC endpoints.",
-                        mitigation="Review mach service and XPC exposure for affected profiles.",
-                        confidence=0.6,
-                        evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
-                    )
-                )
         return findings
 
 def serialize_findings(findings: list[Finding]) -> list[dict]:
