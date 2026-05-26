@@ -11,10 +11,15 @@ class DiffCounts:
     entitlement_changes: int = 0
     sandbox_changes: int = 0
     kext_changes: int = 0
-    framework_changes: int = 0
     launchd_changes: int = 0
     dyld_changes: int = 0
     kernel_changes: int = 0
+    firmware_added: int = 0
+    firmware_removed: int = 0
+    firmware_modified: int = 0
+    iboot_added: int = 0
+    iboot_removed: int = 0
+    iboot_modified: int = 0
 
 @dataclass
 class EvidenceItem:

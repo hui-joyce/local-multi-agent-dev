@@ -1,0 +1,25 @@
+{
+  "generated_at_utc": "2026-05-26T02:08:22.569443+00:00",
+  "result": {
+    "case_id": "RE-IPSW-DIFF-01",
+    "description": "Download and extract artifacts for two iPhone17,1 IPSW versions.",
+    "selected_domain": "reverse_engineering",
+    "execution_domains": [
+      "reverse_engineering"
+    ],
+    "agent_chain": [
+      "supervisor",
+      "firmware_locator",
+      "firmware_downloader",
+      "ipsw_extractor",
+      "firmware_diff_report",
+      "firmware_analysis",
+      "reverse_engineering_synthesize",
+      "final_synthesis"
+    ],
+    "latency_seconds": 2973.606,
+    "output_chars": 1177,
+    "output_text": "# Executive Summary\n- firmware versions compared: 26.2 (23C55) vs 26.2.1 (23C71)\n- extraction success status: complete\n- total binaries added/removed/modified: 1/1/37\n- high-fmrisk changes detected: 0\n\n# Critical Findings\n# Recommendations\n- Monitor newly added binaries and services in privileged paths for behavior changes.\n- Prioritize reverse engineering of entitlements and sandbox deltas flagged as high-risk.\n- Validate launchd/service diffs against expected platform changes and patch notes.\n\n# Technical Details\n- kernelcache extraction summary: available\n- dyld_shared_cache extraction summary: available\n- filesystem extraction status: not executed (see diff artifacts)\n- binary inventory counts: added=1, removed=1, modified=37\n- entitlement diff summary: 2 changes\n- sandbox diff summary: 0 changes\n- KEXT diff summary: 0 changes\n- launchd/service diff summary: 0 changes\n- dyld diff summary: 0 changes\n- firmware component summary: added=0, removed=0, modified=3\n- iBoot component summary: added=1, removed=1, modified=0\n- evidence sources:\n  - report artifacts: /Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260526-012907/report.md",
+    "output_preview": "# Executive Summary\n- firmware versions compared: 26.2 (23C55) vs 26.2.1 (23C71)\n- extraction success status: complete\n- total binaries added/removed/modified: 1/1/37\n- high-fmrisk changes detected: 0\n\n# Critical Findings\n# Recommendations\n- Monitor newly added binaries and services in privileged paths for behavior changes.\n- Prioritize reverse engineering of entitlements and sandbox deltas flagged as high-risk.\n- Validate launchd/service diffs against expected platform changes and patch notes.\n\n# Technical Details\n- kernelcache extraction summary: available\n- dyld_shared_cache extraction summary: available\n- filesystem extraction status: not executed (see diff artifacts)\n- binary inventory counts: added=1, removed=1, modified=37\n- entitlement diff summary: 2 changes\n- sandbox diff summary"
+  }
+}

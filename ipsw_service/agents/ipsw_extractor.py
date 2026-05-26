@@ -49,6 +49,8 @@ class IpswExtractorAgent:
 
             dyld_paths = extract_paths_by_keyword(dyld_result.stdout + "\n" + dyld_result.stderr, "dyld_shared_cache")
             kernel_paths = extract_paths_by_keyword(kernel_result.stdout + "\n" + kernel_result.stderr, "kernelcache")
+            dyld_paths = [path for path in dyld_paths if os.path.exists(path)]
+            kernel_paths = [path for path in kernel_paths if os.path.exists(path)]
             if not dyld_paths:
                 dyld_paths = self._find_extracted_paths(ipsw_dir, "dyld_shared_cache")
             if not kernel_paths:

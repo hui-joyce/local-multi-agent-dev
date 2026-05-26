@@ -64,6 +64,9 @@ DeveloperDiskImage*
 *.dyldlinkedit
 *.extracted
 firmware_analysis_*
+DYLIBS*/
+KEXTS*/
+MACHOS*/
 
 # Others
 .DS_Store
