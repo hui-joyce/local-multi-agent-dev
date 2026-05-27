@@ -8,6 +8,7 @@ class DiffCounts:
     added_binaries: int = 0
     removed_binaries: int = 0
     modified_binaries: int = 0
+    cstring_count: int = 0
     entitlement_changes: int = 0
     sandbox_changes: int = 0
     kext_changes: int = 0
@@ -41,17 +42,14 @@ class FirmwareDiffArtifacts:
     output_dir: str
     report_markdown: str
     report_json: str
-    binary_inventory: str
     entitlement_diff: Optional[str] = None
     sandbox_diff: Optional[str] = None
     kext_diff: Optional[str] = None
     dyld_diff: Optional[str] = None
     kernel_diff: Optional[str] = None
     framework_diff: Optional[str] = None
-    diff_json: Optional[str] = None
     launchd_diff: Optional[str] = None
     raw_diff_dir: Optional[str] = None
-    symbol_metadata: Optional[str] = None
 
 @dataclass
 class FirmwareDiffSummary:

@@ -66,6 +66,57 @@ class IpswCliRunner:
                 success=False,
             )
 
+    def run_shell(self, command: str, timeout: int = 600, cwd: Optional[str] = None) -> CommandResult:
+        """Run a shell command string (supports pipes) and return a CommandResult.
+
+        This is used for lightweight shell pipelines such as piping output to `wc -l` to avoid
+        capturing extremely large stdout blobs in Python memory.
+        """
+        started = time.perf_counter()
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=cwd or self.cwd,
+            )
+            duration = time.perf_counter() - started
+            stdout = (proc.stdout or "").strip()
+            stderr = (proc.stderr or "").strip()
+            return CommandResult(
+                args=[command],
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=proc.returncode,
+                duration_seconds=round(duration, 3),
+                success=proc.returncode == 0,
+            )
+        except FileNotFoundError:
+            duration = time.perf_counter() - started
+            return CommandResult(
+                args=[command],
+                command=command,
+                stdout="",
+                stderr="shell execution failed: command not found",
+                exit_code=127,
+                duration_seconds=round(duration, 3),
+                success=False,
+            )
+        except subprocess.TimeoutExpired:
+            duration = time.perf_counter() - started
+            return CommandResult(
+                args=[command],
+                command=command,
+                stdout="",
+                stderr=f"shell command timed out after {timeout}s",
+                exit_code=124,
+                duration_seconds=round(duration, 3),
+                success=False,
+            )
+
 
 def build_download_args(
     device: str,

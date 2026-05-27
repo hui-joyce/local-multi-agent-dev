@@ -19,6 +19,7 @@ from ipsw_service.parsing import (
     parse_simple_list_output,
     strip_ansi,
 )
+from ipsw_service.agents.macho_analysis_engine import MachoAnalysisEngine
 from ipsw_service.reporting import render_report
 from ipsw_service.utils import ensure_dir, list_files, read_text, write_json, write_text
 
@@ -59,6 +60,7 @@ def _dedupe_stripped(items: list[str]) -> list[str]:
 def _is_noisy_binary(path: str) -> bool:
     """Check if a binary path matches any noise filter patterns"""
     return any(re.search(pattern, path) for pattern in IGNORE_PATTERNS)
+
 
 class FirmwareDiffService:
     def __init__(
@@ -128,7 +130,6 @@ class FirmwareDiffService:
             gaps.append(f"ipsw diff failed: {diff_result.get('stderr') or 'unknown error'}")
 
         diff_report_path = diff_result.get("markdown_report")
-        diff_json_path = diff_result.get("json_report")
         diff_report_text = read_text(diff_report_path) if diff_report_path else ""
         diff_data = parse_diff_markdown(diff_report_text) if diff_report_text else {
             "added_binaries": [],
@@ -148,9 +149,6 @@ class FirmwareDiffService:
         }
         diff_report_root = os.path.dirname(diff_report_path) if diff_report_path else diff_dir
         
-        cstring_changes = extract_cstring_diffs(diff_report_text) if diff_report_text else []
-        cstring_changes = self._collect_cstring_changes(cstring_changes, diff_report_root)
-        diff_data["cstring_changes"] = cstring_changes
         macho_note = None
         if diff_report_path:
             macho_dir = os.path.join(diff_report_root, "MACHOS")
@@ -168,6 +166,28 @@ class FirmwareDiffService:
         diff_data["removed_binaries"] = self._normalize_binary_list(removed_raw, diff_report_root)
         filtered_modified = self._filter_modified_binaries(modified_raw, diff_report_root)
         diff_data["modified_binaries"] = filtered_modified
+
+        # Compute explicit cstring count across candidate binaries.
+        macho_engine = MachoAnalysisEngine(self.runner)
+        cstring_count = 0
+        try:
+            candidates = set(
+                [*diff_data.get("added_binaries", []), *diff_data.get("modified_binaries", []), *diff_data.get("removed_binaries", [])]
+            )
+            for item in sorted(candidates):
+                if not item:
+                    continue
+                candidate_path = item if os.path.isabs(item) and os.path.exists(item) else ""
+                if not candidate_path and diff_report_root:
+                    name = os.path.basename(item)
+                    for root, _, files in os.walk(diff_report_root):
+                        if name in files:
+                            candidate_path = os.path.join(root, name)
+                            break
+                res = macho_engine.count_strings(candidate_path or item, diff_report_root=diff_report_root, arch="arm64e")
+                cstring_count += int(res.get("count", 0) or 0)
+        except Exception:
+            cstring_count = 0
 
         ent_diff_path: Optional[str] = None
         if request.include_entitlements:
@@ -263,6 +283,7 @@ class FirmwareDiffService:
             notes.append(macho_note)
 
         counts, security_findings = self.classifier.classify(diff_data)
+        counts.cstring_count = cstring_count
 
         summary = FirmwareDiffSummary(
             old_firmware=request.old_version or os.path.basename(request.old_ipsw),
@@ -274,29 +295,6 @@ class FirmwareDiffService:
 
         report_markdown_path = os.path.join(output_dir, "report.md")
         report_json_path = os.path.join(output_dir, "report.json")
-        binary_inventory_path = os.path.join(output_dir, "binary_inventory.json")
-        symbol_metadata_path = os.path.join(output_dir, "symbol_metadata.json")
-
-        write_json(binary_inventory_path, {
-            "added": diff_data.get("added_binaries", []),
-            "removed": diff_data.get("removed_binaries", []),
-            "modified": diff_data.get("modified_binaries", []),
-            "kext_changes": diff_data.get("kext_changes", []),
-            "framework_changes": diff_data.get("framework_changes", []),
-            "launchd_changes": diff_data.get("launchd_changes", []),
-            "firmware_added": diff_data.get("firmware_added", []),
-            "firmware_removed": diff_data.get("firmware_removed", []),
-            "firmware_modified": diff_data.get("firmware_modified", []),
-            "iboot_added": diff_data.get("iboot_added", []),
-            "iboot_removed": diff_data.get("iboot_removed", []),
-            "iboot_modified": diff_data.get("iboot_modified", []),
-        })
-
-        write_json(symbol_metadata_path, {
-            "dyld_changes": diff_data.get("dyld_changes", []),
-            "kernel_changes": diff_data.get("kernel_changes", []),
-            "cstring_changes": cstring_changes,
-        })
 
         kernel_diff_path = os.path.join(artifacts_dir, "kernel_diff.txt")
         launchd_diff_path = os.path.join(artifacts_dir, "launchd_diff.txt")
@@ -313,17 +311,14 @@ class FirmwareDiffService:
             output_dir=output_dir,
             report_markdown=report_markdown_path,
             report_json=report_json_path,
-            binary_inventory=binary_inventory_path,
             entitlement_diff=ent_diff_path,
             sandbox_diff=sandbox_diff_path,
             kext_diff=kext_diff_path,
             dyld_diff=dyld_diff_path,
             kernel_diff=kernel_diff_path,
             framework_diff=diff_report_path,
-            diff_json=diff_json_path,
             launchd_diff=launchd_diff_path,
             raw_diff_dir=diff_dir,
-            symbol_metadata=symbol_metadata_path,
         )
 
         result = FirmwareDiffResult(
@@ -468,26 +463,6 @@ class FirmwareDiffService:
 
     def _is_metadata_line(self, content: str) -> bool:
         return any(pattern.search(content) for pattern in _METADATA_ONLY_PATTERNS)
-
-    def _collect_cstring_changes(self, base: list[str], diff_report_root: str) -> list[str]:
-        if not diff_report_root:
-            return _dedupe_stripped(base)
-
-        extra: list[str] = []
-        for subdir in ("MACHOS", "DYLIBS"):
-            dir_path = os.path.join(diff_report_root, subdir)
-            if not os.path.isdir(dir_path):
-                continue
-            for path in sorted(list_files(dir_path)):
-                if not path.endswith(".md"):
-                    continue
-                try:
-                    text = read_text(path)
-                except OSError:
-                    continue
-                extra.extend(extract_cstring_diffs(text))
-
-        return _dedupe_stripped(base + extra)
 
     def _timestamped_output_dir(self) -> str:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
