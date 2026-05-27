@@ -20,22 +20,17 @@ logger = logging.getLogger(__name__)
 
 class QdrantRetriever(BaseRetriever):
     
-    # Default Qdrant configuration
     DEFAULT_DB_PATH = "~/.local/share/qdrant"
     DEFAULT_COLLECTION_PREFIX = "agents_"
     
-    # Known model vector dimensions (to avoid loading models during init)
     MODEL_VECTOR_SIZES = {
-        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ": 384,
-        "sentence-transformers/all-MiniLM-L6-v2": 384,
-        # Add more as needed
+        "Qwen/Qwen3-Embedding-0.6B": 384    
     }
     
     def __init__(
         self,
         db_path: Optional[str] = None,
-        embedding_model: str = "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ",
-        domain_embedding_models: Optional[dict[str, str]] = None,
+        embedding_model: str = "Qwen/Qwen3-Embedding-0.6B",
         embedding_cache_dir: Optional[str] = None,
         embedding_device: Optional[str] = None,
         enable_fallback: bool = True,
@@ -43,14 +38,10 @@ class QdrantRetriever(BaseRetriever):
         self.db_path = Path(db_path or self.DEFAULT_DB_PATH).expanduser()
         self.db_path.mkdir(parents=True, exist_ok=True)
 
-        self.domain_embedding_models = domain_embedding_models or {
-            "shared": embedding_model,
-            "software_dev": embedding_model,
-            "reverse_engineering": embedding_model,
-        }
+        self.embedding_model = embedding_model
         self.embedding_cache_dir = embedding_cache_dir
         self.embedding_device = embedding_device
-        self.embedding_services: dict[str, EmbeddingService] = {}
+        self._embedding_service: Optional[EmbeddingService] = None
         self.enable_fallback = enable_fallback
         
         # Initialize Qdrant client
@@ -67,24 +58,18 @@ class QdrantRetriever(BaseRetriever):
         for domain in self.domain_collections:
             self._ensure_collection(domain)
 
-        # Backwards-compatible default service reference (lazy loaded)
-        self._embedding_service = None
         self._embedding_dim = None
         
         logger.info(f"✓ Qdrant retriever initialized at {self.db_path}")
 
     def _get_embedding_service(self, domain: Optional[str] = None) -> EmbeddingService:
-        domain_key = domain if domain in self.domain_collections else "shared"
-        if domain_key not in self.embedding_services:
-            model_name = self.domain_embedding_models.get(domain_key) or self.domain_embedding_models.get("shared")
-            if not model_name:
-                model_name = next(iter(self.domain_embedding_models.values()))
-            self.embedding_services[domain_key] = EmbeddingService(
-                model_name=model_name,
+        if self._embedding_service is None:
+            self._embedding_service = EmbeddingService(
+                model_name=self.embedding_model,
                 cache_dir=self.embedding_cache_dir,
                 device=self.embedding_device,
             )
-        return self.embedding_services[domain_key]
+        return self._embedding_service
 
     @property
     def embedding_dim(self) -> int:
@@ -145,12 +130,11 @@ class QdrantRetriever(BaseRetriever):
         collection_name = self._get_collection_name(domain)
         
         # Get vector size without loading the model
-        embedding_model = self.domain_embedding_models.get(domain, self.domain_embedding_models.get("shared"))
-        vector_size = self.MODEL_VECTOR_SIZES.get(embedding_model)
+        vector_size = self.MODEL_VECTOR_SIZES.get(self.embedding_model)
         
         if vector_size is None:
             # Only load model if we don't know the vector size
-            vector_size = self._get_embedding_service(domain).get_embedding_dimension()
+            vector_size = self.embedding_dim
         
         try:
             collection_info = self.client.get_collection(collection_name)
@@ -196,22 +180,17 @@ class QdrantRetriever(BaseRetriever):
             return []
         
         try:
-            # Determine which domains to search
             domains = [domain] if domain and domain in self.domain_collections else list(self.domain_collections.keys())
-            
-            # Collect results from all relevant collections
+            query_embedding = self._get_embedding_service().embed_text(query).tolist()
             all_results = []
-            
+
             for search_domain in domains:
-                embedding_service = self._get_embedding_service(search_domain)
-                query_embedding = embedding_service.embed_text(query)
-                query_embedding_list = query_embedding.tolist()
                 collection_name = self._get_collection_name(search_domain)
 
                 try:
                     search_result = self.client.query_points(
                         collection_name=collection_name,
-                        query=query_embedding_list,
+                        query=query_embedding,
                         limit=top_k * 2,
                         score_threshold=score_threshold,
                     )
@@ -297,12 +276,7 @@ class QdrantRetriever(BaseRetriever):
         embedding_service = self._get_embedding_service(domain)
         
         try:
-            # Embed documents in batches
-            embeddings = embedding_service.embed_batch(
-                documents,
-                batch_size=batch_size,
-                normalize=True,
-            )
+            embeddings = embedding_service.embed_batch(documents, batch_size=batch_size, normalize=True)
 
             self._ensure_collection(domain)
             
@@ -368,11 +342,17 @@ class QdrantRetriever(BaseRetriever):
         collection_name = self._get_collection_name(domain)
         try:
             collection_info = self.client.get_collection(collection_name)
+            vector_size = None
+            try:
+                vector_size = collection_info.config.params.vectors.size
+            except Exception:
+                vector_size = self.MODEL_VECTOR_SIZES.get(self.embedding_model)
+
             return {
                 "name": collection_name,
                 "domain": domain,
                 "document_count": collection_info.points_count,
-                "vector_size": self._get_embedding_service(domain).get_embedding_dimension(),
+                "vector_size": vector_size,
             }
         except Exception as e:
             logger.error(f"Failed to get collection info: {e}")
