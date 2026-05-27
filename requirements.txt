@@ -32,17 +32,3 @@ python-dotenv>=1.0.0
 # API server 
 fastapi>=0.136.0
 uvicorn[standard]>=0.45.0
-
-# PDF Conversion & Advanced RAG
-# Category 1: Simple PDF extraction
-PyMuPDF>=1.24.0
-pymupdf4llm>=0.0.1
-
-# Category 2: Medium complexity (scanned, tables, OCR)
-# docling>=1.0.0  
-
-# Category 3: Complex PDFs with Vision-Language Models
-# google-genai>=0.3.0  # VLM support (requires GEMINI_API_KEY)
-
-# Optional PDF tools
-# PyPDF2>=3.0.0  # For PDF metadata extraction

@@ -33,8 +33,12 @@ class FrameworkDiffEngine:
 
         result = self.runner.run(args, timeout=4 * 60 * 60)
         files = list_files(output_dir)
-        markdown_report = next((path for path in files if path.endswith(".md")), "")
-        json_report = next((path for path in files if path.endswith(".json")), "")
+        markdown_report = next((path for path in files if path.replace("\\", "/").lower().endswith("/readme.md")), "")
+        if not markdown_report:
+            markdown_report = next((path for path in files if path.lower().endswith(".md") and not path.lower().endswith("report.md")), "")
+        json_report = next((path for path in files if path.replace("\\", "/").lower().endswith("/report.json")), "")
+        if not json_report:
+            json_report = next((path for path in files if path.lower().endswith("report.json")), "")
 
         return {
             "success": result.success,

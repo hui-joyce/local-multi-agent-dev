@@ -141,7 +141,6 @@ def _add_unique(items: list[str], item: str, seen: set[str]) -> None:
 
 def parse_diff_markdown(text: str) -> dict[str, list[str]]:
     headings: list[str | None] = [None] * 6
-    in_dsc_section = False
 
     added_binaries: list[str] = []
     removed_binaries: list[str] = []
@@ -184,12 +183,6 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             headings[level - 1] = title
             for idx in range(level, len(headings)):
                 headings[idx] = None
-                
-            # Safely trap and release the DSC section state based on the current heading hierarchy
-            if len(headings) >= 2 and headings[1]:
-                in_dsc_section = headings[1].lower().strip() == "dsc"
-            else:
-                in_dsc_section = False
 
             if title and not _title_has_keyword(title, _ALL_CHANGE_KEYWORDS):
                 hinted = _resolve_component([title])
@@ -197,8 +190,6 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
                     component_hint = hinted
 
             if level >= 4 and title and not _is_group_heading(title):
-                if in_dsc_section:
-                    continue
                 item = _extract_item_token(title)
                 if not item:
                     continue
@@ -228,8 +219,6 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
 
         stripped = line.strip()
         if stripped.startswith("- "):
-            if in_dsc_section:
-                continue
             raw_item = stripped[2:].strip()
             item = _extract_item_token(raw_item)
             if not item:
@@ -257,9 +246,6 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
                 iboot_modified,
                 seen,
             )
-            continue
-
-        if in_dsc_section:
             continue
 
         if not stripped.startswith(("+", "-", "#")) and "com.apple." in stripped:

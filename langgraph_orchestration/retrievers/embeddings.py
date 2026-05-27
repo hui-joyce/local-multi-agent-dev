@@ -1,14 +1,12 @@
-"""
-Local embedding service.
-Provides semantic embeddings for RAG.
-"""
-
+import logging
 import os
-from typing import Optional
-import numpy as np
 from pathlib import Path
+from typing import Optional
 
-MODEL = "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
+import numpy as np
+
+MODEL = "Qwen/Qwen3-Embedding-0.6B"
+logger = logging.getLogger(__name__)
 
 def _detect_default_device(preferred: Optional[str] = None) -> str:
     if preferred:
@@ -23,8 +21,9 @@ def _detect_default_device(preferred: Optional[str] = None) -> str:
         pass
     return "cpu"
 
-
 class EmbeddingService:
+    _MODEL_CACHE: dict[tuple[str, str, str], tuple[object, object, int]] = {}
+
     def __init__(
         self,
         model_name: str = MODEL,
@@ -34,9 +33,9 @@ class EmbeddingService:
         self.model_name = model_name
         self.device = _detect_default_device(device)
         self.model = None
+        self.tokenizer = None
         self.embedding_dim = None
-        if cache_dir is None:
-            cache_dir = os.path.expanduser("~/.cache/huggingface")
+        cache_dir = os.path.expanduser(cache_dir or "~/.cache/huggingface")
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -56,36 +55,38 @@ class EmbeddingService:
                 "Install with: pip install transformers torch"
             ) from e
 
+        cache_key = (self.model_name, str(self.cache_dir), self.device)
+        cached = self._MODEL_CACHE.get(cache_key)
+        if cached is not None:
+            self.tokenizer, self.model, self.embedding_dim = cached
+            self._loaded = True
+            return
+
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
                 cache_dir=str(self.cache_dir),
                 trust_remote_code=True,
                 use_fast=False,
             )
             device_map = self.device if self.device != "cpu" else None
-            self.model = AutoModel.from_pretrained(
+            model = AutoModel.from_pretrained(
                 self.model_name,
                 cache_dir=str(self.cache_dir),
                 trust_remote_code=True,
                 device_map=device_map,
             )
             if self.device == "cpu":
-                self.model = self.model.to(self.device)
-            self.model.eval()
-            
-            test_embedding = self.embed_text("test", normalize=False)
-            self.embedding_dim = int(test_embedding.shape[-1])
+                model = model.to(self.device)
+            model.eval()
+
+            self.tokenizer = tokenizer
+            self.model = model
+            self.embedding_dim = int(self.embed_text("test", normalize=False).shape[-1])
+            self._MODEL_CACHE[cache_key] = (self.tokenizer, self.model, self.embedding_dim)
             self._loaded = True
-            print(
-                f"✓ Embedding model loaded: {self.model_name} "
-                f"(dim={self.embedding_dim}, device={self.device})"
-            )
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to load embedding model {self.model_name}: {e}\n"
-                "Ensure internet connection for first-time model download or pre-cache the model."
-            ) from e
+            raise RuntimeError(f"Failed to load embedding model {self.model_name}: {e}") from e
 
     def _ensure_loaded(self):
         if not self._loaded:
@@ -95,9 +96,9 @@ class EmbeddingService:
         if not text or not isinstance(text, str):
             raise ValueError("Input must be a non-empty string")
         self._ensure_loaded()
-        
+
         import torch
-        
+
         inputs = self.tokenizer(
             text,
             return_tensors="pt",
@@ -105,25 +106,24 @@ class EmbeddingService:
             truncation=True,
             max_length=512,
         ).to(self.device)
-        
+
         with torch.no_grad():
             outputs = self.model(**inputs)
-        
-        # Mean-pool token embeddings
+
         embeddings = outputs.last_hidden_state
         attention_mask = inputs["attention_mask"]
         mask_expanded = attention_mask.unsqueeze(-1).float()
         sum_embeddings = torch.sum(embeddings * mask_expanded, 1)
         sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
         mean_pooled = sum_embeddings / sum_mask
-        
+
         embedding = mean_pooled.detach().cpu().numpy()[0]
-        
+
         if normalize:
             norm = np.linalg.norm(embedding)
             if norm > 0:
                 embedding = embedding / norm
-        
+
         return np.asarray(embedding)
 
     def embed_batch(
@@ -136,14 +136,14 @@ class EmbeddingService:
             return []
 
         self._ensure_loaded()
-        
+
         import torch
-        
+
         all_embeddings = []
-        
+
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i : i + batch_size]
-            
+
             inputs = self.tokenizer(
                 batch_texts,
                 return_tensors="pt",
@@ -151,26 +151,26 @@ class EmbeddingService:
                 truncation=True,
                 max_length=512,
             ).to(self.device)
-            
+
             with torch.no_grad():
                 outputs = self.model(**inputs)
-            
+
             embeddings = outputs.last_hidden_state
             attention_mask = inputs["attention_mask"]
             mask_expanded = attention_mask.unsqueeze(-1).float()
             sum_embeddings = torch.sum(embeddings * mask_expanded, 1)
             sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
             mean_pooled = sum_embeddings / sum_mask
-            
+
             batch_embeddings = mean_pooled.detach().cpu().numpy()
-            
+
             if normalize:
                 norms = np.linalg.norm(batch_embeddings, axis=1, keepdims=True)
                 norms[norms == 0] = 1e-9
                 batch_embeddings = batch_embeddings / norms
-            
+
             all_embeddings.extend(batch_embeddings)
-        
+
         return all_embeddings
 
     def get_embedding_dimension(self) -> int:

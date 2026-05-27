@@ -15,8 +15,6 @@ from dotenv import load_dotenv
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.schemas.state import AgentState
-from ipsw_service.parsing import extract_cstring_diffs, strip_ansi
-from ipsw_service.utils import write_json
 
 REPORT_PATH = Path(
     "artifacts/firmware_diff/20260520-021825/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md"
@@ -52,7 +50,6 @@ def build_feature_case() -> FeatureAnalysisCase:
 
 def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
     report_text = case.report_path.read_text(encoding="utf-8")
-    _populate_symbol_metadata(case.report_path, report_text)
     state = AgentState(user_input=case.user_input)
     state.intermediate_outputs["firmware_diff_report_path"] = str(case.report_path)
     state.intermediate_outputs["firmware_diff_report"] = report_text
@@ -73,38 +70,6 @@ def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
         report_count=len(reports),
         report_paths=reports,
     )
-
-def _populate_symbol_metadata(report_path: Path, report_text: str) -> None:
-    changes = extract_cstring_diffs(report_text)
-    for subdir in ("MACHOS", "DYLIBS"):
-        dir_path = report_path.parent / subdir
-        if not dir_path.is_dir():
-            continue
-        for path in sorted(dir_path.rglob("*.md")):
-            try:
-                changes.extend(extract_cstring_diffs(path.read_text(encoding="utf-8")))
-            except OSError:
-                continue
-
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for item in changes:
-        key = strip_ansi(item).strip()
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(item)
-
-    metadata_path = report_path.parents[2] / "symbol_metadata.json"
-    payload = {"dyld_changes": [], "kernel_changes": [], "cstring_changes": deduped}
-    if metadata_path.exists():
-        try:
-            existing = json.loads(metadata_path.read_text(encoding="utf-8"))
-            payload["dyld_changes"] = existing.get("dyld_changes", [])
-            payload["kernel_changes"] = existing.get("kernel_changes", [])
-        except Exception:
-            pass
-
-    write_json(str(metadata_path), payload)
 
 def write_result(result: FeatureAnalysisResult, output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)

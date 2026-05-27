@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.schemas.state import AgentState
 
 @dataclass
@@ -45,14 +46,14 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             "1) Download Version 1 and Version 2 firmware artifacts.\n"
             "2) Extract dyld_shared_cache and kernelcache from both artifacts.\n"
             "Perform baseline comparison and feature inference.\n\n"
-            "Version 1: iPhone18,1_26.2_23C55_Restore.ipsw\n"
-            "Version 2: iPhone18,1_26.2.1_23C71_Restore.ipsw\n\n"
+            # "Version 1: iPhone18,1_26.2_23C55_Restore.ipsw\n"
+            # "Version 2: iPhone18,1_26.2.1_23C71_Restore.ipsw\n\n"
             # "Version 1: iPhone18,1_26.3_23D127_Restore.ipsw\n"
             # "Version 2: iPhone18,1_26.3.1_23D8133_Restore.ipsw\n\n"
             # "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
             # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
-            # "Version 1: iPhone17,1_18.6.1_22G90_Restore.ipsw\n"
-            # "Version 2: iPhone17,1_18.6.2_22G100_Restore.ipsw"\n
+            "Version 1: iPhone17,1_18.6.1_22G90_Restore.ipsw\n"
+            "Version 2: iPhone17,1_18.6.2_22G100_Restore.ipsw\n"
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
     )
@@ -122,6 +123,36 @@ def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
 
     return json_path, md_path
 
+def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFactory) -> dict[str, str]:
+    """Trigger feature analysis on the generated diff report"""
+    diff_report_path = Path(diff_report_path)
+    if not diff_report_path.exists():
+        print(f"Warning: Diff report not found at {diff_report_path}, skipping feature analysis.")
+        return {}
+    
+    report_text = diff_report_path.read_text(encoding="utf-8")
+    
+    state = AgentState(user_input="Run feature analysis on generated diff report.")
+    state.intermediate_outputs["firmware_diff_report_path"] = str(diff_report_path)
+    state.intermediate_outputs["firmware_diff_report"] = report_text
+    
+    print(f"\nTriggering feature analysis on: {diff_report_path}")
+    start = time.perf_counter()
+    
+    re_graph = build_reverse_engineering_graph(factory=factory)
+    raw_result = re_graph.invoke(state.model_dump())
+    
+    elapsed = time.perf_counter() - start
+    final_state = AgentState(**raw_result)
+    reports = final_state.feature_analysis_reports
+    
+    print(f"Feature analysis complete in {round(elapsed, 3)}s")
+    print(f"Generated {len(reports)} feature analysis reports:")
+    for name, path in reports.items():
+        print(f"  - {name}: {path}")
+    
+    return reports
+
 def main() -> None:
     load_dotenv()
 
@@ -141,6 +172,21 @@ def main() -> None:
     print(f"Agent chain: {', '.join(result.agent_chain) if result.agent_chain else 'n/a'}")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
+    
+    # Find and trigger feature analysis on the generated diff report
+    artifacts_dir = Path("artifacts/firmware_diff")
+    if artifacts_dir.exists():
+        # Find the most recent diff report
+        diff_dirs = sorted([d for d in artifacts_dir.iterdir() if d.is_dir()], reverse=True)
+        for diff_dir in diff_dirs[:3]:  # Check last 3 timestamp directories
+            diff_files = list(diff_dir.rglob("README.md"))
+            if diff_files:
+                diff_report = diff_files[0]
+                print(f"\nFound diff report: {diff_report}")
+                feature_reports = trigger_feature_analysis(diff_report, factory)
+                if feature_reports:
+                    print(f"✓ Feature analysis succeeded with {len(feature_reports)} reports")
+                break
 
 if __name__ == "__main__":
     main()

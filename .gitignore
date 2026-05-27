@@ -43,30 +43,9 @@ knowledge_base/
 
 # IPSW Firmware Files and Downloads
 *.ipsw
-*.ipsw.partial
 .ipsw_downloads/
 .ipsw_extracted/
-.ipsw_cache/
 checksums.txt.sha1
-
-# Extracted Firmware & Analysis Artifacts
-dyld_shared_cache*
-kernelcache*
-Kernelcache*
-DeveloperDiskImage*
-*.dmg
-22G100__iPhone*/
-22G90__iPhone*/
-.device_fw_cache/
-.extracted_fw/
-*.dylddata
-*.dyldreadonly
-*.dyldlinkedit
-*.extracted
-firmware_analysis_*
-DYLIBS*/
-KEXTS*/
-MACHOS*/
 
 # Others
 .DS_Store

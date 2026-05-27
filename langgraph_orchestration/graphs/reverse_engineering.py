@@ -591,26 +591,22 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         state.intermediate_outputs["firmware_diff_report_path"] = result.artifacts.report_markdown
         return state
 
-    def feature_analysis_supervisor_node(state: AgentState) -> AgentState:
-        report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
-        report_text = state.intermediate_outputs.get("firmware_diff_report", "")
-        if not report_path or not report_text:
-            state.feature_analysis_targets = []
-            state.feature_analysis_queue = []
-            state.feature_analysis_current = None
-            state.record_analysis_note("feature_analysis skipped: missing diff report")
-            return state
-
-        targets = _build_feature_targets(report_text)
-        state.feature_analysis_targets = targets
-        state.feature_analysis_queue = list(targets)
-        state.feature_analysis_current = None
-        state.record_analysis_note(f"feature_analysis targets: {len(targets)}")
-        return state
-
     def feature_analysis_select_node(state: AgentState) -> AgentState:
-        if state.feature_analysis_current:
-            return state
+        # Initialize queue on first call
+        if not state.feature_analysis_queue and not state.feature_analysis_targets:
+            report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
+            report_text = state.intermediate_outputs.get("firmware_diff_report", "")
+            if not report_path or not report_text:
+                state.feature_analysis_targets = []
+                state.feature_analysis_queue = []
+                state.feature_analysis_current = None
+                state.record_analysis_note("feature_analysis skipped: missing diff report")
+                return state
+            targets = _build_feature_targets(report_text)
+            state.feature_analysis_targets = targets
+            state.feature_analysis_queue = list(targets)
+            state.record_analysis_note(f"feature_analysis targets: {len(targets)}")
+        # Pop next feature from queue
         if state.feature_analysis_queue:
             state.feature_analysis_current = state.feature_analysis_queue.pop(0)
         return state
@@ -705,7 +701,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             state.intermediate_outputs.get("firmware_diff_report_path")
             and state.intermediate_outputs.get("firmware_diff_report")
         ):
-            return "feature_analysis_supervisor"
+            return "feature_analysis_select"
         return "firmware_locator"
 
     graph.add_node("retrieve_re_context", retrieve_re_context_node)
@@ -713,7 +709,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     graph.add_node("firmware_downloader", firmware_downloader_node)
     graph.add_node("ipsw_extractor", ipsw_extractor_node)
     graph.add_node("firmware_diff_service", firmware_diff_service_node)
-    graph.add_node("feature_analysis_supervisor", feature_analysis_supervisor_node)
     graph.add_node("feature_analysis_select", feature_analysis_select_node)
     graph.add_node("feature_analysis_relation", feature_analysis_relation_node)
     graph.add_node("feature_analysis_decipher", feature_analysis_decipher_node)
@@ -725,7 +720,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         "retrieve_re_context",
         route_after_context,
         {
-            "feature_analysis_supervisor": "feature_analysis_supervisor",
+            "feature_analysis_select": "feature_analysis_select",
             "firmware_locator": "firmware_locator",
         },
     )
@@ -739,8 +734,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             "firmware_diff_service": "firmware_diff_service",
         },
     )
-    graph.add_edge("firmware_diff_service", "feature_analysis_supervisor")
-    graph.add_edge("feature_analysis_supervisor", "feature_analysis_select")
+    graph.add_edge("firmware_diff_service", "feature_analysis_select")
     graph.add_conditional_edges(
         "feature_analysis_select",
         route_after_feature_select,
