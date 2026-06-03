@@ -1,0 +1,7 @@
+[launchd_diff]
+item_count: 4
+items:
+/usr/libexec/AuthenticationServicesAgent
+/usr/lib/swift/libswiftsimd.dylib
+/usr/lib/swift/libswiftsys_time.dylib
+/usr/lib/swift/libswiftunistd.dylib

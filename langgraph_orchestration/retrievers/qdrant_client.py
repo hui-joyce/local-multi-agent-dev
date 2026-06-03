@@ -8,7 +8,7 @@
 
 import os
 import time
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
 from datetime import datetime
 import logging
@@ -93,7 +93,7 @@ class QdrantRetriever(BaseRetriever):
             raise ValueError(f"Unknown domain: {domain}")
         return self.domain_collections[domain]
 
-    def _coerce_vector_size(self, vector: np.ndarray | list[float], size: int) -> list[float]:
+    def _coerce_vector_size(self, vector: Union[np.ndarray, list[float]], size: int) -> list[float]:
         array = np.asarray(vector, dtype=float).reshape(-1)
         if array.size == size:
             return array.tolist()

@@ -49,3 +49,4 @@ checksums.txt.sha1
 
 # Others
 .DS_Store
+*.dmg
