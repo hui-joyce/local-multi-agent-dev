@@ -24,7 +24,6 @@ class MLXModelLoader:
         self.model_dir = Path(model_dir or "~/.cache/mlx_models").expanduser()
         self.model_dir.mkdir(parents=True, exist_ok=True)
         
-        # Get model config
         if model_name in self.DEFAULT_MODELS:
             self.model_config = self.DEFAULT_MODELS[model_name]
         else:
@@ -32,7 +31,6 @@ class MLXModelLoader:
                 f"Unknown model: {model_name}. "
                 f"Available: {list(self.DEFAULT_MODELS.keys())}"
             )
-        # Override quantization if specified
         if quantization:
             self.model_config["quantization"] = quantization
         
@@ -61,7 +59,7 @@ class MLXModelLoader:
                 f"Active python: {sys.executable}\n"
                 f"mlx_lm location: {Path(mlx_lm.__file__).resolve()}\n"
                 "Likely cause: running with a different interpreter than your project venv.\n"
-                "Try: source venv/bin/activate && python benchmarks/no_rag_harness.py"
+                "Try: source venv/bin/activate && python benchmarks/test_no_rag.py"
             )
     
     def load(self) -> tuple:
@@ -82,14 +80,12 @@ class MLXModelLoader:
         last_error: Optional[Exception] = None
         for attempt in range(1, 4):
             try:
-                # Load model and tokenizer from HuggingFace repo
                 model_and_tokenizer = load(self.model_config["repo_id"])
 
                 if isinstance(model_and_tokenizer, tuple) and len(model_and_tokenizer) == 2:
                     self.model, self.tokenizer = model_and_tokenizer
                 else:
                     self.model = model_and_tokenizer
-                    # Load tokenizer separately if needed
                     from transformers import AutoTokenizer
                     self.tokenizer = AutoTokenizer.from_pretrained(
                         self.model_config["repo_id"],

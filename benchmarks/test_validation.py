@@ -13,7 +13,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Add project root to sys.path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -39,7 +38,7 @@ def validate_imports() -> bool:
 def validate_test_cases() -> bool:
     """Load and validate test cases from harness"""
     try:
-        from benchmarks.no_rag_harness import get_benchmark_cases
+        from benchmarks.test_no_rag import get_benchmark_cases
         
         cases = get_benchmark_cases()
         print(f"✓ Loaded {len(cases)} test cases:")
@@ -76,7 +75,6 @@ def validate_prompt_templates() -> bool:
             build_code_analysis_prompt,
         )
         
-        # Test each builder
         test_input = "Test request"
         
         prompts = {
@@ -124,7 +122,7 @@ def main() -> None:
     
     if passed == total:
         print("\n✓ All structural checks passed. Ready to run full harness:")
-        print("  python3 benchmarks/no_rag_harness.py")
+        print("  python3 benchmarks/test_no_rag.py")
     else:
         print("\n✗ Some checks failed. Review errors above and fix before running harness.")
     

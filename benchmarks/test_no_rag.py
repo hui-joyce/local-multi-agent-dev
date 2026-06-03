@@ -28,7 +28,10 @@ sys.path.insert(0, str(project_root))
 from dotenv import load_dotenv
 
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+<<<<<<< HEAD
 from langgraph_orchestration.core.state_utils import StateManager
+=======
+>>>>>>> main
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.schemas.state import AgentState
 
@@ -202,8 +205,12 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
     elapsed = time.perf_counter() - start
 
     final_state = AgentState(**result)
+<<<<<<< HEAD
     clean_output = StateManager.sanitize_output(final_state.final_output)
     final_output=clean_output or ""
+=======
+    final_output = final_state.final_output or ""
+>>>>>>> main
     expected = sorted(case.expected_execution_domains)
     actual = sorted(final_state.execution_domains)
     routing_match = expected == actual

@@ -151,7 +151,6 @@ class EmbeddingService:
             norm = np.linalg.norm(embedding)
             if norm > 0:
                 embedding = embedding / norm
-
         return np.asarray(embedding)
 
     def embed_batch(

@@ -91,7 +91,11 @@ def respond(message, history):
                 agent_name = "Analysis"
         
         _request_queue.put((agent, message, context_text))
+<<<<<<< HEAD
         response = _response_queue.get(timeout=1800)
+=======
+        response = _response_queue.get(timeout=60)
+>>>>>>> main
         
         return f"[{agent_name}] {response}{context_str}"
     
