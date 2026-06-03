@@ -4,45 +4,8 @@ This directory contains command-line utilities for managing RAG system and knowl
 
 ## Scripts Overview
 
-<<<<<<< HEAD
 ### `load_documents_to_qdrant.py` - Load Markdown/Text/JSONL Chunks
 **Load Markdown, text, or pre-chunked JSONL records into Qdrant.**
-=======
-### `pdf_to_qdrant.py` - PDF to Markdown to Qdrant Pipeline
-**Main tool for converting PDFs into searchable embeddings.**
-
-Implements intelligent PDF conversion with auto-detection of complexity tier:
-- **Category 1 (Simple)**: PyMuPDF4LLM for digital PDFs
-- **Category 2 (Medium)**: Docling for scanned documents with OCR
-- **Category 3 (Complex)**: Vision-Language Models for visual content (not added yet)
-
-**Usage:**
-```bash
-# Auto-detect and convert
-python scripts/pdf_to_qdrant.py --pdf document.pdf --domain software_dev
-# Batch convert directory
-python scripts/pdf_to_qdrant.py --dir ./research_pdfs --domain reverse_engineering
-# Force specific method
-python scripts/pdf_to_qdrant.py --pdf doc.pdf --domain software_dev --method docling
-# With VLM (complex PDFs)
-python scripts/pdf_to_qdrant.py --pdf complex.pdf --domain software_dev --method vlm --vlm-api-key YOUR_KEY
-```
-
-**Options:**
-- `--pdf`: Single PDF to convert
-- `--dir`: Directory with PDFs
-- `--domain`: Target domain (software_dev, reverse_engineering, shared)
-- `--method`: Force conversion method (pymupdf4llm, docling, vlm)
-- `--chunk-size`: Words per chunk (default: 512)
-- `--overlap`: Word overlap between chunks (default: 100)
-
----
-
-### `load_documents_to_qdrant.py` - Load Markdown/Text Files
-**Load Markdown, PDF, or text files with intelligent chunking.**
-
-Simpler alternative to `pdf_to_qdrant.py` if you already have Markdown files.
->>>>>>> main
 
 **Usage:**
 ```bash
@@ -50,13 +13,8 @@ Simpler alternative to `pdf_to_qdrant.py` if you already have Markdown files.
 python scripts/load_documents_to_qdrant.py --file README.md --domain software_dev
 # Load directory
 python scripts/load_documents_to_qdrant.py --dir ./docs --domain software_dev
-<<<<<<< HEAD
 # Load JSONL chunks
 python scripts/load_documents_to_qdrant.py --file chunks.jsonl --domain shared
-=======
-# Load PDF (basic extraction)
-python scripts/load_documents_to_qdrant.py --pdf research.pdf --domain reverse_engineering
->>>>>>> main
 # Custom chunking
 python scripts/load_documents_to_qdrant.py --dir ./docs --domain software_dev --chunk-size 256
 ```
@@ -64,11 +22,7 @@ python scripts/load_documents_to_qdrant.py --dir ./docs --domain software_dev --
 **Supports:**
 - `.md`, `.markdown` - Markdown files with structure-aware chunking
 - `.txt` - Plain text files
-<<<<<<< HEAD
 - `.jsonl` - One chunk per line with `text` and optional `metadata`
-=======
-- `.pdf` - Basic PDF text extraction
->>>>>>> main
 
 ---
 
@@ -100,37 +54,11 @@ Collection: agents_software_dev
 
 ---
 
-<<<<<<< HEAD
 ## Quick Start
 
 ### 1. Ingest Your First Document
 ```bash
 python scripts/load_documents_to_qdrant.py --file README.md --domain software_dev
-=======
-### `pdf_to_qdrant_examples.py` - Interactive Examples
-**Ready-to-use examples for common RAG operations.**
-
-10 interactive examples including:
-1. Query PDFs
-2. Use in LangGraph
-3. Inspect Qdrant
-4. Full end-to-end workflow
-
-**Usage:**
-```bash
-python scripts/pdf_to_qdrant_examples.py
-
-# Choose example from interactive menu
-```
-
----
-
-## Quick Start
-
-### 1. Convert Your First PDF
-```bash
-python scripts/pdf_to_qdrant.py --pdf my_document.pdf --domain software_dev
->>>>>>> main
 ```
 
 ### 2. Check What's Stored
@@ -138,65 +66,23 @@ python scripts/pdf_to_qdrant.py --pdf my_document.pdf --domain software_dev
 python scripts/inspect_qdrant.py
 ```
 
-<<<<<<< HEAD
-=======
-### 3. Try Examples
-```bash
-python scripts/pdf_to_qdrant_examples.py
-```
-
----
-
-## Installation
-
-Install PDF conversion dependencies:
-
-```bash
-# Base (always needed)
-pip install PyMuPDF pymupdf4llm
-
-# Category 2: OCR support for scanned documents
-pip install docling
-
-# Category 3: VLM for complex PDFs
-pip install google-genai
-```
-
->>>>>>> main
 ---
 
 ## Common Workflows
 
 ### Add New Knowledge Base Documents
 ```bash
-<<<<<<< HEAD
 # Ingest all docs in a folder
 python scripts/load_documents_to_qdrant.py --dir ./knowledge_base --domain software_dev
 
 # Verify they're stored
 python scripts/inspect_qdrant.py
-=======
-# Convert all PDFs in a folder
-python scripts/pdf_to_qdrant.py --dir ./knowledge_base --domain software_dev
-
-# Verify they're stored
-python scripts/inspect_qdrant.py
-
-# Test retrieval
-python scripts/pdf_to_qdrant_examples.py
->>>>>>> main
 ```
 
 ### Troubleshoot Retrieval
 ```bash
 # Check what's actually stored
 python scripts/inspect_qdrant.py
-<<<<<<< HEAD
-=======
-
-# Run example queries
-python scripts/pdf_to_qdrant_examples.py
->>>>>>> main
 ```
 
 ---
@@ -209,26 +95,11 @@ The embedded Qdrant database only allows one process at a time.
 **Solution:** Stop `langgraph dev` temporarily:
 ```bash
 pkill -f "langgraph dev"
-<<<<<<< HEAD
 python scripts/load_documents_to_qdrant.py --file doc.md --domain software_dev
 ```
 
 ### "No files found"
 Make sure you point `--dir` at a folder containing `.md`, `.markdown`, `.txt`, or `.jsonl` files.
-=======
-python scripts/pdf_to_qdrant.py --pdf doc.pdf --domain software_dev
-```
-
-### "PyMuPDF not found"
-```bash
-pip install PyMuPDF
-```
-
-### "Docling not installed" (for scanned PDFs)
-```bash
-pip install docling
-```
->>>>>>> main
 
 ---
 

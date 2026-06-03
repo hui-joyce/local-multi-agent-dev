@@ -1,0 +1,5 @@
+[kext_diff]
+command: ipsw kernel kexts --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone18,1_26.2_23C55_Restore/23C55__iPhone18,1/kernelcache.release.iPhone18,1 /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone18,1_26.2.1_23C71_Restore/23C71__iPhone18,1/kernelcache.release.iPhone18,1
+parsed_item_count: 0
+stderr:
+[34m[1m   •[22m No differences found     [0m

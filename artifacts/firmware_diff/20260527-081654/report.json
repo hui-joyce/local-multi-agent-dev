@@ -1,0 +1,47 @@
+{
+  "summary": {
+    "old_firmware": "18.6.1 (22G90)",
+    "new_firmware": "18.6.2 (22G100)",
+    "extraction_status": "complete",
+    "counts": {
+      "added_binaries": 0,
+      "removed_binaries": 0,
+      "modified_binaries": 0,
+      "cstring_count": 0,
+      "entitlement_changes": 0,
+      "sandbox_changes": 0,
+      "kext_changes": 0,
+      "launchd_changes": 0,
+      "dyld_changes": 0,
+      "kernel_changes": 0,
+      "firmware_added": 0,
+      "firmware_removed": 0,
+      "firmware_modified": 0,
+      "iboot_added": 0,
+      "iboot_removed": 0,
+      "iboot_modified": 0
+    },
+    "high_risk_changes": 0
+  },
+  "findings": [],
+  "artifacts": {
+    "output_dir": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654",
+    "report_markdown": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/report.md",
+    "report_json": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/report.json",
+    "entitlement_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/entitlements/18_6_1_22G90_vs_18_6_2_22G100.idiff",
+    "sandbox_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/artifacts/sandbox_diff.txt",
+    "kext_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/artifacts/kext_diff.txt",
+    "dyld_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/artifacts/dyld_diff.txt",
+    "kernel_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/artifacts/kernel_diff.txt",
+    "framework_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/diff/18_6_1_22G90_vs_18_6_2_22G100/README.md",
+    "launchd_diff": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/artifacts/launchd_diff.txt",
+    "raw_diff_dir": "/Users/user/Documents/GitHub/local-multi-agent-dev/artifacts/firmware_diff/20260527-081654/diff"
+  },
+  "gaps": [
+    "MachO diff artifacts missing; filesystem diff likely failed or was skipped.",
+    "dyld diff failed: Usage:\n  ipsw dyld info <DSC> [flags]\n\nAliases:\n  info, i\n\nFlags:\n  -c, --closures   Dump program launch closures\n      --delta      Delta two DSC's image's versions\n      --diff       Diff two DSC's images\n  -d, --dlopen     Dump all dylibs and bundles with dlopen closures\n  -l, --dylibs     List dylibs and their versions\n  -h, --help       help for info\n  -j, --json       Output as JSON\n  -s, --sig        Print code signature\n\nGlobal Flags:\n      --color           colorize output\n      --config string   config file (default is $HOME/.config/ipsw/config.yaml)\n      --no-color        disable colorize output\n  -V, --verbose         verbose output\n\n\u001b[31m\u001b[1m   \u2a2f\u001b[22m failed to create partial MachO for image /usr/lib/libobjc.A.dylib: address 0x18010c000 not within any mappings address range\u001b[0m"
+  ],
+  "notes": [
+    "MachO diff artifacts missing; filesystem diff likely failed or was skipped."
+  ]
+}

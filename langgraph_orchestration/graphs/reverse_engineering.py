@@ -836,6 +836,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             "synthesize": "synthesize",
         },
     )
+    graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")
+    graph.add_edge("feature_analysis_decipher", "feature_analysis_compile")
+    graph.add_edge("feature_analysis_compile", "feature_analysis_select")
+    graph.add_edge("firmware_analysis", "synthesize")
     graph.add_edge("synthesize", END)
 
     graph.set_entry_point("retrieve_re_context")
