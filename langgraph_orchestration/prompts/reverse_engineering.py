@@ -2,7 +2,7 @@ from langgraph_orchestration.prompts import render_prompt
 from langgraph_orchestration.prompts.shared import build_tooling_block
 from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source
 
-REVERSE_ENGINEERING_TASKS = ["planning", "firmware_analysis", "code_analysis", "vulnerability_detection"]
+REVERSE_ENGINEERING_TASKS = ["planning", "firmware_analysis", "code_analysis", "vulnerability_detection", "firmware_categorization"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
     "reverse_engineering/task_router.md",
     user_input="",
@@ -125,5 +125,32 @@ def build_firmware_analysis_prompt(user_input: str, planning_output: str = "") -
             "Use ipsw tools to collect concrete firmware evidence (download/extract/diff), "
             "then prioritize IDA disassembly targets before concluding."
         ),
+        body=body,
+    )
+
+def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str = "") -> str:
+    intro = (
+        "You are an expert iOS/macOS Reverse Engineer. Analyze the provided Objective-C/Swift method signatures and categorize them.\n\n"
+        "First, assign a Behavioural Class:\n"
+        "1. LIFECYCLE: Initialisation & lifecycle methods (e.g., initWithConfig:, startDaemon, setupRemoteConnection).\n"
+        "2. INGESTION: Data Ingestion & Parsing methods accepting NSData, NSDictionary, NSString, or byte pointers.\n"
+        "3. PRIVILEGE: Privilege and permission checks returning BOOL (e.g., isAuthorized, hasEntitlement:, checkDeveloperMode).\n"
+        "4. IGNORE: Standard UI, layout, or irrelevant utility methods.\n\n"
+        "Second, assign an AI Prioritisation Score (Interest Score):\n"
+        "- TIER_1: Critical/High Interest. Deals with security boundaries, IPC, data-serialization, hardware access, or privileged info. Keywords: deserialize, validate, authenticate, entitlement, xpc, sendRequest:.\n"
+        "- TIER_2: Medium Interest. Core business logic, data processing, and state manipulation. Keywords: updateCache, processImage, savePreferences, toggleFeature.\n"
+        "- TIER_3: Low Interest. Standard boilerplate, UI rendering, basic getters/setters. Keywords: description, delegate, setFrame:, isEqual:.\n\n"
+        "Analyze the methods and output strictly as a JSON array of objects matching this schema:\n"
+        "[\n"
+        '  {"method": "<signature>", "category": "<LIFECYCLE|INGESTION|PRIVILEGE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "reason": "<brief justification>"}\n'
+        "]\n\n"
+        "Omit TIER_3 and IGNORE methods from the final JSON array to reduce noise."
+    )
+    method_block = f"Methods to Categorize:\n{retrieved_methods}\n\n" if retrieved_methods else ""
+    
+    body = f"{intro}\n\n{method_block}\n\nUser Request: {user_input}"
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Analyze the provided method signatures and categorize them strictly into JSON format without markdown fencing.",
         body=body,
     )

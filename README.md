@@ -144,7 +144,7 @@ print(result["final_output"])
 
 ## Embedding Models And Retrieval
 
-Embedding Model: [Qwen3-Embedding-0.6B-4bit-DWQ](https://huggingface.co/mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ)
+Embedding Model: [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
 
 | Purpose | Where It Is Active |
 |---|---|
@@ -213,8 +213,8 @@ Recommended ingestion policy
 - LangGraph: https://langchain-ai.github.io/langgraph/
 - Pydantic: https://docs.pydantic.dev/
 - Qdrant: https://qdrant.tech/documentation/
-- Qwen3 Embeddings: https://huggingface.co/mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ
+- Qwen3 Embeddings: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
 - MLX: https://ml-explore.github.io/mlx/
 - FastAPI: https://fastapi.tiangolo.com/
 
-Last updated: May 2026
+Last updated: June 2026

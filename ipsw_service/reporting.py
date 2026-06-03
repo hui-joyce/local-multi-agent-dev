@@ -1,90 +1,63 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from typing import Iterable
-import os
+from typing import Optional
 
-from ipsw_service.models import FirmwareDiffResult, Finding
+def _format_section(title: str, items: list[str]) -> list[str]:
+    lines = [f"# {title}"]
+    if not items:
+        lines.append("- none")
+        return lines
+    lines.append(f"- total: {len(items)}")
+    lines.extend(f"- {item}" for item in items)
+    return lines
 
-def _format_evidence_lines(finding: Finding) -> list[str]:
+def render_report(
+    report_payload: dict[str, object],
+    notes: Optional[list[str]] = None,
+    gaps: Optional[list[str]] = None,
+) -> str:
+    boundary = report_payload.get("boundary_changes", {}) or {}
+    userland = report_payload.get("userland_changes", {}) or {}
+    base_firmware = report_payload.get("base_firmware_changes", []) or []
+    cstring_context = report_payload.get("cstring_context", []) or []
+
     lines: list[str] = []
-    for item in finding.evidence:
-        detail = f" ({item.details})" if item.details else ""
-        lines.append(f"- {item.source}: {item.summary}{detail}")
-    return lines or ["- Evidence pending from ipsw diff artifacts."]
-
-def render_report(result: FirmwareDiffResult) -> str:
-    summary = result.summary
-    counts = summary.counts
-
-    lines: list[str] = []
-    lines.append("# Executive Summary")
-    lines.append(f"- firmware versions compared: {summary.old_firmware} vs {summary.new_firmware}")
-    lines.append(f"- extraction success status: {summary.extraction_status}")
-    lines.append(
-        "- total binaries added/removed/modified: "
-        f"{counts.added_binaries}/{counts.removed_binaries}/{counts.modified_binaries}"
-    )
-    lines.append(f"- high-fmrisk changes detected: {summary.high_risk_changes}")
+    lines.append("# Boundary Changes")
+    lines.append(f"- entitlements: {len(boundary.get('entitlements', []) or [])}")
+    lines.append(f"- sandbox: {len(boundary.get('sandbox', []) or [])}")
+    lines.append(f"- launchd: {len(boundary.get('launchd', []) or [])}")
+    lines.append(f"- kexts: {len(boundary.get('kexts', []) or [])}")
+    lines.append("")
+    lines.extend(_format_section("Entitlements", boundary.get("entitlements", []) or []))
+    lines.append("")
+    lines.extend(_format_section("Sandbox", boundary.get("sandbox", []) or []))
+    lines.append("")
+    lines.extend(_format_section("Launchd", boundary.get("launchd", []) or []))
+    lines.append("")
+    lines.extend(_format_section("Kexts", boundary.get("kexts", []) or []))
     lines.append("")
 
-    lines.append("# Critical Findings")
+    lines.append("# Userland Changes")
+    lines.append(f"- frameworks: {len(userland.get('frameworks', []) or [])}")
+    lines.append(f"- standard binaries: {len(userland.get('standard_binaries', []) or [])}")
+    lines.append("")
+    lines.extend(_format_section("Frameworks", userland.get("frameworks", []) or []))
+    lines.append("")
+    lines.extend(_format_section("Standard Binaries", userland.get("standard_binaries", []) or []))
+    lines.append("")
 
-    for index, finding in enumerate(result.findings, start=1):
-        change_type = f"Potentially Security-Relevant Change ({finding.change_type or 'unspecified'})"
-        lines.append(f"## Finding {index}: {finding.title}")
-        binary_hint = "unknown"
-        for item in finding.evidence:
-            if "/" in item.summary:
-                binary_hint = item.summary
-                break
-        lines.append(f"- Binary path and architecture: {binary_hint}")
-        lines.append(f"- Change type: {change_type}")
-        lines.append(f"- Potential impact: {finding.impact or 'Potentially security-relevant change.'}")
-        lines.append(f"- Recommended mitigation steps: {finding.mitigation or 'Review and validate with additional analysis.'}")
-        lines.append("- Evidence (symbols, paths, artifacts):")
-        lines.extend(_format_evidence_lines(finding))
+    lines.extend(_format_section("Base Firmware Changes", base_firmware))
+    lines.append("")
+    lines.extend(_format_section("Cstring Context", cstring_context))
+
+    if notes:
         lines.append("")
+        lines.append("# Notes")
+        lines.extend(f"- {note}" for note in notes)
 
-    lines.append("# Recommendations")
-    lines.append("- Monitor newly added binaries and services in privileged paths for behavior changes.")
-    lines.append("- Prioritize reverse engineering of entitlements and sandbox deltas flagged as high-risk.")
-    lines.append("- Validate launchd/service diffs against expected platform changes and patch notes.")
-    lines.append("")
-
-    kernel_status = "available" if (result.artifacts.kernel_diff or result.artifacts.kext_diff) else "missing"
-    dyld_status = "available" if result.artifacts.dyld_diff else "missing"
-    lines.append("# Technical Details")
-    lines.append(f"- kernelcache extraction summary: {kernel_status}")
-    lines.append(f"- dyld_shared_cache extraction summary: {dyld_status}")
-    lines.append("- filesystem extraction status: not executed (see diff artifacts)")
-    lines.append(
-        "- binary inventory counts: "
-        f"added={counts.added_binaries}, removed={counts.removed_binaries}, modified={counts.modified_binaries}"
-    )
-    lines.append(f"- entitlement diff summary: {counts.entitlement_changes} changes")
-    lines.append(f"- sandbox diff summary: {counts.sandbox_changes} changes")
-    lines.append(f"- KEXT diff summary: {counts.kext_changes} changes")
-    lines.append(f"- launchd/service diff summary: {counts.launchd_changes} changes")
-    lines.append(f"- dyld diff summary: {counts.dyld_changes} changes")
-    lines.append(f"- cstring total count: {counts.cstring_count}")
-    lines.append(
-        "- firmware component summary: "
-        f"added={counts.firmware_added}, removed={counts.firmware_removed}, modified={counts.firmware_modified}"
-    )
-    lines.append(
-        "- iBoot component summary: "
-        f"added={counts.iboot_added}, removed={counts.iboot_removed}, modified={counts.iboot_modified}"
-    )
-    if result.notes:
-        lines.append("- firmware highlights:")
-        for note in result.notes:
-            lines.append(f"  - {note}")
-    lines.append("- evidence sources:")
-    lines.append(f"  - report artifacts: {result.artifacts.report_markdown}")
-    if result.gaps:
-        lines.append("- unresolved gaps or blockers:")
-        for gap in result.gaps:
-            lines.append(f"  - {gap}")
+    if gaps:
+        lines.append("")
+        lines.append("# Gaps")
+        lines.extend(f"- {gap}" for gap in gaps)
 
     return "\n".join(lines).strip() + "\n"

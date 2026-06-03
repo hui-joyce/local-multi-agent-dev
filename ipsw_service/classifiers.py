@@ -32,7 +32,6 @@ class ChangeClassifier:
     def classify(self, diff_data: dict[str, list[str]]) -> tuple[DiffCounts, list[Finding]]:
         counts = DiffCounts(
             added_binaries=len(diff_data.get("added_binaries", [])),
-            removed_binaries=len(diff_data.get("removed_binaries", [])),
             modified_binaries=len(diff_data.get("modified_binaries", [])),
             entitlement_changes=len(diff_data.get("entitlement_changes", [])),
             sandbox_changes=len(diff_data.get("sandbox_changes", [])),
@@ -41,10 +40,8 @@ class ChangeClassifier:
             dyld_changes=len(diff_data.get("dyld_changes", [])),
             kernel_changes=len(diff_data.get("kernel_changes", [])),
             firmware_added=len(diff_data.get("firmware_added", [])),
-            firmware_removed=len(diff_data.get("firmware_removed", [])),
             firmware_modified=len(diff_data.get("firmware_modified", [])),
             iboot_added=len(diff_data.get("iboot_added", [])),
-            iboot_removed=len(diff_data.get("iboot_removed", [])),
             iboot_modified=len(diff_data.get("iboot_modified", [])),
         )
 

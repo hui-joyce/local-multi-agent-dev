@@ -17,6 +17,7 @@ class FrameworkDiffEngine:
         output_dir: str,
         include_fw: bool = True,
         include_launchd: bool = True,
+        include_strs: bool = True,
         markdown: bool = True,
         low_memory: bool = False,
     ) -> dict:
@@ -28,6 +29,7 @@ class FrameworkDiffEngine:
             markdown=markdown,
             include_fw=include_fw,
             include_launchd=include_launchd,
+            include_strs=include_strs,
             low_memory=low_memory,
         )
 

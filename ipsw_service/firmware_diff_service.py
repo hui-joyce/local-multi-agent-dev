@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-from dataclasses import asdict
 from datetime import datetime, timezone
 import re
 from typing import Optional
@@ -123,6 +121,7 @@ class FirmwareDiffService:
             diff_dir,
             include_fw=request.include_fw_components,
             include_launchd=request.include_launchd,
+            include_strs=request.include_strs,
             markdown=True,
             low_memory=low_memory,
         )
@@ -133,7 +132,6 @@ class FirmwareDiffService:
         diff_report_text = read_text(diff_report_path) if diff_report_path else ""
         diff_data = parse_diff_markdown(diff_report_text) if diff_report_text else {
             "added_binaries": [],
-            "removed_binaries": [],
             "modified_binaries": [],
             "entitlement_changes": [],
             "sandbox_changes": [],
@@ -141,14 +139,15 @@ class FirmwareDiffService:
             "framework_changes": [],
             "launchd_changes": [],
             "firmware_added": [],
-            "firmware_removed": [],
             "firmware_modified": [],
             "iboot_added": [],
-            "iboot_removed": [],
             "iboot_modified": [],
+            "cstring_changes": [],
         }
         diff_report_root = os.path.dirname(diff_report_path) if diff_report_path else diff_dir
         
+        if diff_report_text:
+            diff_data["cstring_changes"] = extract_cstring_diffs(diff_report_text)
         macho_note = None
         if diff_report_path:
             macho_dir = os.path.join(diff_report_root, "MACHOS")
@@ -159,11 +158,9 @@ class FirmwareDiffService:
                 gaps.append(macho_note)
 
         added_raw = diff_data.get("added_binaries", [])
-        removed_raw = diff_data.get("removed_binaries", [])
         modified_raw = diff_data.get("modified_binaries", [])
 
         diff_data["added_binaries"] = self._normalize_binary_list(added_raw, diff_report_root)
-        diff_data["removed_binaries"] = self._normalize_binary_list(removed_raw, diff_report_root)
         filtered_modified = self._filter_modified_binaries(modified_raw, diff_report_root)
         diff_data["modified_binaries"] = filtered_modified
 
@@ -171,23 +168,15 @@ class FirmwareDiffService:
         macho_engine = MachoAnalysisEngine(self.runner)
         cstring_count = 0
         try:
-            candidates = set(
-                [*diff_data.get("added_binaries", []), *diff_data.get("modified_binaries", []), *diff_data.get("removed_binaries", [])]
+            seen: set[tuple[str, str]] = set()
+            cstring_count += self._count_cstrings_for_items(
+                diff_data.get("added_binaries", []), diff_report_root, request.new_dyld, macho_engine, seen
             )
-            for item in sorted(candidates):
-                if not item:
-                    continue
-                candidate_path = item if os.path.isabs(item) and os.path.exists(item) else ""
-                if not candidate_path and diff_report_root:
-                    name = os.path.basename(item)
-                    for root, _, files in os.walk(diff_report_root):
-                        if name in files:
-                            candidate_path = os.path.join(root, name)
-                            break
-                res = macho_engine.count_strings(candidate_path or item, diff_report_root=diff_report_root, arch="arm64e")
-                cstring_count += int(res.get("count", 0) or 0)
-        except Exception:
-            cstring_count = 0
+            cstring_count += self._count_cstrings_for_items(
+                diff_data.get("modified_binaries", []), diff_report_root, request.new_dyld, macho_engine, seen
+            )
+        except Exception as e:
+            gaps.append(f"CString counting partially failed: {str(e)}")
 
         ent_diff_path: Optional[str] = None
         if request.include_entitlements:
@@ -329,15 +318,10 @@ class FirmwareDiffService:
             notes=notes,
         )
 
-        report_text = render_report(result)
+        report_payload = self._build_report_payload(diff_data, cstring_count)
+        report_text = render_report(report_payload, notes=notes, gaps=gaps)
         write_text(report_markdown_path, report_text)
-        write_json(report_json_path, {
-            "summary": asdict(summary),
-            "findings": [asdict(f) for f in security_findings],
-            "artifacts": asdict(artifacts),
-            "gaps": gaps,
-            "notes": notes,
-        })
+        write_json(report_json_path, report_payload)
 
         return result
 
@@ -351,21 +335,62 @@ class FirmwareDiffService:
             ("filesystem", ("filesystem",)),
             ("enclaveOS", ("enclaveos", "enclave"))
         ]:
-            for comp_type in ("added", "removed", "modified"):
+            for comp_type in ("added", "modified"):
                 key = f"firmware_{comp_type}"
                 items = diff_data.get(key, [])
                 filtered = _filter_by_keywords(items, keywords)
                 if filtered:
                     counts = {t: len(_filter_by_keywords(diff_data.get(f"firmware_{t}", []), keywords)) 
-                             for t in ("added", "removed", "modified")}
+                             for t in ("added", "modified")}
                     notes.append(
                         f"{component} components: "
-                        f"added={counts['added']}, removed={counts['removed']}, "
-                        f"modified={counts['modified']} (see framework diff report for paths)"
+                        f"added={counts['added']}, modified={counts['modified']} "
+                        f"(see framework diff report for paths)"                    
                     )
                     break
-        
         return notes
+
+    def _build_report_payload(self, diff_data: dict[str, list[str]], cstring_count: int) -> dict[str, object]:
+        # Gather all specialized paths so we can subtract them
+        specialized_paths = set(_dedupe_stripped([
+            *diff_data.get("framework_changes", []),
+            *diff_data.get("kext_changes", []),
+            *diff_data.get("launchd_changes", []),
+        ]))
+
+        # Gather raw userland binaries
+        raw_standard = _dedupe_stripped([
+            *diff_data.get("added_binaries", []),
+            *diff_data.get("modified_binaries", []),
+        ])
+
+        # Filter out the duplicates 
+        standard_binaries = [bin for bin in raw_standard if bin not in specialized_paths]
+
+        base_firmware_changes = _dedupe_stripped([
+            *diff_data.get("firmware_added", []),
+            *diff_data.get("firmware_modified", []),
+            *diff_data.get("iboot_added", []),
+            *diff_data.get("iboot_modified", []),
+        ])
+
+        return {
+            "summary_metrics": {
+                "total_cstring_changes": cstring_count 
+            },
+            "boundary_changes": {
+                "entitlements": diff_data.get("entitlement_changes", []),
+                "sandbox": diff_data.get("sandbox_changes", []),
+                "launchd": diff_data.get("launchd_changes", []),
+                "kexts": diff_data.get("kext_changes", []),
+            },
+            "userland_changes": {
+                "frameworks": diff_data.get("framework_changes", []),
+                "standard_binaries": standard_binaries,
+            },
+            "base_firmware_changes": base_firmware_changes,
+            "cstring_context": diff_data.get("cstring_changes", []),
+        }
 
     def _filter_modified_binaries(self, items: list[str], diff_dir: str) -> list[str]:
         if not items:
@@ -435,6 +460,51 @@ class FirmwareDiffService:
             return match.group(1), match.group(2)
         return item, None
 
+    def _resolve_binary_candidate(self, item: str, diff_dir: str) -> tuple[str, str]:
+        label, _ = self._split_markdown_link(item)
+        candidate = (label or item).strip()
+        if not candidate:
+            return "", ""
+
+        candidate_path = ""
+        if os.path.isabs(candidate) and os.path.exists(candidate):
+            candidate_path = candidate
+        elif diff_dir:
+            name = os.path.basename(candidate)
+            if name:
+                for root, _, files in os.walk(diff_dir):
+                    if name in files:
+                        candidate_path = os.path.join(root, name)
+                        break
+        return candidate, candidate_path
+
+    def _count_cstrings_for_items(
+        self,
+        items: list[str],
+        diff_dir: str,
+        dyld_cache_path: Optional[str],
+        macho_engine: MachoAnalysisEngine,
+        seen: set[tuple[str, str]],
+    ) -> int:
+        total = 0
+        for item in items:
+            if not item:
+                continue
+            candidate, candidate_path = self._resolve_binary_candidate(item, diff_dir)
+            if not candidate and not candidate_path:
+                continue
+            key = (candidate_path or candidate, dyld_cache_path or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            res = macho_engine.count_strings(
+                candidate_path or candidate,
+                diff_report_root=diff_dir,
+                dyld_cache_path=dyld_cache_path,
+            )
+            total += int(res.get("count", 0) or 0)
+        return total
+
     def _should_ignore_binary(self, label: str) -> bool:
         if os.getenv("IPSW_DIFF_INCLUDE_METAL") == "1":
             return False
@@ -486,3 +556,47 @@ class FirmwareDiffService:
         if dyld_ready or kernel_ready:
             return "partial"
         return "missing"
+
+    def _build_cstring_summary(self, diff_report_text: str) -> dict[str, dict[str, list[str]]]:
+        cstring_entries = extract_cstring_diffs(diff_report_text)
+
+        # build per-item buckets
+        cstring_summary: dict[str, dict[str, list[str]]] = {}
+        for entry in cstring_entries:
+            if ":" in entry:
+                label, diff_line = entry.split(":", 1)
+                label = label.strip()
+            else:
+                label = "unknown"
+                diff_line = entry
+            diff_line = diff_line.strip()
+            if not diff_line:
+                continue
+            sign = diff_line[0]
+            text = diff_line[1:].strip()
+            bucket = cstring_summary.setdefault(label or "unknown", {"added": [], "removed": [], "modified": []})
+            if sign == "+":
+                bucket["added"].append(text)
+            elif sign == "-":
+                bucket["removed"].append(text)
+
+        # mark modified if same text appears in both added & removed
+        for label, buckets in cstring_summary.items():
+            added_set = set(buckets["added"])
+            removed_set = set(buckets["removed"])
+            modified = list(added_set & removed_set)
+            if modified:
+                buckets["modified"].extend(modified)
+                buckets["added"] = [s for s in buckets["added"] if s not in modified]
+                buckets["removed"] = [s for s in buckets["removed"] if s not in modified]
+
+        # aggregate totals
+        total_added = sum(len(b["added"]) for b in cstring_summary.values())
+        total_removed = sum(len(b["removed"]) for b in cstring_summary.values())
+        total_modified = sum(len(b["modified"]) for b in cstring_summary.values())
+
+        return {
+            "per_file": cstring_summary,
+            "totals": {"added": total_added, "removed": total_removed, "modified": total_modified},
+            "raw_entries": cstring_entries,
+        }

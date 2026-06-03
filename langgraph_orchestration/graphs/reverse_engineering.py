@@ -453,6 +453,17 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return "\n".join(lines).strip() + "\n"
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
+        lowered_input = (state.user_input or "").lower()
+        if "categorize" in lowered_input or "dsdump" in lowered_input:
+            state.re_context = []
+            state.selected_domain = "reverse_engineering"
+            state.execution_domains = ["reverse_engineering"]
+            state.re_task_plan = ["firmware_categorization"]
+            state.split_tasks = {}
+            state.tool_policy.allowed_tools = get_allowed_tools("reverse_engineering")
+            state.max_tool_iterations = state.tool_policy.max_iterations
+            return state
+
         report_path = state.intermediate_outputs.get("firmware_diff_report_path")
         report_text = state.intermediate_outputs.get("firmware_diff_report")
         if report_path and report_text:
@@ -655,6 +666,64 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return "analyze"
         return "done"
 
+    def parse_firmware_methods_node(state: AgentState) -> AgentState:
+        raw_methods = []
+        IGNORE_PREFIXES = ("-[UIView", "-[UIResponder", "-[UIViewController", "-[NSObject")
+        
+        methods_text = state.intermediate_outputs.get("raw_methods", "")
+        if not methods_text:
+            methods_text = state.user_input 
+        
+        for line in methods_text.splitlines():
+            line = line.strip()
+            if line and not line.startswith(IGNORE_PREFIXES) and ("-[" in line or "+[" in line):
+                raw_methods.append(line)
+                
+        chunk_size = 50
+        chunks = [raw_methods[i:i + chunk_size] for i in range(0, len(raw_methods), chunk_size)]
+        state.firmware_methods_queue = chunks
+        state.record_analysis_note(f"Parsed {len(raw_methods)} methods into {len(chunks)} chunks.")
+        return state
+
+    def categorize_firmware_node(state: AgentState) -> AgentState:
+        if not state.firmware_methods_queue:
+            return state
+            
+        chunk = state.firmware_methods_queue.pop(0)
+        state.firmware_methods_current_chunk = chunk
+        
+        try:
+            engine = _get_feature_engine()
+            from langgraph_orchestration.prompts.reverse_engineering import build_firmware_categorization_prompt
+            
+            methods_str = "\n".join(chunk)
+            prompt = build_firmware_categorization_prompt(state.user_input, methods_str)
+            
+            output = engine.generate(
+                prompt,
+                config=GenerationConfig(max_tokens=2048, temperature=0.1),
+                stream=False,
+            )
+            
+            sanitized = _sanitize_model_output(output)
+            json_match = re.search(r'\[.*\]', sanitized, re.DOTALL)
+            if json_match:
+                try:
+                    parsed_json = json.loads(json_match.group(0))
+                    if isinstance(parsed_json, list):
+                        state.categorized_methods.extend(parsed_json)
+                except json.JSONDecodeError:
+                    state.record_analysis_note("Failed to parse JSON from categorization output.")
+        except Exception as e:
+            state.record_analysis_note(f"Categorization error: {e}")
+            
+        return state
+
+    def route_after_categorize(state: AgentState) -> str:
+        if state.firmware_methods_queue:
+            return "categorize_firmware"
+        return "synthesize"
+
     def firmware_analysis_node(state: AgentState) -> AgentState:
         stage_keys = [
             "firmware_locator",
@@ -677,6 +746,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return StateManager.add_intermediate_output(state, "firmware_analysis", output)
 
     def synthesize_output(state: AgentState) -> AgentState:
+        if state.categorized_methods:
+            final = f"## Firmware Categorization Targets\n\n```json\n{json.dumps(state.categorized_methods, indent=2)}\n```\n"
+            state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(final)
+            state.agent_chain.append("reverse_engineering_synthesize")
+            return state
+
         report = state.intermediate_outputs.get("firmware_diff_report", "")
         if report:
             state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(report)
@@ -697,6 +772,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return "firmware_diff_service"
 
     def route_after_context(state: AgentState) -> str:
+        if state.re_task_plan and "firmware_categorization" in state.re_task_plan:
+            return "parse_firmware_methods"
         if (
             state.intermediate_outputs.get("firmware_diff_report_path")
             and state.intermediate_outputs.get("firmware_diff_report")
@@ -715,6 +792,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     graph.add_node("feature_analysis_compile", feature_analysis_compile_node)
     graph.add_node("firmware_analysis", firmware_analysis_node)
     graph.add_node("synthesize", synthesize_output)
+    graph.add_node("parse_firmware_methods", parse_firmware_methods_node)
+    graph.add_node("categorize_firmware", categorize_firmware_node)
 
     graph.add_conditional_edges(
         "retrieve_re_context",
@@ -722,6 +801,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         {
             "feature_analysis_select": "feature_analysis_select",
             "firmware_locator": "firmware_locator",
+            "parse_firmware_methods": "parse_firmware_methods",
         },
     )
     graph.add_edge("firmware_locator", "firmware_downloader")
@@ -741,6 +821,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         {
             "analyze": "feature_analysis_relation",
             "done": "firmware_analysis",
+        },
+    )
+    graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")
+    graph.add_edge("feature_analysis_decipher", "feature_analysis_compile")
+    graph.add_edge("feature_analysis_compile", "feature_analysis_select")
+    graph.add_edge("firmware_analysis", "synthesize")
+    graph.add_edge("parse_firmware_methods", "categorize_firmware")
+    graph.add_conditional_edges(
+        "categorize_firmware",
+        route_after_categorize,
+        {
+            "categorize_firmware": "categorize_firmware",
+            "synthesize": "synthesize",
         },
     )
     graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")

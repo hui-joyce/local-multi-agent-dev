@@ -161,11 +161,6 @@ class AgentState(BaseModel):
         description="Accumulated strict JSON output of categorized methods",
     )
 
-    generated_hooks: str = Field(
-        default="",
-        description="Final compiled Frida/Python scripts",
-    )
-
     def register_tool_request(self, request: ToolRequest) -> None:
         self.tool_requests.append(request)
         self.tool_iteration += 1

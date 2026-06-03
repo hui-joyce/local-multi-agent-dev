@@ -6,7 +6,6 @@ from typing import Optional
 @dataclass
 class DiffCounts:
     added_binaries: int = 0
-    removed_binaries: int = 0
     modified_binaries: int = 0
     cstring_count: int = 0
     entitlement_changes: int = 0
@@ -16,10 +15,8 @@ class DiffCounts:
     dyld_changes: int = 0
     kernel_changes: int = 0
     firmware_added: int = 0
-    firmware_removed: int = 0
     firmware_modified: int = 0
     iboot_added: int = 0
-    iboot_removed: int = 0
     iboot_modified: int = 0
 
 @dataclass
@@ -84,3 +81,4 @@ class FirmwareDiffRequest:
     include_kexts: bool = True
     include_launchd: bool = True
     include_fw_components: bool = True
+    include_strs: bool = True

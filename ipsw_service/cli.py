@@ -175,6 +175,7 @@ def build_diff_args(
     include_fw: bool = True,
     include_launchd: bool = True,
     include_entitlements: bool = False,
+    include_strs: bool = True,
     low_memory: bool = False,
     json_output: bool = False,
 ) -> list[str]:
@@ -189,6 +190,8 @@ def build_diff_args(
         args.append("--launchd")
     if include_entitlements:
         args.append("--ent")
+    if include_strs:
+        args.append("--strs")
     if low_memory:
         args.append("--low-memory")
     if json_output:

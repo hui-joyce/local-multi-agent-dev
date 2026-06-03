@@ -17,7 +17,7 @@ from langgraph_orchestration.graphs.reverse_engineering import build_reverse_eng
 from langgraph_orchestration.schemas.state import AgentState
 
 REPORT_PATH = Path(
-    "artifacts/firmware_diff/20260520-021825/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md"
+    "artifacts/firmware_diff/20260526-012907/diff/26_2_23C55_vs_26_2_1_23C71/README.md"
 )
 
 @dataclass
@@ -39,12 +39,12 @@ class FeatureAnalysisResult:
 
 def build_feature_case() -> FeatureAnalysisCase:
     return FeatureAnalysisCase(
-        case_id="RE-FEATURE-ANALYSIS-26-4-2",
-        description="Feature analysis on 26.4.1 vs 26.4.2 diff report.",
+        case_id="RE-FEATURE-ANALYSIS-26-2-1",
+        description="Feature analysis on 26.2.1 vs 26.2.2 diff report.",
         report_path=REPORT_PATH,
         user_input=(
             "Run feature analysis on diff report: "
-            "26.4.1 (23E254) vs 26.4.2 (23E261)."
+            "26.2.1 (23C71) vs 26.2.2 (23C55)."
         ),
     )
 

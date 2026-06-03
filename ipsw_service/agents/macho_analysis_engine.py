@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional
 import os
+import re
 import shlex
 from ipsw_service.cli import IpswCliRunner
 
@@ -42,60 +43,61 @@ class MachoAnalysisEngine:
         self,
         binary_path: str,
         diff_report_root: Optional[str] = None,
-        arch: Optional[str] = None,
+        dyld_cache_path: Optional[str] = None,
         timeout: int = 300,
+        arch: str = "arm64e",
     ) -> dict:
         """Count statically embedded c-strings for a binary.
-        - If the binary file exists and appears usable, run `ipsw macho info --strings <binary> | wc -l`.
-        - Otherwise, if a dyld_shared_cache file is present under `diff_report_root`, route via
-          `ipsw dyld macho <cache> <basename> --strings | wc -l` to avoid the DSC trap.
+        - If the binary file exists and appears usable, run `ipsw macho info --strings -a arm64e <binary> | wc -l`.
+                - Otherwise, if a dyld_shared_cache file is present under `diff_report_root` or provided
+                    explicitly via `dyld_cache_path`, route via
+                    `ipsw dyld macho <cache> <path> --strings | wc -l` to avoid the DSC trap.
         - Uses shell pipeline to let `wc -l` count without buffering the full dump in Python.
         Returns a dict with keys: success, count, command, stdout, stderr.
         """
-        def _parse_count(result) -> int:
-            try:
-                return int(result.stdout.strip()) if result.success and result.stdout.strip() else 0
-            except ValueError:
-                return 0
 
         def _run(command: str) -> dict:
             result = self.runner.run_shell(command, timeout=timeout)
+            count = 0
+            if result.stdout:
+                count = len([line for line in result.stdout.splitlines() if line.strip()])
             return {
                 "success": result.success,
-                "count": _parse_count(result),
+                "count": count,
                 "command": result.command,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
             }
 
-        def _find_dyld_cache() -> str:
-            if not diff_report_root or not os.path.isdir(diff_report_root):
-                return ""
-            for root, _, files in os.walk(diff_report_root):
-                for name in files:
-                    if "dyld_shared_cache" in name:
-                        return os.path.join(root, name)
-            return ""
-
+        binary_path = (binary_path or "").strip()
         base_name = os.path.basename(binary_path) if binary_path else ""
-        cache_path = _find_dyld_cache()
-        is_system_binary = any(segment in (binary_path or "") for segment in ("/System/Library/", "/usr/lib/"))
-        arch_flag = f" --arch {shlex.quote(arch)}" if arch else ""
+        cache_path = ""
+        if dyld_cache_path and os.path.exists(dyld_cache_path):
+            cache_path = dyld_cache_path
+        else:
+            cache_path = _find_dyld_cache()
+        is_system_binary = any(segment in binary_path for segment in ("/System/Library/", "/usr/lib/"))
+        arch_arg = f" -a {shlex.quote(arch)}" if arch else ""
+        dyld_target = binary_path if (binary_path.startswith("/") or "/" in binary_path) else base_name
 
         if cache_path and (is_system_binary or not binary_path or not os.path.exists(binary_path) or os.path.getsize(binary_path) == 0):
-            return _run(f"{shlex.quote(self.runner.executable)} dyld macho {shlex.quote(cache_path)} {shlex.quote(base_name)} --strings{arch_flag} | wc -l")
+            dyld_cmd = (
+                f"{shlex.quote(self.runner.executable)} dyld macho {shlex.quote(cache_path)} "
+                f"{shlex.quote(dyld_target)} --strings{arch_arg}"
+            )
+            return _run(dyld_cmd) 
 
         if binary_path and os.path.exists(binary_path) and os.path.getsize(binary_path) > 0:
-            direct = _run(f"{shlex.quote(self.runner.executable)} macho info --strings{arch_flag} {shlex.quote(binary_path)} | wc -l")
+            direct_cmd = f"{shlex.quote(self.runner.executable)} macho info --strings{arch_arg} {shlex.quote(binary_path)}"
+            direct = _run(direct_cmd) # <-- PASS RAW COMMAND
             if direct["count"] > 0 or not cache_path:
                 return direct
-            cached = _run(f"{shlex.quote(self.runner.executable)} dyld macho {shlex.quote(cache_path)} {shlex.quote(base_name)} --strings{arch_flag} | wc -l")
+            
+            cached_cmd = (
+                f"{shlex.quote(self.runner.executable)} dyld macho {shlex.quote(cache_path)} "
+                f"{shlex.quote(dyld_target)} --strings{arch_arg}"
+            )
+            cached = _run(cached_cmd) # <-- PASS RAW COMMAND
             return cached if cached["count"] > direct["count"] else direct
-
-        if diff_report_root and os.path.isdir(diff_report_root):
-            for root, _, files in os.walk(diff_report_root):
-                for name in files:
-                    if name == base_name:
-                        return _run(f"{shlex.quote(self.runner.executable)} macho info --strings{arch_flag} {shlex.quote(os.path.join(root, name))} | wc -l")
 
         return {"success": False, "count": 0, "command": "", "stdout": "", "stderr": "could not locate binary or cache"}
