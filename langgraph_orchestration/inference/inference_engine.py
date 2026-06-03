@@ -28,28 +28,19 @@ class GenerationMetrics:
     generated_tokens: int
     prompt_generation_speed_tok_s: float  # tokens/second for prompt building
     generation_speed_tok_s: float  # tokens/second for generation
-    # peak_memory_gb: float
     total_generation_seconds: float
 
 class MLXInferenceEngine:
-    """    
-    Features:
-    - Efficient token generation on Apple Silicon
-    - Streaming support for real-time responses
-    - Token counting and management
-    - Prompt formatting with RAG context
-    - System role and conversation history support
-    - Detailed metrics: TTFT, prompt/generation speeds
-    """
+    """MLX-backed inference engine with prompt formatting and metrics"""
+    """MLX-backed inference engine with prompt formatting and metrics"""
     
     # Default system prompt for agents
     DEFAULT_SYSTEM_PROMPT = (
         "You are a specialized AI assistant. "
         "Provide concise, actionable responses. "
         "Use provided context to inform your answers. "
-        # Disable thinking for benchmarking
-        "Do not use extended thinking or <think> tags. "
-        "Respond directly without internal reasoning tags."
+        "Do not expose internal reasoning traces or <think> tags in your responses. "
+        "Respond clearly and directly to the user's request."
     )
     
     def __init__(
@@ -62,31 +53,6 @@ class MLXInferenceEngine:
         self.tokenizer = tokenizer
         self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
         self.last_metrics: Optional[GenerationMetrics] = None
-    
-    # def _get_memory_usage_gb(self) -> float:
-    #     """Get current memory usage in GB (works with MLX on Apple Silicon)."""
-    #     try:
-    #         import psutil
-    #         process = psutil.Process()
-    #         # Get resident set size (RSS) (actual physical memory used)
-    #         rss_bytes = process.memory_info().rss
-    #         return rss_bytes / 1e9
-    #     except ImportError:
-    #         # MLX-specific memory as fallback
-    #         try:
-    #             import mlx.core as mx
-    #             if hasattr(mx, 'metal'):
-    #                 try:
-    #                     stats = mx.metal.mem_stats()
-    #                     if isinstance(stats, dict) and 'peak_memory' in stats:
-    #                         return stats['peak_memory'] / 1e9
-    #                 except (AttributeError, KeyError, TypeError):
-    #                     pass
-    #         except Exception:
-    #             pass
-    #         return 0.0
-    #     except Exception:
-    #         return 0.0
     
     def generate_with_metrics(
         self,
@@ -108,16 +74,13 @@ class MLXInferenceEngine:
             ) from e
         
         try:
-            # Measure actual tokenization time for prompt
             tokenize_start = time.time()
             prompt_tokens = self.count_tokens(prompt)
             tokenize_end = time.time()
             prompt_tokenization_time = tokenize_end - tokenize_start
             
-            # Calculate prompt generation speed (tokens per second)
             prompt_generation_speed = prompt_tokens / prompt_tokenization_time if prompt_tokenization_time > 0 else 0
             
-            # Time the text generation
             gen_start = time.time()
             
             generated_text = generate(
@@ -131,14 +94,10 @@ class MLXInferenceEngine:
             gen_end = time.time()
             total_gen_time = gen_end - gen_start
             
-            # Count generated tokens
             generated_tokens = self.count_tokens(generated_text)
             
-            # Estimate TTFT from total time and token count
-            # For non-streaming - estimate based on average generation speed
             ttft = total_gen_time / max(generated_tokens, 1) if generated_tokens > 0 else total_gen_time
             
-            # Calculate generation speed
             generation_speed = generated_tokens / total_gen_time if total_gen_time > 0 else 0
             
             metrics = GenerationMetrics(
@@ -177,18 +136,23 @@ class MLXInferenceEngine:
         
         try:
             if stream:
-                # Streaming generation (yields tokens)
                 return self._generate_stream(prompt, config)
-            else:
-                # Non-streaming generation (returns full text)
-                generated_text = generate(
-                    self.model,
-                    self.tokenizer,
-                    prompt=prompt,
-                    max_tokens=config.max_tokens,
-                    verbose=False,
-                )
-                return generated_text
+            generated_text = generate(
+                self.model,
+                self.tokenizer,
+                prompt=prompt,
+                max_tokens=config.max_tokens,
+                verbose=False,
+            )
+            return generated_text
+            generated_text = generate(
+                self.model,
+                self.tokenizer,
+                prompt=prompt,
+                max_tokens=config.max_tokens,
+                verbose=False,
+            )
+            return generated_text
         
         except Exception as e:
             raise RuntimeError(f"Generation failed: {str(e)}") from e
@@ -212,7 +176,6 @@ class MLXInferenceEngine:
             verbose=False,
         )
         
-        # Simple word-by-word streaming
         for word in full_text.split():
             yield word + " "
     
@@ -225,7 +188,6 @@ class MLXInferenceEngine:
         """Build formatted prompt with context."""
         system = system_prompt or self.system_prompt
         
-        # Build context section
         context_section = ""
         if context:
             context_section = "## Relevant Context\n"
@@ -233,7 +195,6 @@ class MLXInferenceEngine:
                 context_section += f"{i}. {doc}\n"
             context_section += "\n"
         
-        # Qwen format: system, user interaction
         prompt = f"""<|im_start|>system
 {system}<|im_end|>
 <|im_start|>user

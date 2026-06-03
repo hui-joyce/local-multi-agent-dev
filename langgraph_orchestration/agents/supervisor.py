@@ -1,9 +1,4 @@
-"""
-Supervisor agent for domain routing and orchestration.
-
-The Supervisor analyzes incoming requests and routes them to the
-appropriate domain (software development or reverse engineering).
-"""
+"""Supervisor agent for domain routing"""
 
 import json
 import re
@@ -21,9 +16,7 @@ from langgraph_orchestration.prompts.supervisor import (
 class SupervisorAgent(SyncBaseAgent):
     DOMAIN_OPTIONS = ("software_dev", "reverse_engineering")
     LABEL_OPTIONS = ("SOFTWARE_DEV", "REVERSE_ENGINEERING", "BOTH")
-    """Memory safety limit for routing decisions - 
-     automatically clears entire dict (when cache reaches 1000 entries) 
-     to prevent unbounded memory growth"""
+    # Clear cache when it reaches this size to cap memory usage.
     _CACHE_MAX_SIZE = 1000
 
     def __init__(self, inference_engine: Optional[MLXInferenceEngine] = None):
@@ -38,35 +31,94 @@ class SupervisorAgent(SyncBaseAgent):
         """Remove internal reasoning blocks from text"""
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
+    def _sanitize_output(self, text: str) -> str:
+        if not isinstance(text, str):
+            try:
+                text = str(text)
+            except Exception:
+                return ""
+
+        text = self._remove_thinking_blocks(text)
+
+        # Remove fenced JSON blocks that include diagnostic keys
+        def _remove_block(match):
+            block = match.group(0)
+            if re.search(r"\b(tool|metric|trace|langgraph|orchestration|diagnostic|tool_result|metrics)\b", block, flags=re.IGNORECASE):
+                return ""
+            return block
+
+        text = re.sub(r"```json[\s\S]*?```", _remove_block, text, flags=re.IGNORECASE)
+
+        # Remove inline lines that look like tool traces
+        cleaned_lines = []
+        for line in text.splitlines():
+            if re.search(r"\b(tool|tool_call|tool_result|metrics|trace|langgraph)\b", line, flags=re.IGNORECASE):
+                continue
+            cleaned_lines.append(line)
+
+        return "\n".join(cleaned_lines).strip()
+
     def _build_label_prompt(self, user_input: str) -> str:
         return build_label_routing_prompt(self.inference_engine, user_input)
 
     def _parse_label(self, raw_output: str) -> Optional[str]:
-        cleaned_upper = self._remove_thinking_blocks(raw_output).upper()
+        cleaned = self._remove_thinking_blocks(raw_output).strip()
+        if not cleaned:
+            return None
+        cleaned_upper = cleaned.upper()
 
-        # Exact match first
+        line_labels = []
+        for line in cleaned.splitlines():
+            stripped = line.strip().strip("`*_-. ")
+            if stripped in self.LABEL_OPTIONS:
+                line_labels.append(stripped)
+        if line_labels:
+            unique_line_labels = set(line_labels)
+            if len(unique_line_labels) == 1:
+                return line_labels[0]
+            return None
+        
         if cleaned_upper in self.LABEL_OPTIONS:
             return cleaned_upper
 
-        # Line-based match
-        for line in cleaned_upper.splitlines():
-            token = line.strip().strip("`*_-. ")
-            if token in self.LABEL_OPTIONS:
-                return token
+        token_matches = re.findall(r"\b(?:SOFTWARE_DEV|REVERSE_ENGINEERING|BOTH)\b", cleaned_upper)
+        if token_matches:
+            unique_token_labels = set(token_matches)
+            if len(unique_token_labels) == 1:
+                return token_matches[0]
 
-        # Fallback: return last mention (decision usually at end)
-        last_match = None
-        for label in self.LABEL_OPTIONS:
-            if label in cleaned_upper:
-                last_match = label
-        return last_match
+        return None
+
+    def _resolve_label_with_model(self, user_input: str, prior_output: str) -> Optional[str]:
+        if self.inference_engine is None:
+            return None
+
+        resolver_prompt = (
+            "You are a strict routing label resolver.\n"
+            "Choose exactly one label for the request below.\n"
+            "Allowed labels: SOFTWARE_DEV, REVERSE_ENGINEERING, BOTH.\n"
+            "Return only one label token and nothing else.\n\n"
+            f"Request:\n{user_input}\n\n"
+            "Classifier output to resolve (may be noisy):\n"
+            f"{prior_output}\n"
+        )
+
+        try:
+            output = self.inference_engine.generate(
+                prompt=resolver_prompt,
+                config=GenerationConfig(max_tokens=32, temperature=0.0),
+                stream=False,
+            )
+            output = self._sanitize_output(output)
+            return self._parse_label(output)
+        except Exception:
+            return None
 
     def _extract_split_tasks(self, user_input: str) -> dict[str, str]:
         """Extract domain-specific subtasks from a multi-domain request"""
         normalized_input = re.sub(r"\s+", " ", user_input).strip()
 
-        # Prefer a deterministic split when the request explicitly chains
-        # implementation work followed by analysis/review work.
+        # Prefer deterministic splits for explicit "and then" requests.
         split_markers = (
             r"\band then\b",
             r"\bthen\b",
@@ -80,10 +132,8 @@ class SupervisorAgent(SyncBaseAgent):
             reverse_part = normalized_input[match.end() :].strip(" ,;:-\n\t")
 
             if software_part and reverse_part:
-                # Extract any code snippets from the entire input to include in both tasks
                 code_snippets = self._extract_code_blocks(user_input)
                 
-                # Include in both split tasks for context
                 if code_snippets:
                     software_part = f"{software_part}\n\n{code_snippets}"
                     reverse_part = f"{reverse_part}\n\n{code_snippets}"
@@ -104,7 +154,7 @@ class SupervisorAgent(SyncBaseAgent):
                 config=config,
                 stream=False,
             )
-            
+            output = self._sanitize_output(output)
             parsed = self._parse_json_from_text(output)
             if parsed is not None:
                 split_tasks = {}
@@ -123,14 +173,12 @@ class SupervisorAgent(SyncBaseAgent):
         seen = set()
         code_blocks = []
         
-        # Extract markdown code fences
         for match in re.finditer(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL):
             block = match.group(1).strip()
             if block and block not in seen:
                 seen.add(block)
                 code_blocks.append(block)
         
-        # Extract labelled sections 
         for section in re.split(r"\n(?=[A-Z]|\Z)", text):
             if ":" in section:
                 _, content = section.split(":", 1)
@@ -139,7 +187,6 @@ class SupervisorAgent(SyncBaseAgent):
                     seen.add(content)
                     code_blocks.append(content)
         
-        # Extract indented blocks
         lines = text.split("\n")
         indented_block = []
         for line in lines:
@@ -203,6 +250,19 @@ class SupervisorAgent(SyncBaseAgent):
         if user_input in self._decision_cache:
             return self._decision_cache[user_input]
 
+        ipsw_keywords = [
+            "ipsw", "firmware", "download", "extract", "dyld_shared_cache",
+            "kernelcache", "kernel cache", "binary analysis", "entitlement", "framework diff",
+            "symbol analysis"
+        ]
+        user_input_lower = user_input.lower()
+        if any(keyword in user_input_lower for keyword in ipsw_keywords):
+            decision = self._build_decision("reverse_engineering", ["reverse_engineering"])
+            if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
+                self._decision_cache.clear()
+            self._decision_cache[user_input] = decision
+            return decision
+
         if self.inference_engine is None:
             raise RuntimeError(
                 "Supervisor inference engine is unavailable. "
@@ -210,9 +270,8 @@ class SupervisorAgent(SyncBaseAgent):
             )
 
         prompt = self._build_label_prompt(user_input)
-        config = GenerationConfig(max_tokens=1200, temperature=0.0)
+        config = GenerationConfig(max_tokens=64, temperature=0.0)
 
-        # Try twice before failing
         for attempt in range(2):
             try:
                 attempt_prompt = prompt
@@ -222,7 +281,7 @@ class SupervisorAgent(SyncBaseAgent):
                         + "\n\nIMPORTANT: Output one label only: SOFTWARE_DEV or REVERSE_ENGINEERING or BOTH."
                     )
 
-                # Use generate_with_metrics for the first attempt to capture metrics
+                # Capture generation metrics on the first attempt
                 output = self.inference_engine.generate_with_metrics(
                     prompt=attempt_prompt,
                     config=config,
@@ -231,8 +290,12 @@ class SupervisorAgent(SyncBaseAgent):
                     config=config,
                     stream=False,
                 )
-                    
+                output = self._sanitize_output(output)
+
                 label = self._parse_label(output)
+                if label is None:
+                    label = self._resolve_label_with_model(user_input, output)
+
                 if label == "SOFTWARE_DEV":
                     decision = self._build_decision("software_dev", ["software_dev"])
                 elif label == "REVERSE_ENGINEERING":
@@ -243,7 +306,6 @@ class SupervisorAgent(SyncBaseAgent):
                 else:
                     continue
                 
-                # Cache with size limit
                 if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
                     self._decision_cache.clear()
                 self._decision_cache[user_input] = decision
@@ -256,14 +318,12 @@ class SupervisorAgent(SyncBaseAgent):
     def _parse_json_from_text(self, text: str) -> Optional[dict]:
         stripped = self._remove_thinking_blocks(text)
 
-        # Remove code fence markers
         if stripped.startswith("```"):
             stripped = re.sub(r"^```(?:json)?", "", stripped).strip()
             stripped = re.sub(r"```$", "", stripped).strip()
         
         candidates = [stripped]
         
-        # Try first and last braced blocks
         for block in [self._extract_braced_block(stripped), self._extract_braced_block(stripped, from_end=True)]:
             if block and block not in candidates:
                 candidates.append(block)

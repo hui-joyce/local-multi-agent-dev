@@ -1,6 +1,8 @@
 from langgraph_orchestration.prompts import render_prompt
+from langgraph_orchestration.prompts.shared import build_tooling_block
+from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source
 
-REVERSE_ENGINEERING_TASKS = ["planning", "code_analysis", "vulnerability_detection"]
+REVERSE_ENGINEERING_TASKS = ["planning", "firmware_analysis", "code_analysis", "vulnerability_detection", "firmware_categorization"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
     "reverse_engineering/task_router.md",
     user_input="",
@@ -14,12 +16,25 @@ def build_re_task_router_prompt(user_input: str) -> str:
     )
     return body
 
+
+def _prepend_tooling_block(user_input: str, task_focus: str, body: str) -> str:
+    tooling_block = build_tooling_block(
+        domain="reverse_engineering",
+        user_input=user_input,
+        task_focus=task_focus,
+    )
+    return f"{tooling_block}\n\n{body}"
+
 def build_planning_prompt(user_input: str) -> str:
     _, body = render_prompt(
         "reverse_engineering/planning.md",
         user_input=user_input,
     )
-    return body
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Plan an evidence-driven analysis and request missing decompilation, disassembly, or metadata before deeper work.",
+        body=body,
+    )
 
 def build_code_analysis_prompt(user_input: str, planning_output: str = "", generated_code: str = "") -> str:
     if generated_code and planning_output:
@@ -55,7 +70,11 @@ def build_code_analysis_prompt(user_input: str, planning_output: str = "", gener
         analysis_block=analysis_block,
         user_input=user_input,
     )
-    return body
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Trace control flow, data flow, and surrounding evidence before finalizing conclusions.",
+        body=body,
+    )
 
 def build_vulnerability_detection_prompt(user_input: str, analysis_output: str = "") -> str:
     if analysis_output:
@@ -77,4 +96,61 @@ def build_vulnerability_detection_prompt(user_input: str, analysis_output: str =
         analysis_block=analysis_block,
         user_input=user_input,
     )
-    return body
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Validate exploitability with direct evidence and request additional binary context when needed.",
+        body=body,
+    )
+
+def build_firmware_analysis_prompt(user_input: str, planning_output: str = "") -> str:
+    planning_block = f"Structured Plan:\n{planning_output}\n\n" if planning_output else ""
+    ipsw_skill_block = load_ipsw_skill_context()
+    ipsw_skill_source = get_ipsw_skill_source()
+    _, body = render_prompt(
+        "reverse_engineering/firmware_analysis.md",
+        user_input=user_input,
+        planning_block=planning_block,
+    )
+    if ipsw_skill_block:
+        body = (
+            f"{body}\n\n"
+            "## IPSW Skill Pack (Loaded)\n"
+            "Use the following instructions and references as canonical command guidance.\n\n"
+            f"Source: {ipsw_skill_source or 'unknown'}\n\n"
+            f"{ipsw_skill_block}"
+        )
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus=(
+            "Use ipsw tools to collect concrete firmware evidence (download/extract/diff), "
+            "then prioritize IDA disassembly targets before concluding."
+        ),
+        body=body,
+    )
+
+def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str = "") -> str:
+    intro = (
+        "You are an expert iOS/macOS Reverse Engineer. Analyze the provided Objective-C/Swift method signatures and categorize them.\n\n"
+        "First, assign a Behavioural Class:\n"
+        "1. LIFECYCLE: Initialisation & lifecycle methods (e.g., initWithConfig:, startDaemon, setupRemoteConnection).\n"
+        "2. INGESTION: Data Ingestion & Parsing methods accepting NSData, NSDictionary, NSString, or byte pointers.\n"
+        "3. PRIVILEGE: Privilege and permission checks returning BOOL (e.g., isAuthorized, hasEntitlement:, checkDeveloperMode).\n"
+        "4. IGNORE: Standard UI, layout, or irrelevant utility methods.\n\n"
+        "Second, assign an AI Prioritisation Score (Interest Score):\n"
+        "- TIER_1: Critical/High Interest. Deals with security boundaries, IPC, data-serialization, hardware access, or privileged info. Keywords: deserialize, validate, authenticate, entitlement, xpc, sendRequest:.\n"
+        "- TIER_2: Medium Interest. Core business logic, data processing, and state manipulation. Keywords: updateCache, processImage, savePreferences, toggleFeature.\n"
+        "- TIER_3: Low Interest. Standard boilerplate, UI rendering, basic getters/setters. Keywords: description, delegate, setFrame:, isEqual:.\n\n"
+        "Analyze the methods and output strictly as a JSON array of objects matching this schema:\n"
+        "[\n"
+        '  {"method": "<signature>", "category": "<LIFECYCLE|INGESTION|PRIVILEGE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "reason": "<brief justification>"}\n'
+        "]\n\n"
+        "Omit TIER_3 and IGNORE methods from the final JSON array to reduce noise."
+    )
+    method_block = f"Methods to Categorize:\n{retrieved_methods}\n\n" if retrieved_methods else ""
+    
+    body = f"{intro}\n\n{method_block}\n\nUser Request: {user_input}"
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Analyze the provided method signatures and categorize them strictly into JSON format without markdown fencing.",
+        body=body,
+    )

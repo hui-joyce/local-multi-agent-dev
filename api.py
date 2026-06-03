@@ -1,18 +1,19 @@
 import os
+import ipaddress
 from typing import Optional
 from functools import lru_cache
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+from langgraph_orchestration.retrievers.config import RAGConfigManager
+from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 
 load_dotenv()
-
-# Cache the graph for LangSmith discovery
 @lru_cache(maxsize=1)
 def get_cached_graph():
     graph = build_orchestration_graph()
@@ -20,10 +21,8 @@ def get_cached_graph():
     graph.description = "Supervisor-based multi-agent system routing to software development or reverse engineering domains"
     return graph
 
-# Initialize LangSmith tracing on startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize LangSmith if enabled
     if os.getenv("LANGSMITH_TRACING", "false").lower() == "true":
         try:
             from langsmith import Client
@@ -32,12 +31,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"⚠ LangSmith warning: {e}")
     
-    # Preload the graph to ensure it's cached and discoverable
     get_cached_graph()
     print("✓ Graph loaded and cached for LangSmith discovery")
     
     yield
-    # Shutdown (no cleanup needed)
 
 app = FastAPI(
     title="Multi-Agent Orchestration API",
@@ -45,25 +42,55 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_origins=[
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:7860",
+        "http://127.0.0.1:7860",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# Request/Response models
 class AgentRequest(BaseModel):
     user_input: str
-    domain: Optional[str] = None  # "software_dev" or "reverse_engineering"
+    domain: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
     selected_domain: str
     agent_chain: list[str]
     final_output: str
-    intermediate_outputs: list[str]
+    intermediate_outputs: dict[str, str]
+    tool_requests: list[ToolRequest] = Field(default_factory=list)
+    tool_results: list[ToolResult] = Field(default_factory=list)
+    analysis_notes: list[str] = Field(default_factory=list)
+
+class AddDocumentRequest(BaseModel):
+    text: str
+    domain: str
+    metadata: Optional[dict] = None
+
+
+class SearchRequest(BaseModel):
+    query: str
+    domain: Optional[str] = None
+    top_k: Optional[int] = 5
 
 # /root, /info, /invoke, /domains, /assistants, /assistants/search, /graph, /assistants/{assistant_id}/schemas, /threads, /threads/{thread_id}/messages endpoints
 @app.get("/")
@@ -109,6 +136,9 @@ async def invoke_orchestration(request: AgentRequest):
             agent_chain=final_state.agent_chain,
             final_output=final_state.final_output,
             intermediate_outputs=final_state.intermediate_outputs,
+            tool_requests=final_state.tool_requests,
+            tool_results=final_state.tool_results,
+            analysis_notes=final_state.analysis_notes,
         )
     
     except Exception as e:
@@ -142,7 +172,6 @@ async def list_domains():
         }
     }
 
-# LangSmith Studio compatible endpoints
 @app.get("/assistants")
 async def list_assistants():
     return {
@@ -324,6 +353,38 @@ async def get_assistant_schemas(assistant_id: str):
 async def list_threads():
     return {"threads": []}
 
+
+@app.post("/rag/add")
+async def rag_add(doc: AddDocumentRequest):
+    try:
+        RAGConfigManager.initialize()
+        admin = RAGConfigManager.get_admin_service()
+        result = admin.add_document(doc.text, doc.domain, metadata=doc.metadata)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/rag/search")
+async def rag_search(req: SearchRequest):
+    try:
+        RAGConfigManager.initialize()
+        rag = RAGConfigManager.get_rag_manager()
+        results = rag.retrieve_for_agent(req.query, domain=req.domain, top_k=req.top_k)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/rag/stats")
+async def rag_stats():
+    try:
+        RAGConfigManager.initialize()
+        admin = RAGConfigManager.get_admin_service()
+        return admin.get_statistics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/threads/{thread_id}/messages")
 async def send_message(thread_id: str, request: AgentRequest):
     try:
@@ -339,6 +400,9 @@ async def send_message(thread_id: str, request: AgentRequest):
                 agent_chain=final_state.agent_chain,
                 final_output=final_state.final_output,
                 intermediate_outputs=final_state.intermediate_outputs,
+                tool_requests=final_state.tool_requests,
+                tool_results=final_state.tool_results,
+                analysis_notes=final_state.analysis_notes,
             )
         }
     
@@ -352,10 +416,10 @@ if __name__ == "__main__":
     import uvicorn
     
     port = int(os.getenv("API_PORT", "8000"))
-    host = os.getenv("API_HOST", "0.0.0.0")
+    host = os.getenv("API_HOST", "127.0.0.1")
     
     print(f"\n{'='*60}")
-    print(f"  Server: http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+    print(f"  Server: http://{host}:{port}")
     print(f"{'='*60}\n")
     
     uvicorn.run(

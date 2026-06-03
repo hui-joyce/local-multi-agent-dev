@@ -1,0 +1,3 @@
+[submodule "ipsw_service/ipsw-skill"]
+	path = ipsw_service/ipsw-skill
+	url = https://github.com/blacktop/ipsw-skill
