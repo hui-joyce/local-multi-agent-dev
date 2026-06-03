@@ -42,6 +42,20 @@ Tool loop flow:
 ### LangGraph Flow
 ![LangGraph Flow](assets/langgraph.png)
 
+## IPSW Service & Firmware Pipeline
+
+The reverse engineering domain features a dedicated, stage-gated firmware analysis pipeline powered by the `ipsw` CLI to autonomously inspect Apple firmware updates.
+
+**Pipeline Stages:**
+1. **Firmware Resolution & Download**: Resolves device identifiers and build numbers to locate and download target IPSW or OTA artifacts (e.g., full restore images, delta updates).
+2. **Extraction**: Extracts critical firmware components such as the `dyld_shared_cache` and `kernelcache` from the acquired artifacts.
+3. **Diffing**: Performs structural binary diffs between an old and new firmware version to identify modified libraries, private frameworks, and introduced symbols/classes.
+4. **Feature Analysis**: Employs LLM-driven inference to analyze the diff evidence, semantically deciphering the high-level purpose of new features, function relations, and potential trigger conditions.
+5. **Methods Parsing & Categorization**: Extracts and groups relevant Objective-C/Swift methods, prioritizing high-signal targets for subsequent binary disassembly (e.g. in IDA Pro).
+6. **Synthesis**: Aggregates the findings, evidence, and extracted data into a comprehensive final report.
+
+This service allows the system to perform a deep, static-only inspection of firmware updates, shifting complex binary analysis into an automated, repeatable workflow.
+
 ## Quickstart
 
 Create a virtual environment and install dependencies:
