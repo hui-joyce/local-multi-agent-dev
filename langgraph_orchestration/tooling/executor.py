@@ -849,6 +849,7 @@ class IDAToolExecutor(BaseToolExecutor):
                 include_fw=bool(req.arguments.get("fw", False)),
                 include_launchd=bool(req.arguments.get("launchd", False)),
                 include_entitlements=bool(req.arguments.get("ent", False)),
+                include_strs=bool(req.arguments.get("strs", True)),
                 low_memory=bool(req.arguments.get("low_memory", False)),
                 json_output=json_output,
             )

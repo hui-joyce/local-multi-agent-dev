@@ -146,6 +146,26 @@ class AgentState(BaseModel):
         description="Sequence of agents executed (for auditing)",
     )
 
+    firmware_methods_queue: list[list[str]] = Field(
+        default_factory=list,
+        description="Queue of chunked method signatures for categorization",
+    )
+
+    firmware_methods_current_chunk: list[str] = Field(
+        default_factory=list,
+        description="Current chunk of methods being categorized",
+    )
+
+    categorized_methods: list[dict] = Field(
+        default_factory=list,
+        description="Accumulated strict JSON output of categorized methods",
+    )
+
+    generated_hooks: str = Field(
+        default="",
+        description="Final compiled Frida/Python scripts",
+    )
+
     def register_tool_request(self, request: ToolRequest) -> None:
         self.tool_requests.append(request)
         self.tool_iteration += 1
