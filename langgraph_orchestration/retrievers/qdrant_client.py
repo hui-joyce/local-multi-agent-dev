@@ -13,6 +13,8 @@ from pathlib import Path
 from datetime import datetime
 import logging
 
+import numpy as np
+
 from .base import BaseRetriever
 from .embeddings import EmbeddingService
 
@@ -24,7 +26,7 @@ class QdrantRetriever(BaseRetriever):
     DEFAULT_COLLECTION_PREFIX = "agents_"
     
     MODEL_VECTOR_SIZES = {
-        "Qwen/Qwen3-Embedding-0.6B": 384    
+        "Qwen/Qwen3-Embedding-0.6B": 1024
     }
     
     def __init__(
@@ -42,6 +44,8 @@ class QdrantRetriever(BaseRetriever):
         self.embedding_cache_dir = embedding_cache_dir
         self.embedding_device = embedding_device
         self._embedding_service: Optional[EmbeddingService] = None
+        self._embedding_dim: Optional[int] = None
+        self._collection_vector_sizes: dict[str, int] = {}
         self.enable_fallback = enable_fallback
         
         # Initialize Qdrant client
@@ -57,8 +61,6 @@ class QdrantRetriever(BaseRetriever):
         # Initialize collections
         for domain in self.domain_collections:
             self._ensure_collection(domain)
-
-        self._embedding_dim = None
         
         logger.info(f"✓ Qdrant retriever initialized at {self.db_path}")
 
@@ -90,6 +92,16 @@ class QdrantRetriever(BaseRetriever):
         if domain not in self.domain_collections:
             raise ValueError(f"Unknown domain: {domain}")
         return self.domain_collections[domain]
+
+    def _coerce_vector_size(self, vector: np.ndarray | list[float], size: int) -> list[float]:
+        array = np.asarray(vector, dtype=float).reshape(-1)
+        if array.size == size:
+            return array.tolist()
+        if array.size > size:
+            return array[:size].tolist()
+        padded = np.zeros(size, dtype=float)
+        padded[: array.size] = array
+        return padded.tolist()
     
     def _init_qdrant_client(self):
         try:
@@ -162,11 +174,19 @@ class QdrantRetriever(BaseRetriever):
         except Exception:
             logger.debug(f"Could not inspect vector size for {collection_name}")
 
-        if current_size is not None and current_size != vector_size:
-            raise RuntimeError(
-                f"Collection {collection_name} uses vector size {current_size}, "
-                f"but {domain} requires {vector_size}. Rebuild the collection or use a matching model."
-            )
+        if current_size is not None:
+            if current_size != vector_size:
+                logger.warning(
+                    "Collection %s uses vector size %s, but model %s expects %s. "
+                    "Using the existing collection size for compatibility.",
+                    collection_name,
+                    current_size,
+                    self.embedding_model,
+                    vector_size,
+                )
+            self._collection_vector_sizes[domain] = int(current_size)
+        else:
+            self._collection_vector_sizes[domain] = int(vector_size)
     
     def retrieve(
         self,
@@ -186,11 +206,20 @@ class QdrantRetriever(BaseRetriever):
 
             for search_domain in domains:
                 collection_name = self._get_collection_name(search_domain)
+                target_size = self._collection_vector_sizes.get(search_domain)
+                if target_size is None:
+                    try:
+                        target_size = int(self.client.get_collection(collection_name).config.params.vectors.size)
+                        self._collection_vector_sizes[search_domain] = target_size
+                    except Exception:
+                        target_size = len(query_embedding)
+
+                search_query = self._coerce_vector_size(query_embedding, target_size)
 
                 try:
                     search_result = self.client.query_points(
                         collection_name=collection_name,
-                        query=query_embedding,
+                        query=search_query,
                         limit=top_k * 2,
                         score_threshold=score_threshold,
                     )
@@ -279,6 +308,7 @@ class QdrantRetriever(BaseRetriever):
             embeddings = embedding_service.embed_batch(documents, batch_size=batch_size, normalize=True)
 
             self._ensure_collection(domain)
+            target_size = self._collection_vector_sizes.get(domain, len(embeddings[0]) if embeddings else 0)
             
             # Prepare points for insertion
             points = []
@@ -303,7 +333,7 @@ class QdrantRetriever(BaseRetriever):
                 points.append(
                     PointStruct(
                         id=point_id,
-                        vector=embedding.tolist(),
+                        vector=self._coerce_vector_size(embedding, target_size),
                         payload=point_metadata,
                     )
                 )

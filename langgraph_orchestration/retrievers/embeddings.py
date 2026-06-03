@@ -13,7 +13,11 @@ def _detect_default_device(preferred: Optional[str] = None) -> str:
         return preferred
     try:
         import torch
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_built():
+        if (
+            hasattr(torch.backends, "mps")
+            and torch.backends.mps.is_built()
+            and torch.backends.mps.is_available()
+        ):
             return "mps"
         if torch.cuda.is_available():
             return "cuda"
@@ -44,6 +48,11 @@ class EmbeddingService:
     def preload(self) -> None:
         if not self._loaded:
             self._load_model()
+
+    @staticmethod
+    def _is_mps_oom(error: Exception) -> bool:
+        msg = str(error).lower()
+        return "mps backend out of memory" in msg or ("mps" in msg and "out of memory" in msg)
 
     def _load_model(self):
         try:
@@ -82,10 +91,29 @@ class EmbeddingService:
 
             self.tokenizer = tokenizer
             self.model = model
-            self.embedding_dim = int(self.embed_text("test", normalize=False).shape[-1])
-            self._MODEL_CACHE[cache_key] = (self.tokenizer, self.model, self.embedding_dim)
             self._loaded = True
+
+            inferred_dim = getattr(getattr(model, "config", None), "hidden_size", None)
+            if not isinstance(inferred_dim, int) or inferred_dim <= 0:
+                self.embedding_dim = int(self.embed_text("test", normalize=False).shape[-1])
+            else:
+                self.embedding_dim = int(inferred_dim)
+
+            self._MODEL_CACHE[cache_key] = (self.tokenizer, self.model, self.embedding_dim)
         except Exception as e:
+            if self.device == "mps" and self._is_mps_oom(e):
+                logger.warning("MPS out of memory while loading %s; retrying on CPU", self.model_name)
+                self.device = "cpu"
+                self.model = None
+                self.tokenizer = None
+                self.embedding_dim = None
+                self._loaded = False
+                self._load_model()
+                return
+            self.model = None
+            self.tokenizer = None
+            self.embedding_dim = None
+            self._loaded = False
             raise RuntimeError(f"Failed to load embedding model {self.model_name}: {e}") from e
 
     def _ensure_loaded(self):
