@@ -34,13 +34,13 @@ Tool loop flow:
 ## Architecture
 
 ### System Architecture
-![System Architecture](assets/system-architecture.png)
+<img src="assets/system-architecture.png" alt="System Architecture" width="700"/>
 
 ### High-Level Flow
-![High-Level Flow](assets/high-level-flow.png)
+<img src="assets/high-level-flow.png" alt="High-Level Flow" width="700"/>
 
 ### LangGraph Flow
-![LangGraph Flow](assets/langgraph.png)
+<img src="assets/langgraph.png" alt="LangGraph Flow" width="700"/>
 
 ## IPSW Service & Firmware Pipeline
 

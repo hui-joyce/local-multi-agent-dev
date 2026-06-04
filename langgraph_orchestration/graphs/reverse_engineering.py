@@ -668,6 +668,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
     def parse_firmware_methods_node(state: AgentState) -> AgentState:
         raw_methods = []
+        strict_methods = []
         IGNORE_PREFIXES = ("-[UIView", "-[UIResponder", "-[UIViewController", "-[NSObject")
         
         methods_text = state.intermediate_outputs.get("raw_methods", "")
@@ -676,13 +677,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         
         for line in methods_text.splitlines():
             line = line.strip()
-            if line and not line.startswith(IGNORE_PREFIXES) and ("-[" in line or "+[" in line):
-                raw_methods.append(line)
+            if not line or line.startswith(IGNORE_PREFIXES):
+                continue
+            
+            raw_methods.append(line)
+            if "-[" in line or "+[" in line:
+                strict_methods.append(line)
                 
+        # Use strict Obj-C methods if found, otherwise fallback to all valid lines
+        final_methods = strict_methods if strict_methods else raw_methods
         chunk_size = 50
-        chunks = [raw_methods[i:i + chunk_size] for i in range(0, len(raw_methods), chunk_size)]
+        chunks = [final_methods[i:i + chunk_size] for i in range(0, len(final_methods), chunk_size)]
         state.firmware_methods_queue = chunks
-        state.record_analysis_note(f"Parsed {len(raw_methods)} methods into {len(chunks)} chunks.")
+        state.record_analysis_note(f"Parsed {len(final_methods)} methods into {len(chunks)} chunks.")
         return state
 
     def categorize_firmware_node(state: AgentState) -> AgentState:
@@ -746,8 +753,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return StateManager.add_intermediate_output(state, "firmware_analysis", output)
 
     def synthesize_output(state: AgentState) -> AgentState:
-        if state.categorized_methods:
-            final = f"## Firmware Categorization Targets\n\n```json\n{json.dumps(state.categorized_methods, indent=2)}\n```\n"
+        is_categorization = state.re_task_plan and "firmware_categorization" in state.re_task_plan
+        if is_categorization:
+            final = "## Firmware Categorization Targets\n\n"
+            if getattr(state, "categorized_methods", None):
+                final += f"```json\n{json.dumps(state.categorized_methods, indent=2)}\n```\n"
+            elif state.intermediate_outputs.get("raw_categorization"):
+                final += "*(Failed to extract structured JSON. Showing raw model output)*\n\n"
+                final += state.intermediate_outputs.get("raw_categorization", "")
+            else:
+                final += "No methods were parsed or categorized from the input."
             state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(final)
             state.agent_chain.append("reverse_engineering_synthesize")
             return state

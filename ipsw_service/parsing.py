@@ -169,6 +169,7 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
     }
 
     component_hint: str | None = None
+    active_change_type: str | None = None
 
     for raw in text.splitlines():
         line = strip_ansi(raw).rstrip()
@@ -177,6 +178,13 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             headings[level - 1] = title
             for idx in range(level, len(headings)):
                 headings[idx] = None
+
+            if title:
+                ctype = _resolve_change_type([title])
+                if ctype:
+                    active_change_type = ctype
+                elif level <= 3:
+                    active_change_type = None
 
             if title and not _title_has_keyword(title, _ALL_CHANGE_KEYWORDS):
                 hinted = _resolve_component([title])
@@ -188,7 +196,7 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
                 if not item:
                     continue
                 titles = [t for t in headings if t]
-                change_type = _resolve_change_type(titles)
+                change_type = _resolve_change_type(titles) or active_change_type
                 if change_type:
                     _apply_item(
                         item,
@@ -215,7 +223,7 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             if not item:
                 continue
             titles = [t for t in headings if t]
-            change_type = _resolve_change_type(titles)
+            change_type = _resolve_change_type(titles) or active_change_type
             if not change_type:
                 continue
             _apply_item(
@@ -242,7 +250,7 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             if not item:
                 continue
             titles = [t for t in headings if t]
-            change_type = _resolve_change_type(titles)
+            change_type = _resolve_change_type(titles) or active_change_type
             if not change_type:
                 continue
             _apply_item(

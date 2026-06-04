@@ -56,10 +56,10 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
             # "Version 1: iPhone16,2_17.6.1_21G101_Restore.ipsw\n"
             # "Version 2: iPhone16,2_17.7_21H16_Restore.ipsw\n"
-            # "Version 1: iPhone17,1_18.6.1_22G90_Restore.ipsw\n"
-            # "Version 2: iPhone17,1_18.6.2_22G100_Restore.ipsw\n"
-            "Version 1: iPhone17,1_18.3.1_22D72_Restore.ipsw\n"
-            "Version 2: iPhone17,1_18.3.2_22D82_Restore.ipsw\n"
+            "Version 1: iPhone17,1_18.6.1_22G90_Restore.ipsw\n"
+            "Version 2: iPhone17,1_18.6.2_22G100_Restore.ipsw\n"
+            # "Version 1: iPhone17,1_18.3.1_22D72_Restore.ipsw\n"
+            # "Version 2: iPhone17,1_18.3.2_22D82_Restore.ipsw\n"
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
     )
