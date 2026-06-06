@@ -1,0 +1,25 @@
+{
+  "generated_at_utc": "2026-06-06T10:58:06.036068+00:00",
+  "result": {
+    "case_id": "RE-IPSW-DIFF-01",
+    "description": "Download and extract artifacts for two iPhone17,1 IPSW versions.",
+    "selected_domain": "reverse_engineering",
+    "execution_domains": [
+      "reverse_engineering"
+    ],
+    "agent_chain": [
+      "supervisor",
+      "firmware_locator",
+      "firmware_downloader",
+      "ipsw_extractor",
+      "firmware_diff_report",
+      "firmware_analysis",
+      "reverse_engineering_synthesize",
+      "final_synthesis"
+    ],
+    "latency_seconds": 2684.522,
+    "output_chars": 3233,
+    "output_text": "# Boundary Changes\n- entitlements: 0\n- sandbox: 0\n- launchd: 0\n- kexts: 0\n\n# Entitlements\n- none\n\n# Sandbox\n- none\n\n# Launchd\n- none\n\n# Kexts\n- none\n\n# Userland Changes\n- frameworks: 13\n- standard binaries: 18\n\n# Frameworks\n- total: 13\n- /System/Library/Frameworks/Security.framework/XPCServices/TrustedPeersHelper.xpc/TrustedPeersHelper\n- /System/Library/PrivateFrameworks/CoreCDP.framework/cdpd\n- /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation\n- /System/Library/PrivateFrameworks/CoreCDPInternal.framework/CoreCDPInternal\n- /System/Library/PrivateFrameworks/IMCore.framework/imagent.app/imagent\n- /System/Library/PrivateFrameworks/ProtocolBuffer.framework/ProtocolBuffer\n- /System/Library/Frameworks/QuickLook.framework/QuickLook\n- /System/Library/PrivateFrameworks/ChatKit.framework/ChatKit\n- /System/Library/PrivateFrameworks/IMSharedUtilities.framework/IMSharedUtilities\n- /System/Library/PrivateFrameworks/MessagesCloudSync.framework/MessagesCloudSync\n- /System/Library/PrivateFrameworks/MessagesSettingsUI.framework/MessagesSettingsUI\n- /System/Library/PrivateFrameworks/MessagesSupport.framework/MessagesSupport\n- /System/Library/PrivateFrameworks/SettingsFoundation.framework/SettingsFoundation\n\n# Standard Binaries\n- total: 18\n- /Applications/DiagnosticsReporter.app/DiagnosticsReporter\n- /usr/lib/swift/libswiftsimd.dylib\n- /usr/lib/swift/libswiftsys_time.dylib\n- /usr/lib/swift/libswiftunistd.dylib\n- /System/Library/CoreServices/osanalyticshelper\n- /usr/lib/swift/libswiftos.dylib\n- /usr/lib/libSystem.B.dylib\n- /usr/lib/libobjc.A.dylib\n- /usr/libexec/keychainsharingmessagingd\n- /usr/libexec/otpaird\n- /usr/lib/libMobileGestalt.dylib\n- /usr/libexec/securityd\n- /usr/lib/libprequelite.dylib\n- /usr/lib/libsqlite3.dylib\n- /usr/lib/libz.1.dylib\n- /usr/libexec/trustd\n- /usr/sbin/otctl\n- com.apple.mobile.keybagd.lock_status\n\n# Base Firmware Changes\n- none\n\n# Cstring Context\n- total: 21\n- imagent: + \"16:36:36\"\n- imagent: + \"Dec 18 2024\"\n- imagent: - \"19:20:06\"\n- imagent: - \"Dec  6 2024\"\n- CoreCDPInternal: - \"%{public}s device is not unlocked. Found lock state %{public}d.\"\n- CoreCDPInternal: - \"%{public}s ignoring event %{public}s because device is not unlocked\"\n- CoreCDPInternal: - \"%{public}s ignoring notification event %{public}s\"\n- CoreCDPInternal: - \"%{public}s received a nil eventName\"\n- CoreCDPInternal: - \"%{public}s recognizes event name %{public}s as unlocked. Notifying %{public}ld listeners.\"\n- CoreCDPInternal: - \"CDPDUnlockListener\"\n- CoreCDPInternal: - \"CDPDUnlockObserver\"\n- CoreCDPInternal: - \"Fetched manatee status after device unlock with altDSID=%@, isPrimaryAccount=%{BOOL}d\"\n- CoreCDPInternal: - \"Fetching manatee status after device unlock with altDSID=%@, isPrimaryAccount=%{BOOL}d\"\n- CoreCDPInternal: - \"Notifying listener %{public}s\"\n- CoreCDPInternal: - \"com.apple.mobile.keybagd.lock_status\"\n- CoreCDPInternal: - \"currentDeviceIsUnlocked\"\n- CoreCDPInternal: - \"deviceDidUnlock\"\n- SettingsFoundation: + \"CI\"\n- SettingsFoundation: + \"LL\"\n- SettingsFoundation: + \"LZ\"\n- SettingsFoundation: + \"VC\"\n\n# Notes\n- MachO diff artifacts missing; filesystem diff likely failed or was skipped.\n\n# Gaps\n- MachO diff artifacts missing; filesystem diff likely failed or was skipped.",
+    "output_preview": "# Boundary Changes\n- entitlements: 0\n- sandbox: 0\n- launchd: 0\n- kexts: 0\n\n# Entitlements\n- none\n\n# Sandbox\n- none\n\n# Launchd\n- none\n\n# Kexts\n- none\n\n# Userland Changes\n- frameworks: 13\n- standard binaries: 18\n\n# Frameworks\n- total: 13\n- /System/Library/Frameworks/Security.framework/XPCServices/TrustedPeersHelper.xpc/TrustedPeersHelper\n- /System/Library/PrivateFrameworks/CoreCDP.framework/cdpd\n- /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation\n- /System/Library/PrivateFrameworks/CoreCDPInternal.framework/CoreCDPInternal\n- /System/Library/PrivateFrameworks/IMCore.framework/imagent.app/imagent\n- /System/Library/PrivateFrameworks/ProtocolBuffer.framework/ProtocolBuffer\n- /System/Library/Frameworks/QuickLook.framework/QuickLook\n- /System/Library/PrivateFrameworks/ChatKit.fram"
+  }
+}

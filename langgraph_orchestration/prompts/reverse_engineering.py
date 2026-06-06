@@ -130,27 +130,29 @@ def build_firmware_analysis_prompt(user_input: str, planning_output: str = "") -
 
 def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str = "") -> str:
     intro = (
-        "You are an expert iOS/macOS Reverse Engineer. Analyze the provided Objective-C/Swift method signatures and categorize them.\n\n"
-        "First, assign a Behavioural Class:\n"
-        "1. LIFECYCLE: Initialisation & lifecycle methods (e.g., initWithConfig:, startDaemon, setupRemoteConnection).\n"
-        "2. INGESTION: Data Ingestion & Parsing methods accepting NSData, NSDictionary, NSString, or byte pointers.\n"
-        "3. PRIVILEGE: Privilege and permission checks returning BOOL (e.g., isAuthorized, hasEntitlement:, checkDeveloperMode).\n"
-        "4. IGNORE: Standard UI, layout, or irrelevant utility methods.\n\n"
+        "You are an expert iOS Reverse Engineer. Analyze the provided firmware diff evidence for a specific component and categorize its reverse-engineering priority.\n\n"
+        "Assess research interest based on behavioural changes in binary metadata and strings.\n\n"
+        "First, assign a Behavioural Class based on the evidence (especially CStrings):\n"
+        "1. SECURITY/PRIVACY: Changes involving credentials, entitlements, Sandbox, or PII. Look for framework removals (Accounts/Contacts), OIDs, or sensitive logging masks (e.g., '%{sensitive}').\n"
+        "2. DATA/IPC/SYNC: Changes involving XPC, serialization, data syncing logic, databases, or file parsing.\n"
+        "3. UI/LOGGING: Purely UI text updates, standard non-sensitive logging, or version bumps.\n"
+        "4. METADATA: Minimal metadata changes (only UUID/size changes with no semantic strings).\n\n"
         "Second, assign an AI Prioritisation Score (Interest Score):\n"
-        "- TIER_1: Critical/High Interest. Deals with security boundaries, IPC, data-serialization, hardware access, or privileged info. Keywords: deserialize, validate, authenticate, entitlement, xpc, sendRequest:.\n"
-        "- TIER_2: Medium Interest. Core business logic, data processing, and state manipulation. Keywords: updateCache, processImage, savePreferences, toggleFeature.\n"
-        "- TIER_3: Low Interest. Standard boilerplate, UI rendering, basic getters/setters. Keywords: description, delegate, setFrame:, isEqual:.\n\n"
-        "Analyze the methods and output strictly as a JSON array of objects matching this schema:\n"
+        "- TIER_1: Critical/High Interest. Strong indicators of security boundaries, privacy-sensitive framework changes, or IPC protocol updates.\n"
+        "- TIER_2: Medium Interest. Core logic updates, data sync changes, or new internal logging for complex features.\n"
+        "- TIER_3: Low Interest/Noise. Proceed only if investigating a specific UI/logging bug.\n\n"
+        "OUTPUT INSTRUCTIONS: You MUST output a JSON array containing EXACTLY ONE object representing the component provided. Do NOT output an empty array. No conversational filler.\n"
+        "Schema:\n"
         "[\n"
-        '  {"method": "<signature>", "category": "<LIFECYCLE|INGESTION|PRIVILEGE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "reason": "<brief justification>"}\n'
+        '  {"method": "<component_name_or_summary>", "category": "<SECURITY/AUTH|DATA/IPC|UI/BOILERPLATE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "reason": "<brief justification based on strings/evidence>"}\n'
         "]\n\n"
-        "Omit TIER_3 and IGNORE methods from the final JSON array to reduce noise."
+        "Important: If there are changes to CStrings related to data syncing or privacy masks (e.g., '%{sensitive}'), do NOT ignore them; categorize as TIER_2 or higher."
     )
-    method_block = f"Methods to Categorize:\n{retrieved_methods}\n\n" if retrieved_methods else ""
+    method_block = f"Diff Evidence to Analyze:\n{retrieved_methods}\n\n" if retrieved_methods else ""
     
     body = f"{intro}\n\n{method_block}\n\nUser Request: {user_input}"
     return _prepend_tooling_block(
         user_input=user_input,
-        task_focus="Analyze the provided method signatures and categorize them strictly into JSON format without markdown fencing.",
+        task_focus="Analyze the provided diff evidence and prioritize the component strictly into JSON format.",
         body=body,
     )

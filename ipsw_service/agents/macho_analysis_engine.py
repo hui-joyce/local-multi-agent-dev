@@ -74,8 +74,16 @@ class MachoAnalysisEngine:
         cache_path = ""
         if dyld_cache_path and os.path.exists(dyld_cache_path):
             cache_path = dyld_cache_path
-        else:
-            cache_path = _find_dyld_cache()
+        elif diff_report_root:
+            # fallback to look in the extracted diff root
+            for root, _, files in os.walk(diff_report_root):
+                for f in files:
+                    if "dyld_shared_cache" in f:
+                        cache_path = os.path.join(root, f)
+                        break
+                if cache_path:
+                    break
+
         is_system_binary = any(segment in binary_path for segment in ("/System/Library/", "/usr/lib/"))
         arch_arg = f" -a {shlex.quote(arch)}" if arch else ""
         dyld_target = binary_path if (binary_path.startswith("/") or "/" in binary_path) else base_name

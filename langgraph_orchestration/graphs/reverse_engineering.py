@@ -1,6 +1,5 @@
 """
-Reverse-engineering graph for handling IPSW analysis tasks.
-resolution -> download -> extraction -> diff -> synthesis.
+Reverse-engineering graph for handling IPSW analysis tasks
 """
 
 from __future__ import annotations
@@ -47,9 +46,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 return ""
 
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        text = re.sub(r"<think>.*$", "", text, flags=re.DOTALL)  # Handle unclosed think blocks
         lines = []
         for line in text.splitlines():
-            if re.search(r"\b(tool|tool_call|tool_result|metrics|trace|langgraph)\b", line, flags=re.IGNORECASE):
+            if re.search(r"^(tool|tool_call|tool_result|metrics|trace|langgraph)\s*:", line, flags=re.IGNORECASE):
                 continue
             lines.append(line)
         return "\n".join(lines).strip()
@@ -240,7 +240,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         root = workspace_root or os.getcwd()
         return ensure_dir(os.path.join(root, "artifacts", "firmware_diff", "feature_analysis"))
 
-    def _build_feature_targets(report_text: str, limit: int = 6) -> list[dict[str, str]]:
+    def _build_feature_targets(report_text: str, limit: int = 6, report_path: str = "") -> list[dict[str, str]]:
         targets: list[dict[str, str]] = []
         seen: set[str] = set()
 
@@ -248,6 +248,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         current_change = ""
         lines = (report_text or "").splitlines()
         idx = 0
+
+        report_dir = os.path.dirname(report_path) if report_path else ""
 
         while idx < len(lines):
             line = lines[idx].strip()
@@ -284,10 +286,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 idx += 1
                 continue
 
-            name = line[5:].strip()
-            if not name:
+            raw_name = line[5:].strip()
+            if not raw_name:
                 idx += 1
                 continue
+
+            # Resolve name and potential detailed diff path: [Name](./diff/Name.md)
+            name_match = re.match(r"\[(.*?)\]\((.*?)\)", raw_name)
+            if name_match:
+                name = name_match.group(1).strip()
+                detailed_rel_path = name_match.group(2).strip()
+            else:
+                name = raw_name
+                detailed_rel_path = ""
 
             key = name.lower()
             if key in seen:
@@ -304,7 +315,23 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 evidence_lines.append(lines[peek])
                 peek += 1
 
-            evidence = "\n".join(evidence_lines).strip() or name
+            evidence = "\n".join(evidence_lines).strip()
+
+            # Attempt to load detailed diff if current evidence in main report is sparse or just a link
+            if report_dir and detailed_rel_path and (len(evidence) < 100 or "```diff" not in evidence):
+                # Normpath handles the relative ./diff/ paths correctly
+                detailed_path = os.path.normpath(os.path.join(report_dir, detailed_rel_path.replace("/", os.sep)))
+                if os.path.isfile(detailed_path):
+                    try:
+                        detailed_evidence = read_text(detailed_path)
+                        if detailed_evidence:
+                            evidence = detailed_evidence
+                    except Exception:
+                        pass
+
+            if not evidence:
+                evidence = name
+
             source = current_section or current_change
             targets.append(
                 {
@@ -449,6 +476,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             "## Evidence",
             f"- Source: {feature.get('source', 'unknown')}",
             f"- Evidence: {feature.get('evidence', '')}",
+            "",
         ]
         return "\n".join(lines).strip() + "\n"
 
@@ -613,7 +641,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 state.feature_analysis_current = None
                 state.record_analysis_note("feature_analysis skipped: missing diff report")
                 return state
-            targets = _build_feature_targets(report_text)
+            targets = _build_feature_targets(report_text, report_path=report_path)
             state.feature_analysis_targets = targets
             state.feature_analysis_queue = list(targets)
             state.record_analysis_note(f"feature_analysis targets: {len(targets)}")
@@ -658,7 +686,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             ensure_ascii=True,
             indent=2,
         )
-        state.feature_analysis_current = None
         return state
 
     def route_after_feature_select(state: AgentState) -> str:
@@ -667,29 +694,17 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return "done"
 
     def parse_firmware_methods_node(state: AgentState) -> AgentState:
-        raw_methods = []
-        strict_methods = []
-        IGNORE_PREFIXES = ("-[UIView", "-[UIResponder", "-[UIViewController", "-[NSObject")
-        
-        methods_text = state.intermediate_outputs.get("raw_methods", "")
-        if not methods_text:
-            methods_text = state.user_input 
-        
-        for line in methods_text.splitlines():
-            line = line.strip()
-            if not line or line.startswith(IGNORE_PREFIXES):
-                continue
+        if state.feature_analysis_current:
+            state.categorized_methods = []
+            evidence_text = state.feature_analysis_current.get("evidence", "").strip()
+            name = state.feature_analysis_current.get("name", "Unknown Component")
             
-            raw_methods.append(line)
-            if "-[" in line or "+[" in line:
-                strict_methods.append(line)
-                
-        # Use strict Obj-C methods if found, otherwise fallback to all valid lines
-        final_methods = strict_methods if strict_methods else raw_methods
-        chunk_size = 50
-        chunks = [final_methods[i:i + chunk_size] for i in range(0, len(final_methods), chunk_size)]
-        state.firmware_methods_queue = chunks
-        state.record_analysis_note(f"Parsed {len(final_methods)} methods into {len(chunks)} chunks.")
+            # pass the whole evidence block
+            # prepended with the name so the LLM knows what to focus on
+            state.firmware_methods_queue = [[f"Component: {name}\n{evidence_text}"]]
+            state.record_analysis_note(f"Queued component '{name}' diff evidence for categorization.")
+        else:
+            state.firmware_methods_queue = []
         return state
 
     def categorize_firmware_node(state: AgentState) -> AgentState:
@@ -712,15 +727,29 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 stream=False,
             )
             
+            # Use targeted cleaning for JSON to prevent stripping content words like 'tool'
             sanitized = _sanitize_model_output(output)
-            json_match = re.search(r'\[.*\]', sanitized, re.DOTALL)
-            if json_match:
+            
+            json_str = None
+            json_block_match = re.search(r"```json\s*([\s\S]*?)\s*```", sanitized, re.DOTALL)
+            if json_block_match:
+                json_str = json_block_match.group(1).strip()
+            else:
+                json_match = re.search(r'\[\s*\{.*\}\s*\]', sanitized, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+
+            if json_str:
                 try:
-                    parsed_json = json.loads(json_match.group(0))
+                    # Attempt to fix common errors like trailing commas before parsing
+                    cleaned_json_str = re.sub(r",\s*([\}\]])", r"\1", json_str)
+                    parsed_json = json.loads(cleaned_json_str)
                     if isinstance(parsed_json, list):
                         state.categorized_methods.extend(parsed_json)
                 except json.JSONDecodeError:
-                    state.record_analysis_note("Failed to parse JSON from categorization output.")
+                    state.record_analysis_note(f"JSON Parse Failure. Raw string: '{json_str[:200]}...'")
+            else:
+                state.record_analysis_note(f"No JSON array found in model output. Output: {sanitized[:200]}...")
         except Exception as e:
             state.record_analysis_note(f"Categorization error: {e}")
             
@@ -729,7 +758,34 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     def route_after_categorize(state: AgentState) -> str:
         if state.firmware_methods_queue:
             return "categorize_firmware"
+        if state.feature_analysis_current:
+            return "feature_analysis_finalize"
         return "synthesize"
+
+    def feature_analysis_finalize_node(state: AgentState) -> AgentState:
+        feature = state.feature_analysis_current
+        if not feature:
+            return state
+        
+        categorized = getattr(state, "categorized_methods", [])
+        slug = _slugify_feature(feature.get("name", "feature"))
+        report_path = state.feature_analysis_reports.get(feature.get("name", slug))
+        if report_path and os.path.isfile(report_path):
+            report_content = read_text(report_path)
+            report_content += "\n## AI Prioritisation Scoring System\n\n"
+            if categorized:
+                for item in categorized:
+                    method = item.get("method", "Unknown Method")
+                    tier = item.get("tier", "Unknown Tier")
+                    category = item.get("category", "Unknown Category")
+                    reason = item.get("reason", "No reason provided")
+                    report_content += f"- **{method}**\n  - **Tier**: {tier}\n  - **Category**: {category}\n  - **Reasoning**: {reason}\n\n"
+            else:
+                report_content += "No high-priority methods or components identified for categorisation.\n\n"
+            write_text(report_path, report_content)
+        
+        state.feature_analysis_current = None
+        return state
 
     def firmware_analysis_node(state: AgentState) -> AgentState:
         stage_keys = [
@@ -809,6 +865,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     graph.add_node("synthesize", synthesize_output)
     graph.add_node("parse_firmware_methods", parse_firmware_methods_node)
     graph.add_node("categorize_firmware", categorize_firmware_node)
+    graph.add_node("feature_analysis_finalize", feature_analysis_finalize_node)
 
     graph.add_conditional_edges(
         "retrieve_re_context",
@@ -840,21 +897,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     )
     graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")
     graph.add_edge("feature_analysis_decipher", "feature_analysis_compile")
-    graph.add_edge("feature_analysis_compile", "feature_analysis_select")
-    graph.add_edge("firmware_analysis", "synthesize")
+    graph.add_edge("feature_analysis_compile", "parse_firmware_methods")
     graph.add_edge("parse_firmware_methods", "categorize_firmware")
     graph.add_conditional_edges(
         "categorize_firmware",
         route_after_categorize,
         {
             "categorize_firmware": "categorize_firmware",
+            "feature_analysis_finalize": "feature_analysis_finalize",
             "synthesize": "synthesize",
         },
     )
-    graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")
-    graph.add_edge("feature_analysis_decipher", "feature_analysis_compile")
-    graph.add_edge("feature_analysis_compile", "feature_analysis_select")
     graph.add_edge("firmware_analysis", "synthesize")
+    graph.add_edge("feature_analysis_finalize", "feature_analysis_select")
     graph.add_edge("synthesize", END)
 
     graph.set_entry_point("retrieve_re_context")
