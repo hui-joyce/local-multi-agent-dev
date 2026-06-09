@@ -1,5 +1,0 @@
-[dyld_diff]
-command: ipsw dyld info --dylibs --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone17,1_18.2_22C152_Restore/22C152__iPhone17,1/dyld_shared_cache_arm64e.02 /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone17,1_18.2.1_22C161_Restore/22C161__iPhone17,1/dyld_shared_cache_arm64e.02
-parsed_item_count: 0
-stderr:
-[34m[1m   •[22m No differences found     [0m

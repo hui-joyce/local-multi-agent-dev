@@ -45,6 +45,7 @@ knowledge_base/
 *.ipsw
 .ipsw_downloads/
 .ipsw_extracted/
+.ipsw_features/
 checksums.txt.sha1
 
 # Others

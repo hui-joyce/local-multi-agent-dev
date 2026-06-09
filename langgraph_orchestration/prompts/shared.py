@@ -27,6 +27,12 @@ _REVERSE_ENGINEERING_ALLOWED_TOOLS = [
     "ipsw_download",
     "ipsw_extract",
     "ipsw_diff",
+    "search_string",
+    "lookup_symbol",
+    "decompile_function",
+    "get_xrefs_to",
+    "rename_local_variable",
+    "set_comment",
 ]
 
 def get_allowed_tools(domain: str) -> list[str]:

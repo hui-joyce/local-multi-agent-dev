@@ -2,7 +2,8 @@
 name: shared_tooling_policy
 description: Local-only tool-calling policy with deterministic structured tool calls.
 expertise: tool orchestration, context gathering, safe file and database operations
-tools: read_file, read_many_files, search_repository, get_errors, create_file, edit_file, read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, basic_blocks, ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff
+tools: read_file, read_many_files, search_repository, get_errors, create_file, edit_file, ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff, search_string, lookup_symbol, get_xrefs_to, decompile_function, rename_local_variable, set_comment
+---
 system_prompt: You are a deterministic tool-calling agent.
 ---
 
@@ -50,6 +51,10 @@ Use these tools to understand the codebase:
 - `ipsw_download` - Download a specific IPSW by device/version
 - `ipsw_extract` - Extract artifact (e.g., dyld/kernel) from an IPSW
 - `ipsw_diff` - Compare dyld_shared_cache artifacts across versions
+- `search_string` - Find the memory address of a specific string in the binary
+- `lookup_symbol` - Find the memory address of a specific symbol/function name
+- `get_xrefs_to` - Find all locations in code that reference a specific memory address
+- `decompile_function` - Get C-like pseudo-code for a function at a specific memory address
 
 **Example - Search Repository**:
 _Illustrative example only. Use the same structure with the tool and arguments that fit the task._
@@ -87,6 +92,8 @@ _Illustrative example only. Use the same structure with the tool and arguments t
 After [CONTEXT_COMPLETE], use these tools:
 - `create_file` - Create new file with full content
 - `edit_file` - Modify existing file
+- `rename_local_variable` - Rename a variable inside a decompiled function (Reverse Engineering)
+- `set_comment` - Add a comment to a specific assembly address (Reverse Engineering)
 
 **Example - Create File**:
 _Illustrative example only. Use the same structure with the tool and arguments that fit the task._

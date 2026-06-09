@@ -47,7 +47,7 @@ class AgentState(BaseModel):
     )
 
     max_tool_iterations: int = Field(
-        default=8,
+        default=40,
         description="Maximum tool loop iterations before forcing synthesis",
     )
 

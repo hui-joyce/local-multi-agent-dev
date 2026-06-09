@@ -361,6 +361,14 @@ class IDAToolExecutor(BaseToolExecutor):
             "ipsw_download": self._ipsw_download,
             "ipsw_extract": self._ipsw_extract,
             "ipsw_diff": self._ipsw_diff,
+            "decompile_function": self._remote_decompile_function,
+            "get_xrefs_to": self._remote_get_xrefs_to,
+            "search_string": self._remote_search_string,
+            "lookup_symbol": self._remote_lookup_symbol,
+            "rename_local_variable": self._remote_rename_local_variable,
+            "set_comment": self._remote_set_comment,
+            "start_ida_server_for_binary": self._remote_start_ida_server_for_binary,
+            "stop_ida_server": self._remote_stop_ida_server,
         }
 
         tool_name = tool_request.tool_name
@@ -577,6 +585,122 @@ class IDAToolExecutor(BaseToolExecutor):
             output="\n".join(lines),
             metadata={"target": str(target), "instruction_count": len(lines)},
         )
+
+    def _remote_decompile_function(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import decompile_function
+        address = req.arguments.get("address")
+        if address is None:
+            return ToolResult(tool_name="decompile_function", success=False, output="", error="Missing address argument")
+        
+        try:
+            addr_int = self._resolve_ea(address) or int(str(address), 16) if isinstance(address, str) and address.startswith("0x") else int(address)
+        except (ValueError, TypeError):
+            return ToolResult(tool_name="decompile_function", success=False, output="", error="Invalid address format")
+        output = decompile_function.invoke({"address": addr_int})
+        if isinstance(output, str) and output.startswith("# ERROR"):
+            return ToolResult(tool_name="decompile_function", success=False, output="", error=output)
+        return ToolResult(tool_name="decompile_function", success=True, output=str(output))
+    
+    def _remote_get_xrefs_to(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import get_xrefs_to
+        import json
+        address = req.arguments.get("address")
+        if address is None:
+            return ToolResult(tool_name="get_xrefs_to", success=False, output="", error="Missing address argument")
+        
+        try:
+            addr_int = self._resolve_ea(address) or int(str(address), 16) if isinstance(address, str) and address.startswith("0x") else int(address)
+        except (ValueError, TypeError):
+            return ToolResult(tool_name="get_xrefs_to", success=False, output="", error="Invalid address format")
+        output = get_xrefs_to.invoke({"address": addr_int})
+        if isinstance(output, list) and len(output) > 0 and "error" in output[0]:
+            return ToolResult(tool_name="get_xrefs_to", success=False, output="", error=output[0]["error"])
+        
+        output_str = json.dumps(output, indent=2) if not isinstance(output, str) else output
+        return ToolResult(tool_name="get_xrefs_to", success=True, output=output_str)
+        
+    def _remote_search_string(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import search_string
+        import json
+        target_string = req.arguments.get("target_string") or req.target
+        if not target_string:
+            return ToolResult(tool_name="search_string", success=False, output="", error="Missing target_string argument")
+        
+        output = search_string.invoke({"target_string": target_string})
+        
+        if isinstance(output, list) and len(output) > 0 and isinstance(output[0], str) and output[0].startswith("error:"):
+            return ToolResult(tool_name="search_string", success=False, output="", error=output[0])
+            
+        if not output:
+            return ToolResult(tool_name="search_string", success=False, output="", error=f"String '{target_string}' not found")
+            
+        output_str = json.dumps([hex(a) if isinstance(a, int) else a for a in output], indent=2) if isinstance(output, list) else str(output)
+        return ToolResult(tool_name="search_string", success=True, output=output_str)
+
+    def _remote_lookup_symbol(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import lookup_symbol
+        symbol_name = req.arguments.get("symbol_name") or req.target
+        if not symbol_name:
+            return ToolResult(tool_name="lookup_symbol", success=False, output="", error="Missing symbol_name argument")
+            
+        output = lookup_symbol.invoke({"symbol_name": symbol_name})
+        output_str = str(output) if output else ""
+        
+        if output_str.startswith("error:"):
+            return ToolResult(tool_name="lookup_symbol", success=False, output="", error=output_str)
+            
+        return ToolResult(tool_name="lookup_symbol", success=True, output=output_str)
+    
+    def _remote_rename_local_variable(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import rename_local_variable
+        func_address = req.arguments.get("func_address")
+        old_name = req.arguments.get("old_name")
+        new_name = req.arguments.get("new_name")
+        
+        if func_address is None or not old_name or not new_name:
+            return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Missing arguments")
+            
+        try:
+            addr_int = self._resolve_ea(func_address) or int(str(func_address), 16) if isinstance(func_address, str) and func_address.startswith("0x") else int(func_address)
+        except (ValueError, TypeError):
+            return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Invalid func_address format")
+        success = rename_local_variable.invoke({"func_address": addr_int, "old_name": old_name, "new_name": new_name})
+        if success:
+            return ToolResult(tool_name="rename_local_variable", success=True, output="Variable renamed successfully.")
+        return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Failed to rename variable.")
+    
+    def _remote_set_comment(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import set_comment
+        address = req.arguments.get("address")
+        comment = req.arguments.get("comment")
+        
+        if address is None or not comment:
+            return ToolResult(tool_name="set_comment", success=False, output="", error="Missing arguments")
+            
+        try:
+            addr_int = self._resolve_ea(address) or int(str(address), 16) if isinstance(address, str) and address.startswith("0x") else int(address)
+        except (ValueError, TypeError):
+            return ToolResult(tool_name="set_comment", success=False, output="", error="Invalid address format")
+        success = set_comment.invoke({"address": addr_int, "comment": comment})
+        if success:
+            return ToolResult(tool_name="set_comment", success=True, output="Comment set successfully.")
+        return ToolResult(tool_name="set_comment", success=False, output="", error="Failed to set comment.")
+    
+    def _remote_start_ida_server_for_binary(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import start_ida_server_for_binary
+        binary_path = req.arguments.get("binary_path")
+        if not binary_path:
+            return ToolResult(tool_name="start_ida_server_for_binary", success=False, output="", error="Missing binary_path argument")
+        
+        output = start_ida_server_for_binary.invoke({"binary_path": binary_path})
+        if isinstance(output, str) and output.startswith("# ERROR"):
+            return ToolResult(tool_name="start_ida_server_for_binary", success=False, output="", error=output)
+        return ToolResult(tool_name="start_ida_server_for_binary", success=True, output=output)
+    
+    def _remote_stop_ida_server(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import stop_ida_server
+        output = stop_ida_server.invoke({})
+        return ToolResult(tool_name="stop_ida_server", success=True, output=output)
 
     def _xrefs_to(self, req: ToolRequest) -> ToolResult:
         target = req.arguments.get("address") or req.target
@@ -906,20 +1030,20 @@ def tool_executor_node(state: AgentState) -> AgentState:
         lines.append("Format reminder:")
         lines.append(
             """
-Emit tool calls like this:
-<tool_call>
-{
-  "tool_name": "read_file",
-  "arguments": {
-    "path": "main.py"
-  },
-  "target": "main.py",
-  "reason": "Understand entry point"
-}
-</tool_call>
+            Emit tool calls like this:
+            <tool_call>
+            {
+            "tool_name": "read_file",
+            "arguments": {
+                "path": "main.py"
+            },
+            "target": "main.py",
+            "reason": "Understand entry point"
+            }
+            </tool_call>
 
-Continue with your analysis after the tool call.
-""".strip()
+            Continue with your analysis after the tool call.
+            """.strip()
         )
         error_feedback = "\n".join(lines)
 
@@ -993,9 +1117,6 @@ Continue with your analysis after the tool call.
             else f"{status} {tool_request.tool_name} failed: {result.error}"
         )
         state.analysis_notes.append(observation)
-
-    if parsed.tool_calls:
-        state.tool_iteration -= len(parsed.tool_calls)
 
     return state
 
