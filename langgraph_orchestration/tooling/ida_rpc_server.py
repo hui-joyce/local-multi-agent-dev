@@ -1,13 +1,4 @@
-"""IDA Pro RPC Server — queue-based main-thread execution for headless mode.
-
-The RPyC ThreadedServer spawns worker threads for each client connection.
-Many IDA API functions require execution on the main thread. In headless mode
-(idat -A), the main thread must explicitly pump a work queue to service
-requests from background threads.
-
-This server uses a simple thread-safe queue: worker threads submit callables,
-and the main thread executes them and returns results.
-"""
+"""Queue-based main-thread execution for headless mode"""
 import rpyc
 from rpyc.utils.server import ThreadedServer
 import ida_hexrays
@@ -24,9 +15,7 @@ if not ida_hexrays.init_hexrays_plugin():
     if not ida_hexrays.init_hexrays_plugin():
         print("Error: Hex-Rays decompiler is not available. The decompiler service cannot start.")
 
-# Thread-safe work queue for main-thread execution
 _work_queue: queue.Queue = queue.Queue()
-
 
 def _run_on_main_thread(func, *args, timeout=120):
     """Submit a callable to be executed on the main thread and wait for the result."""
@@ -123,7 +112,7 @@ class DecompilerService(rpyc.Service):
             return False
 
     def exposed_get_function_name(self, ea: int):
-        """Gets the name of the function containing the given address."""
+        """Gets the name of the function containing the given address"""
         def _do():
             name = idc.get_func_name(ea)
             return name if name else ""
@@ -134,7 +123,7 @@ class DecompilerService(rpyc.Service):
             return ""
 
     def exposed_get_function_boundaries(self, ea: int):
-        """Gets the start and end addresses of the function containing the given address."""
+        """Gets the start and end addresses of the function containing the given address"""
         def _do():
             func = idaapi.get_func(ea)
             if func:
@@ -147,7 +136,7 @@ class DecompilerService(rpyc.Service):
             return (0, 0)
 
     def exposed_get_segment_name(self, ea: int):
-        """Gets the name of the segment containing the given address."""
+        """Gets the name of the segment containing the given address"""
         def _do():
             seg = idc.get_segm_name(ea)
             return seg if seg else ""
@@ -158,7 +147,7 @@ class DecompilerService(rpyc.Service):
             return ""
 
     def exposed_get_bytes(self, ea: int, size: int):
-        """Reads raw bytes from the binary."""
+        """Reads raw bytes from the binary"""
         def _do():
             import ida_bytes
             return ida_bytes.get_bytes(ea, size)
@@ -169,7 +158,7 @@ class DecompilerService(rpyc.Service):
             return None
 
     def exposed_get_qword(self, ea: int):
-        """Reads a 64-bit value from the binary."""
+        """Reads a 64-bit value from the binary"""
         def _do():
             val = idc.get_qword(ea)
             return val if val != idc.BADADDR else 0
@@ -180,7 +169,7 @@ class DecompilerService(rpyc.Service):
             return 0
 
     def exposed_lookup_symbol(self, symbol_name: str):
-        """Looks up the memory address of a given symbol."""
+        """Looks up the memory address of a given symbol"""
         print(f"[DecompilerService] Request to lookup symbol: {symbol_name}")
         def _do():
             import ida_name
@@ -199,7 +188,6 @@ class DecompilerService(rpyc.Service):
         print(f"[DecompilerService] Request to search string: '{target_string}'")
         def _do():
             found = []
-            # Primary approach: use IDA's string catalog (much more reliable)
             import idautils
             for s in idautils.Strings():
                 if target_string in str(s):
@@ -243,16 +231,16 @@ def start_server(port):
 
 if __name__ == "__main__":
     port = 18861
+
+    print("[DecompilerService] Waiting for auto-analysis to complete...")
+    idaapi.auto_wait()
+    print("[DecompilerService] Auto-analysis complete. Starting server thread.")
+
     th = threading.Thread(target=start_server, args=(port,), daemon=True)
     th.start()
     print("[DecompilerService] Server thread started. Main thread pumping work queue.")
 
-    # Wait for IDA auto-analysis to complete before accepting work
-    print("[DecompilerService] Waiting for auto-analysis to complete...")
-    idaapi.auto_wait()
-    print("[DecompilerService] Auto-analysis complete. Ready to serve requests.")
-
-    # Main thread loop: pump the work queue so background RPyC threads can execute IDA APIs
+    # Main thread loop
     while True:
         try:
             task = _work_queue.get(timeout=0.1)

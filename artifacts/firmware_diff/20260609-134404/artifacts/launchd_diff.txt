@@ -1,0 +1,7 @@
+[launchd_diff]
+item_count: 4
+items:
+/System/Library/PrivateFrameworks/AppPredictionFoundation.framework/XPCServices/AppPredictionIntentsHelperService.xpc/AppPredictionIntentsHelperService
+/System/Library/PrivateFrameworks/LinkMetadata.framework/LinkMetadata
+/usr/lib/libSystem.B.dylib
+/usr/lib/libobjc.A.dylib
