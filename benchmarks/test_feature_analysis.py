@@ -51,7 +51,8 @@ def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
     
     parts = report_text.split("\n#### ")
     if len(parts) > 2:
-        report_text = parts[0] + "\n#### " + "\n#### ".join(parts[4:])
+        # parts[0] is the header/intro
+        report_text = parts[0] + "\n#### " + "\n#### ".join(parts[2:])
         
     state = AgentState(user_input=case.user_input)
     state.intermediate_outputs["firmware_diff_report_path"] = str(case.report_path)

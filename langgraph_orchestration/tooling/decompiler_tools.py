@@ -42,7 +42,8 @@ def get_xrefs_to(address: int) -> list[dict]:
 
 @tool
 def search_string(target_string: str) -> list:
-    """Searches the binary for a specific string and returns a list of memory addresses where it is found."""
+    """Searches the binary for a specific string and returns a list of memory addresses where it is found.
+    NOTE: These are DATA addresses, not function addresses. You MUST pass these addresses to `get_xrefs_to` to find which functions reference the string. Do NOT use `decompile_function` directly on these addresses."""
     try:
         conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 120})
         addresses = conn.root.exposed_search_string(target_string)
@@ -107,12 +108,14 @@ def start_ida_server_for_binary(binary_path: str) -> str:
     command = [
         IDA_EXECUTABLE_PATH,
         "-A",  # autonomous mode
+        "-L/tmp/ida.log",
         f"-S{IDA_RPC_SERVER_SCRIPT}",
         binary_path,
     ]
     try:
         env = os.environ.copy()
-        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, env=env)
+        log_file = open("/tmp/ida_rpc_server.log", "w")
+        subprocess.Popen(command, stdout=log_file, stderr=log_file, stdin=subprocess.DEVNULL, env=env)
     except Exception as e:
         return f"# ERROR: Failed to start IDA Pro process: {e}"
     for _ in range(300):  # Wait up to 10 mins
@@ -150,3 +153,54 @@ def set_comment(address: int, comment: str) -> bool:
         return False
     except Exception:
         return False
+
+@tool
+def save_ida_database() -> str:
+    """Saves the current IDA Pro database (.i64) with any annotations made"""
+    try:
+        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
+        success = conn.root.exposed_save_ida_database("")
+        conn.close()
+        return "Successfully saved IDA database." if success else "Failed to save IDA database."
+    except ConnectionRefusedError:
+        return "Connection refused."
+    except Exception as e:
+        return f"Error saving database: {e}"
+
+@tool
+def get_entitlements(binary_path: str) -> str:
+    """Extracts entitlements from a Mach-O binary using ipsw"""
+    try:
+        import subprocess
+        result = subprocess.run(["ipsw", "ent", binary_path], capture_output=True, text=True, check=True)
+        return result.stdout or result.stderr
+    except subprocess.CalledProcessError as e:
+        return f"Failed to get entitlements: {e.stderr}"
+    except Exception as e:
+        return f"Error: {e}"
+
+@tool
+def resolve_objc_dispatch(func_ea: int, call_ea: int) -> str:
+    """Attempts to resolve the objc_msgSend class and selector at call_ea inside func_ea using Hex-Rays AST"""
+    try:
+        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
+        result = conn.root.exposed_resolve_objc_dispatch(func_ea, call_ea)
+        conn.close()
+        return result
+    except ConnectionRefusedError:
+        return "Connection refused."
+    except Exception as e:
+        return f"Error: {e}"
+
+@tool
+def trace_variable_source(func_ea: int, var_name: str) -> str:
+    """Traces the source of a variable inside a function by dumping the def-use context"""
+    try:
+        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
+        result = conn.root.exposed_trace_variable_source(func_ea, var_name)
+        conn.close()
+        return result
+    except ConnectionRefusedError:
+        return "Connection refused."
+    except Exception as e:
+        return f"Error: {e}"

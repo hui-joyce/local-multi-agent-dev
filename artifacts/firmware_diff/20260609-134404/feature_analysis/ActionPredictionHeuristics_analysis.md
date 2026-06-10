@@ -1,40 +1,58 @@
 ## What this feature does
-The `ActionPredictionHeuristics` framework is a system-level component responsible for analyzing and predicting user actions based on contextual heuristics. The update from version 26.4.1 to 26.4.2 involves a minor version bump (0.0.0 to 0.1.0) and a slight increase in the `__const` section size (0x80 to 0x88), suggesting a small data structure or constant table modification. The UUID change indicates a new build or a re-signing of the framework. The framework likely processes user interaction patterns to predict upcoming actions, potentially for proactive suggestions, predictive text, or UI automation.
+ActionPredictionHeuristics is a system framework responsible for analyzing user behavior patterns to proactively suggest actions or optimize system responsiveness. The framework likely processes input data (such as user gestures, typing patterns, or app usage) to predict future user intent and trigger system-level optimizations or suggestions. The version bump from 627.11.0.0.0 to 627.11.0.1.0 suggests a minor update, possibly introducing new heuristics or refining existing ones.
 
 ## How is it implemented
-The implementation details are currently unavailable due to decompiler tool unavailability. However, based on the framework name and the symbols/strings found in the diff metadata, we can infer the following:
-- The framework exports symbols like `_IMSharedHelperPayloadByStrippingServerBagKeys`, which suggests it handles payload processing, possibly stripping or transforming data structures related to server bag keys.
-- Strings like `getNumberOfTimesRespondedToThread` and `MessageGroupController-strip-payload-keys` indicate functionality related to message group handling, thread response tracking, and payload key manipulation.
-- The symbol `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:` suggests logic for determining whether a group message payload should be accepted based on the existence of an existing chat, the sender's known status, and the message type.
-- The framework likely integrates with other system frameworks like `ProactiveSupport` and system libraries like `libSystem.B.dylib` and `libobjc.A.dylib`.
+The framework is implemented as a Mach-O binary with the following characteristics:
+- **Version**: 627.11.0.1.0 (updated from 627.11.0.0.0)
+- **UUID**: A5F28961-BB8A-3A2B-B168-C9E0266FF9D2 (changed from 048BBABC-9D46-3074-9F59-77F9A033CAC3)
+- **Dependencies**:
+  - ProactiveSupport (likely provides proactive system suggestions)
+  - libSystem.B.dylib (standard system library)
+  - libobjc.A.dylib (Objective-C runtime)
+- **Sections**:
+  - `__TEXT.__text`: 0x6400 (executable code)
+  - `__TEXT.__auth_stubs`: 0x440 (authentication stubs)
+  - `__TEXT.__objc_methlist`: 0x32c (Objective-C method list)
+  - `__TEXT.__const`: 0x88 (constants, increased by 4 bytes)
+  - `__TEXT.__gcc_except_tab`: 0x230 (exception handling table)
+  - `__TEXT.__cstring`: 0x51c (C strings)
+  - `__TEXT.__oslogstring`: 0x87e (OS logging strings)
+- **Symbols**: 879 (increased from 213 functions)
+- **CStrings**: 311 (increased from 213 functions)
+
+The increase in symbols and CStrings suggests new functionality or expanded heuristics. The presence of `__auth_stubs` indicates some form of authentication or security checks, while `__objc_methlist` points to Objective-C method dispatching.
 
 ## How to trigger this feature
 The feature is likely triggered by:
-- User interactions within messaging or chat applications, specifically when group messages are received or sent.
-- The system analyzing message payloads and determining if they should be processed or accepted based on the presence of an existing chat and the sender's status.
-- The framework may be invoked by other system components that require action prediction or proactive support features.
+1. **System Events**: The framework may listen for system-level events (e.g., app launches, user gestures) to analyze behavior patterns.
+2. **User Input**: It may process user input (e.g., typing, swiping) to predict next actions.
+3. **ProactiveSupport Integration**: The dependency on `ProactiveSupport` suggests that the framework may be triggered by proactive system suggestions or user activity patterns.
+4. **Version-Specific Logic**: The version bump may introduce new triggers or modify existing ones, such as adding new heuristics or adjusting thresholds.
 
 ## Evidence
-- **Framework Name**: `ActionPredictionHeuristics`
-- **Version Change**: 627.11.0.0.0 -> 627.11.0.1.0
-- **UUID Change**: 048BBABC-9D46-3074-9F59-77F9A033CAC3 -> A5F28961-BB8A-3A2B-B168-C9E0266FF9D2
-- **Symbol Changes**:
-  - `_IMSharedHelperPayloadByStrippingServerBagKeys` (likely related to payload processing)
-  - `_ActionPredictionHeuristics` (likely the main entry point or a key function)
-- **String Changes**:
-  - `getNumberOfTimesRespondedToThread` (thread response tracking)
-  - `MessageGroupController-strip-payload-keys` (payload key manipulation)
-  - `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:` (group message acceptance logic)
-- **Dependency Changes**:
-  - `ProactiveSupport` framework (proactive support features)
-  - `libSystem.B.dylib` and `libobjc.A.dylib` (system and Objective-C libraries)
-- **Section Changes**:
-  - `__const` section size increased by 0x8 (0x80 -> 0x88), suggesting a small data structure or constant table modification.
+- **Metadata Diff**:
+  - Version bump: 627.11.0.0.0 → 627.11.0.1.0
+  - UUID change: 048BBABC-9D46-3074-9F59-77F9A033CAC3 → A5F28961-BB8A-3A2B-B168-C9E0266FF9D2
+  - Increased symbols: 213 → 879
+  - Increased CStrings: 213 → 311
+  - Increased `__const` section: 0x80 → 0x88
+- **Dependencies**:
+  - ProactiveSupport (proactive system suggestions)
+  - libSystem.B.dylib (standard system library)
+  - libobjc.A.dylib (Objective-C runtime)
+- **Sections**:
+  - `__TEXT.__text`: 0x6400 (executable code)
+  - `__TEXT.__auth_stubs`: 0x440 (authentication stubs)
+  - `__TEXT.__objc_methlist`: 0x32c (Objective-C method list)
+  - `__TEXT.__const`: 0x88 (constants)
+  - `__TEXT.__gcc_except_tab`: 0x230 (exception handling table)
+  - `__TEXT.__cstring`: 0x51c (C strings)
+  - `__TEXT.__oslogstring`: 0x87e (OS logging strings)
 
 ## AI Prioritisation Scoring System
 
 - **metadata_analysis**
-  - **Tier**: TIER_3
+  - **Tier**: TIER_2
   - **Category**: METADATA
-  - **Reasoning**: Analysis is based solely on metadata diff (version bump, UUID change, symbol/strings) without decompiled code. The feature appears to be a system-level action prediction heuristic for messaging, which is likely low-priority for most users unless they experience specific issues with proactive suggestions or message handling.
+  - **Reasoning**: The feature is a system-level heuristic framework with moderate impact. The version bump and increased symbols/CStrings suggest new functionality, but without decompiled code, the exact behavior and security implications remain unclear. The dependency on ProactiveSupport indicates integration with proactive system suggestions, which could have privacy implications.
 

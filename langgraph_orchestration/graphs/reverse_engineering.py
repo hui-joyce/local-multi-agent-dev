@@ -313,6 +313,18 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 "feature_type": _infer_feature_type(name, source),
                 "source": source or "component",
                 "evidence": evidence,
+                "allowed_tool_names": [
+                    "search_string",
+                    "lookup_symbol",
+                    "decompile_function",
+                    "get_xrefs_to",
+                    "rename_local_variable",
+                    "set_comment",
+                    "get_entitlements",
+                    "resolve_objc_dispatch",
+                    "trace_variable_source",
+                    "save_ida_database",
+                ]
             }
             if binary_path:
                 target_entry["binary_path"] = binary_path

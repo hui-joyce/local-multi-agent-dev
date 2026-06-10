@@ -164,18 +164,25 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
 
     workflow = """
     **Workflow:**
-    1.  **Analyze Initial Evidence**: Review the provided metadata diff to understand the initial changes (e.g., new symbols, modified strings, version bumps).
-    2.  **Formulate an Investigative Hypothesis**: Based on the metadata, what is the likely purpose of this change?
+    1.  **Analyze Initial Evidence & Privilege Recon**: Review the provided metadata diff to understand the initial changes (e.g., new symbols, modified strings, version bumps).
+        - Use `get_entitlements` on the binary to determine what security privileges it holds. If it has high-privilege entitlements (like `com.apple.private.*`), elevate the threat tier.
+    2.  **Formulate an Investigative Hypothesis**: Based on the metadata and entitlements, what is the likely purpose of this change?
     3.  **Gather Decompilation Evidence with Tools** (you have multiple rounds):
 
         **TOOL SELECTION GUIDE — READ CAREFULLY:**
-        *   **`lookup_symbol`**: Use this ONLY for **exported function symbols** that start with an underscore (e.g., `_IMSharedHelperPayloadByStrippingServerBagKeys`). These are entries in the binary's symbol table.
-        *   **`search_string`**: Use this for **C strings, Objective-C method names, selector names, and any quoted text** from the diff (e.g., `"getNumberOfTimesRespondedToThread"`, `"MessageGroupController-strip-payload-keys"`, `"_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:"`). These are raw byte sequences embedded in the binary's `__cstring` or `__objc_methname` sections.
+        *   **`lookup_symbol`**: Use this ONLY for **exported function symbols** that start with an underscore (e.g., `_MyExampleFunction`).
+        *   **`search_string`**: Use this for **C strings, Objective-C method names, selector names, and any quoted text** from the diff. **NOTE: Returns DATA addresses, NOT function addresses. You MUST pass these addresses to `get_xrefs_to`!**
+        *   **`get_xrefs_to`**: Finds which functions reference a specific data address (e.g., from `search_string`). Use this to find the actual function to decompile!
+        *   **`decompile_function`**: Decompile a function to get C-like pseudo-code.
+        *   **`resolve_objc_dispatch`**: When you see `objc_msgSend(v4, "doSomething")` and need to resolve `v4`'s class.
+        *   **`trace_variable_source`**: If a function takes an untrusted pointer, use this to trace its initialization within the function def-use chains.
+        *   **`rename_local_variable` & `set_comment`**: As you decipher cryptic variables (`v4` -> `myRenamedVar`), you MUST use these tools to annotate the IDA database live.
+        *   **`save_ida_database`**: After making annotations, call this to persist the `.i64` file.
 
         **MULTI-ROUND INVESTIGATION — Follow this chain:**
-        *   **Round 1**: Use `lookup_symbol` for exported symbols AND `search_string` for C strings / method names from the diff. This gives you memory addresses.
-        *   **Round 2**: Use `get_xrefs_to` on the addresses you found. This tells you which functions reference those symbols/strings.
-        *   **Round 3**: Use `decompile_function` on the function addresses returned by `get_xrefs_to`. This gives you the actual C-like pseudo-code. You **MUST** attempt to decompile at least one function.
+        *   **Round 1**: Use `lookup_symbol` for exported symbols AND `search_string` for C strings / method names from the diff to get addresses.
+        *   **Round 2**: Use `get_xrefs_to` to find which functions reference those strings/symbols.
+        *   **Round 3+**: Use `decompile_function` to read logic. Use `resolve_objc_dispatch` or `trace_variable_source` to trace data flow deeply. Use `rename_local_variable` to actively document the binary.
 
         **CRITICAL:** The diff only provides names, NOT addresses. You CANNOT guess addresses. You must use `lookup_symbol` or `search_string` first to get addresses.
         **FALLBACK**: If all decompiler tool calls fail with connection errors, state that the decompiler was unavailable and analyze based only on the metadata diff.
@@ -184,16 +191,15 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
         *   `## What this feature does`: High-level summary based on decompilation findings.
         *   `## How is it implemented`: Detailed code logic. Reference decompiled functions, algorithms, and data structures.
         *   `## How to trigger this feature`: Infer trigger conditions from function names, strings, or framework usage.
-        *   `## Evidence`: Critical evidence — strings, symbol names, decompiled pseudo-code, addresses.
+        *   `## Evidence`: Critical evidence — strings, symbol names, decompiled pseudo-code, addresses, and **entitlements**.
     5.  **Provide AI Prioritisation Score**: After the sections, add `---AI_PRIORITISATION_SCORE---` followed by a JSON object with `method`, `category` (SECURITY/PRIVACY, DATA/IPC/SYNC, UI/LOGGING, METADATA), `tier` (TIER_1, TIER_2, TIER_3), and `reason`.
-    """
+    """ 
     if not has_tool_results:
         output_format_instructions = """
         **CURRENT STATE: GATHERING EVIDENCE (STAGE 1)**
         You have not used any tools yet. You CANNOT write the final report yet.
         You MUST output ONLY `<tool_call>` blocks. DO NOT output any markdown headers, conversational filler, or the final report.
-
-        **YOUR FIRST ACTION**: Look at the diff evidence. For each item in the "Symbols:" section (names starting with `_`), use `lookup_symbol`. For each item in the "CStrings:" section (quoted strings), use `search_string`. Do both in this round.
+        **YOUR FIRST ACTION**: Look at the diff evidence carefully. IF there are specific named symbols added or removed (e.g., lines starting with `+ _` under the Symbols section), use `lookup_symbol` on them. IF there are specific quoted strings added or removed under CStrings, use `search_string` on them. If only counts are shown (e.g., `Symbols: 199`) and no specific names are listed, DO NOT guess or hallucinate symbol names; instead, just use `search_string` on the component name itself. You should also call `get_entitlements` on the binary to get its privileges. Do all of these in this round.
         """
     else:
         if at_limit:
@@ -209,6 +215,9 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
         Review the tool results above. You should continue the investigation chain:
         - If you have **addresses** from `lookup_symbol` or `search_string` but haven't called `get_xrefs_to` yet, call `get_xrefs_to` on those addresses now.
         - If you have **function addresses** from `get_xrefs_to` but haven't decompiled them, call `decompile_function` on those function addresses now.
+        - If you see a function taking an untrusted pointer, trace it using `trace_variable_source`.
+        - If you see an `objc_msgSend` block you want to resolve, use `resolve_objc_dispatch`.
+        - If you understand a variable or function block, use `rename_local_variable` and `set_comment` to annotate the binary, followed by `save_ida_database`.
         - If you still have symbols/strings you haven't looked up, look them up now.
 
         Output ONLY `<tool_call>` blocks if you need more evidence.

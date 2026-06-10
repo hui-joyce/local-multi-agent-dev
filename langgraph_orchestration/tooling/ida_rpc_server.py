@@ -184,32 +184,71 @@ class DecompilerService(rpyc.Service):
             return 0
 
     def exposed_search_string(self, target_string: str):
-        """Searches for a string in the binary. Uses IDA's string catalog (idautils.Strings) first, then falls back to raw byte search."""
-        print(f"[DecompilerService] Request to search string: '{target_string}'")
+        """Searches for a string in the binary and returns a list of addresses where it was found"""
         def _do():
             found = []
             import idautils
             for s in idautils.Strings():
                 if target_string in str(s):
                     found.append(int(s.ea))
-            if found:
-                return found
-
-            # Fallback: raw byte search with find_binary
-            hex_str = " ".join(f"{ord(c):02X}" for c in target_string)
-            ea = idc.get_inf_attr(idc.INF_MIN_EA)
-            max_ea = idc.get_inf_attr(idc.INF_MAX_EA)
-            while ea != idc.BADADDR and ea != -1 and ea < max_ea:
-                ea = idc.find_binary(ea, idc.SEARCH_DOWN, hex_str)
-                if ea != idc.BADADDR and ea != -1:
-                    found.append(int(ea))
-                    ea += len(target_string)
             return found
         try:
             return _run_on_main_thread(_do)
         except Exception as e:
             print(f"Error in search_string: {e}")
             return []
+
+    def exposed_save_ida_database(self, out_path: str = ""):
+        """Saves the current IDA Pro database"""
+        def _do():
+            import ida_pro
+            ida_pro.save_database(out_path if out_path else None, 0)
+            return True
+        try:
+            return _run_on_main_thread(_do)
+        except Exception as e:
+            print(f"Error in save_ida_database: {e}")
+            return False
+
+    def exposed_resolve_objc_dispatch(self, func_ea: int, call_ea: int):
+        """Attempts to resolve the objc_msgSend class and selector at call_ea inside func_ea using Hex-Rays AST"""
+        def _do():
+            try:
+                import ida_hexrays
+                cfunc = ida_hexrays.decompile(func_ea)
+                if not cfunc: return "error: could not decompile function"
+                # extract the specific pseudocode line 
+                # and surrounding context (provide LLM with exact localized info)
+                lines = []
+                for item in cfunc.get_pseudocode():
+                    clean_line = ida_hexrays.tag_remove(item.line)
+                    lines.append(clean_line)
+                    if f"{call_ea:X}" in item.line or f"{call_ea:x}" in item.line or hex(call_ea) in clean_line:
+                        idx = len(lines) - 1
+                        start = max(0, idx - 5)
+                        return "\n".join(lines[start:idx+1])
+                # If exact ea match fails, just return the whole function
+                return "\n".join([ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()])
+            except Exception as e:
+                return f"error: {e}"
+        return _run_on_main_thread(_do)
+
+    def exposed_trace_variable_source(self, func_ea: int, var_name: str):
+        """Traces the source of a variable inside a function by dumping the def-use context"""
+        def _do():
+            try:
+                import ida_hexrays
+                cfunc = ida_hexrays.decompile(func_ea)
+                if not cfunc: return "error: could not decompile function"
+                lines = [ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()]
+                # Extract all lines containing the var_name
+                trace_lines = [l for l in lines if var_name in l]
+                if not trace_lines:
+                    return f"error: Variable {var_name} not found in {hex(func_ea)}"
+                return "Variable trace:\n" + "\n".join(trace_lines)
+            except Exception as e:
+                return f"error: {e}"
+        return _run_on_main_thread(_do)
 
     def exposed_shutdown(self):
         """Remotely shuts down the IDA Pro instance"""

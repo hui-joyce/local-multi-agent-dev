@@ -369,6 +369,10 @@ class IDAToolExecutor(BaseToolExecutor):
             "set_comment": self._remote_set_comment,
             "start_ida_server_for_binary": self._remote_start_ida_server_for_binary,
             "stop_ida_server": self._remote_stop_ida_server,
+            "save_ida_database": self._remote_save_ida_database,
+            "get_entitlements": self._remote_get_entitlements,
+            "resolve_objc_dispatch": self._remote_resolve_objc_dispatch,
+            "trace_variable_source": self._remote_trace_variable_source,
         }
 
         tool_name = tool_request.tool_name
@@ -701,6 +705,37 @@ class IDAToolExecutor(BaseToolExecutor):
         from langgraph_orchestration.tooling.decompiler_tools import stop_ida_server
         output = stop_ida_server.invoke({})
         return ToolResult(tool_name="stop_ida_server", success=True, output=output)
+
+    def _remote_save_ida_database(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import save_ida_database
+        output = save_ida_database.invoke({})
+        return ToolResult(tool_name="save_ida_database", success=True, output=str(output))
+
+    def _remote_get_entitlements(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import get_entitlements
+        binary_path = req.arguments.get("binary_path")
+        if not binary_path:
+            return ToolResult(tool_name="get_entitlements", success=False, output="", error="Missing binary_path argument")
+        output = get_entitlements.invoke({"binary_path": binary_path})
+        return ToolResult(tool_name="get_entitlements", success=True, output=str(output))
+
+    def _remote_resolve_objc_dispatch(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import resolve_objc_dispatch
+        func_ea = req.arguments.get("func_ea")
+        call_ea = req.arguments.get("call_ea")
+        if func_ea is None or call_ea is None:
+            return ToolResult(tool_name="resolve_objc_dispatch", success=False, output="", error="Missing func_ea or call_ea")
+        output = resolve_objc_dispatch.invoke({"func_ea": int(func_ea), "call_ea": int(call_ea)})
+        return ToolResult(tool_name="resolve_objc_dispatch", success=True, output=str(output))
+
+    def _remote_trace_variable_source(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import trace_variable_source
+        func_ea = req.arguments.get("func_ea")
+        var_name = req.arguments.get("var_name")
+        if func_ea is None or not var_name:
+            return ToolResult(tool_name="trace_variable_source", success=False, output="", error="Missing func_ea or var_name")
+        output = trace_variable_source.invoke({"func_ea": int(func_ea), "var_name": var_name})
+        return ToolResult(tool_name="trace_variable_source", success=True, output=str(output))
 
     def _xrefs_to(self, req: ToolRequest) -> ToolResult:
         target = req.arguments.get("address") or req.target
