@@ -1,6 +1,5 @@
 """
-Reverse-engineering graph for handling IPSW analysis tasks.
-resolution -> download -> extraction -> diff -> synthesis.
+Reverse-engineering graph for handling IPSW analysis tasks
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.prompts.shared import get_allowed_tools
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.tooling.executor import get_tool_executor
+from langgraph_orchestration.tooling.executor import get_tool_executor, tool_executor_node, should_continue_tool_loop
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from ipsw_service.agents.ipsw_extractor import IpswExtractorAgent
@@ -39,20 +38,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return feature_engine
 
     def _sanitize_model_output(text: str) -> str:
-        import re
         if not isinstance(text, str):
             try:
                 text = str(text)
             except Exception:
                 return ""
-
-        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-        lines = []
-        for line in text.splitlines():
-            if re.search(r"\b(tool|tool_call|tool_result|metrics|trace|langgraph)\b", line, flags=re.IGNORECASE):
-                continue
-            lines.append(line)
-        return "\n".join(lines).strip()
+        return text.strip()
 
     def _extract_report_title(report_text: str) -> str:
         for line in (report_text or "").splitlines():
@@ -243,7 +234,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     def _build_feature_targets(report_text: str, limit: int = 6) -> list[dict[str, str]]:
         targets: list[dict[str, str]] = []
         seen: set[str] = set()
-
         current_section = ""
         current_change = ""
         lines = (report_text or "").splitlines()
@@ -256,6 +246,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 current_change = ""
                 idx += 1
                 continue
+
             if line.startswith("### "):
                 title = line[4:].strip().lower()
                 if any(token in title for token in ("updated", "modified", "changed")):
@@ -266,6 +257,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     current_change = ""
                 idx += 1
                 continue
+
             if not line.startswith("#### "):
                 idx += 1
                 continue
@@ -275,6 +267,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 current_change = "updated"
                 idx += 1
                 continue
+
             if any(token in heading for token in ("added", "new")):
                 current_change = "added"
                 idx += 1
@@ -288,37 +281,57 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             if not name:
                 idx += 1
                 continue
-
+                
             key = name.lower()
             if key in seen:
                 idx += 1
                 continue
-            seen.add(key)
 
+            seen.add(key)
             evidence_lines: list[str] = []
+            binary_path = ""
             peek = idx + 1
+
             while peek < len(lines):
                 next_line = lines[peek].strip()
                 if next_line.startswith(("#### ", "### ", "## ")):
                     break
+
+                # Extract exact binary path from blockquote: >  `/path/to/binary`
+                if not binary_path:
+                    bp_match = re.search(r">\s*`([^`]+)`", lines[peek])
+                    if bp_match:
+                        binary_path = bp_match.group(1).strip()
+
                 evidence_lines.append(lines[peek])
                 peek += 1
-
+                
             evidence = "\n".join(evidence_lines).strip() or name
             source = current_section or current_change
-            targets.append(
-                {
-                    "name": name,
-                    "feature_type": _infer_feature_type(name, source),
-                    "source": source or "component",
-                    "evidence": evidence,
-                }
-            )
+            target_entry = {
+                "name": name,
+                "feature_type": _infer_feature_type(name, source),
+                "source": source or "component",
+                "evidence": evidence,
+                "allowed_tool_names": [
+                    "search_string",
+                    "lookup_symbol",
+                    "decompile_function",
+                    "get_xrefs_to",
+                    "rename_local_variable",
+                    "set_comment",
+                    "get_entitlements",
+                    "resolve_objc_dispatch",
+                    "trace_variable_source",
+                    "save_ida_database",
+                ]
+            }
+            if binary_path:
+                target_entry["binary_path"] = binary_path
+            targets.append(target_entry)
             if len(targets) >= limit:
                 break
-
             idx = peek
-
         return targets
 
     def _invoke_feature_llm(role: str, feature: dict[str, str], report_text: str) -> str:
@@ -330,11 +343,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         name = feature.get("name", "unknown")
         feature_type = feature.get("feature_type", "component")
         evidence = feature.get("evidence", "")
+
         if len(evidence) > 2000:
             evidence = f"{evidence[:2000]}..."
-
         report_title = _extract_report_title(report_text)
         context = []
+
         if report_title:
             context.append(f"Diff Report: {report_title}")
         if evidence:
@@ -377,7 +391,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 f"Feature: {name}\n"
                 f"Type: {feature_type}"
             )
-
         prompt = engine.build_prompt(
             user_input=user_input,
             context=context,
@@ -407,7 +420,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     cleaned = before + after[match.start():]
                 else:
                     cleaned = cleaned.replace("<think>", "")
-
             lines = []
             
             meta_keywords = [
@@ -434,6 +446,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         relation = _strip_thinking(feature.get("relation", ""))
         decipher = _strip_thinking(feature.get("decipher", ""))
         trigger = _strip_thinking(feature.get("trigger", ""))
+
         lines = [
             f"# Feature Analysis: {feature.get('name', 'unknown')}",
             "",
@@ -600,6 +613,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         report_text = read_text(result.artifacts.report_markdown)
         state = StateManager.add_intermediate_output(state, "firmware_diff_report", report_text)
         state.intermediate_outputs["firmware_diff_report_path"] = result.artifacts.report_markdown
+        if result.artifacts.raw_diff_dir:
+            state.intermediate_outputs["firmware_raw_diff_dir"] = result.artifacts.raw_diff_dir
         return state
 
     def feature_analysis_select_node(state: AgentState) -> AgentState:
@@ -607,63 +622,245 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         if not state.feature_analysis_queue and not state.feature_analysis_targets:
             report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
             report_text = state.intermediate_outputs.get("firmware_diff_report", "")
+
             if not report_path or not report_text:
                 state.feature_analysis_targets = []
                 state.feature_analysis_queue = []
                 state.feature_analysis_current = None
                 state.record_analysis_note("feature_analysis skipped: missing diff report")
                 return state
+
             targets = _build_feature_targets(report_text)
             state.feature_analysis_targets = targets
             state.feature_analysis_queue = list(targets)
             state.record_analysis_note(f"feature_analysis targets: {len(targets)}")
-        # Pop next feature from queue
+
+        # Pop next feature from queue, resetting tool state for each new component
         if state.feature_analysis_queue:
             state.feature_analysis_current = state.feature_analysis_queue.pop(0)
+            # Reset tool state so each component gets a fresh tool budget
+            state.tool_iteration = 0
+            state.tool_requests = []
+            state.tool_results = []
+            state.agent_chain = []
+            # Clear previous component's analysis output
+            state.intermediate_outputs.pop("unified_feature_analysis", None)
+        else:
+            state.feature_analysis_current = None
         return state
 
-    def feature_analysis_relation_node(state: AgentState) -> AgentState:
+    def _is_macho_binary(filepath: str) -> bool:
+        """Check if a file is a Mach-O binary by reading magic bytes."""
+        MACHO_MAGICS = {b'\xfe\xed\xfa\xce', b'\xfe\xed\xfa\xcf', b'\xce\xfa\xed\xfe', b'\xcf\xfa\xed\xfe', b'\xca\xfe\xba\xbe'}
+        try:
+            with open(filepath, 'rb') as f:
+                magic = f.read(4)
+            return magic in MACHO_MAGICS
+        except (OSError, IOError):
+            return False
+
+    def prepare_decompiler_node(state: AgentState) -> AgentState:
         feature = state.feature_analysis_current
         if not feature:
             return state
-        updated = dict(feature)
-        report_text = state.intermediate_outputs.get("firmware_diff_report", "")
-        updated["relation"] = _invoke_feature_llm("function_relation", updated, report_text)
-        state.feature_analysis_current = updated
+
+        from langgraph_orchestration.tooling.decompiler_tools import start_ida_server_for_binary
+        import subprocess
+
+        component_name = feature.get("name")
+        if not component_name:
+            return state
+
+        # Strategy 1: Use the exact binary path parsed from the diff report
+        feature_binary_path = feature.get("binary_path", "")
+        output_dir = os.path.join(state.workspace_root or os.getcwd(), ".ipsw_features")
+        extracted_binary = None
+
+        if feature_binary_path:
+            # The diff report gives us e.g. "/System/Library/Messages/PlugIns/iMessage.imservice/iMessage"
+            # Look for it under any build subdirectory in .ipsw_features/
+            clean_path = feature_binary_path.lstrip("/")
+            if os.path.isdir(output_dir):
+                for entry in os.listdir(output_dir):
+                    candidate = os.path.join(output_dir, entry, clean_path)
+                    if os.path.isfile(candidate) and _is_macho_binary(candidate):
+                        extracted_binary = candidate
+                        break
+
+        # Strategy 2: If not found pre-extracted, try extracting from IPSW
+        if not extracted_binary:
+            local_ipsws = _collect_confirmed_local_artifacts(state)
+            _, new_ipsw = _select_diff_pair(local_ipsws)
+
+            if not new_ipsw:
+                state.record_analysis_note("No new IPSW found. Skipping decompiler preparation.")
+                return state
+
+            os.makedirs(output_dir, exist_ok=True)
+            # Use the exact binary path for extraction pattern if available
+            pattern = f".*{re.escape(os.path.basename(feature_binary_path))}$" if feature_binary_path else f".*{re.escape(component_name)}$"
+            try:
+                subprocess.run(
+                    ["ipsw", "extract", new_ipsw, "--files", "--pattern", pattern, "-o", output_dir],
+                    check=True,
+                    capture_output=True
+                )
+            except subprocess.CalledProcessError as e:
+                state.record_analysis_note(f"Failed to extract {component_name} from {new_ipsw}: {e.stderr}")
+                return state
+
+            # Walk output_dir and find the exact Mach-O binary
+            target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
+            for root, _, files in os.walk(output_dir):
+                for file in files:
+                    if file == target_basename:
+                        candidate = os.path.join(root, file)
+                        if _is_macho_binary(candidate):
+                            extracted_binary = candidate
+                            break
+                if extracted_binary:
+                    break
+
+        if extracted_binary:
+            state.record_analysis_note(f"Decompiler target: {extracted_binary}")
+            result = start_ida_server_for_binary.invoke({"binary_path": extracted_binary})
+            state.record_analysis_note(f"Decompiler prepare: {result}")
+        else:
+            state.record_analysis_note(f"Could not locate Mach-O binary for {component_name}. Decompiler unavailable for this component.")
         return state
 
-    def feature_analysis_decipher_node(state: AgentState) -> AgentState:
+    def cleanup_decompiler_node(state: AgentState) -> AgentState:
+        from langgraph_orchestration.tooling.decompiler_tools import stop_ida_server
+        result = stop_ida_server.invoke({})
+        state.record_analysis_note(f"Decompiler cleanup: {result}")
+        return state
+
+    def unified_feature_analysis_node(state: AgentState) -> AgentState:
         feature = state.feature_analysis_current
         if not feature:
             return state
-        updated = dict(feature)
-        report_text = state.intermediate_outputs.get("firmware_diff_report", "")
-        updated["decipher"] = _invoke_feature_llm("decipher_function", updated, report_text)
-        updated["trigger"] = _invoke_feature_llm("trigger", updated, report_text)
-        state.feature_analysis_current = updated
-        return state
+        from langgraph_orchestration.prompts.reverse_engineering import build_unified_feature_analysis_prompt
+        
+        prompt = build_unified_feature_analysis_prompt(
+            user_input=state.user_input,
+            component_evidence=feature.get("evidence", ""),
+            component_name=feature.get("name", "Unknown Component"),
+            has_tool_results=bool(state.tool_results),
+            at_limit=(state.tool_iteration >= state.max_tool_iterations - 2)
+        )
+        context_blocks = []
+        if state.tool_results:
+            context_blocks.append(StateManager.format_tool_activity(state))
+            
+        if context_blocks:
+            prompt += "\n\n=== RECENT TOOL EXECUTION CONTEXT ===\n" + "\n\n".join(context_blocks) + "\n=====================================\n"
+            if state.tool_iteration >= state.max_tool_iterations - 2:
+                prompt += "\n**CRITICAL FINAL INSTRUCTION**: You have reached the maximum allowed tool calls. You MUST NOT output any more `<tool_call>` blocks. You MUST output the final report EXACTLY starting with the header `## What this feature does`, followed by the other sections and the JSON score. Do not write any conversational filler."
+            else:
+                prompt += "\n**CRITICAL FINAL INSTRUCTION**: Evaluate the tool results above. If you need more information, output ONLY `<tool_call>` blocks. If you have enough evidence to conclude, you MUST output the final report starting EXACTLY with the header `## What this feature does`, followed by the other sections and the JSON score. Do not write any conversational filler or constraints."
+            prompt += "\n\nIf generating the report, use this EXACT format:\n## What this feature does\n[Summary]\n## How is it implemented\n[Details]\n## How to trigger this feature\n[Triggers]\n## Evidence\n[Evidence]\n---AI_PRIORITISATION_SCORE---\n{\"method\": \"...\", \"category\": \"...\", \"tier\": \"...\", \"reason\": \"...\"}"
+            
+        print(f"\n\n[DEBUG STATE] tool_iteration={state.tool_iteration}, max_tool_iterations={state.max_tool_iterations}, has_tool_results={bool(state.tool_results)}, at_limit={state.tool_iteration >= state.max_tool_iterations - 2}")
+        print(f"\n\n[DEBUG PROMPT]\n{prompt}\n[END DEBUG PROMPT]\n\n")
+        from langgraph_orchestration.inference.inference_engine import GenerationConfig
+        engine = _get_feature_engine()
+        chat_prompt = engine.build_prompt(user_input=prompt, system_prompt="")
+        output = engine.generate(
+            chat_prompt,
+            config=GenerationConfig(max_tokens=4096, temperature=0.2),
+            stream=False,
+        )
+        
+        # Self-correction: if we are at the limit and it stubbornly used a tool call, force a regeneration
+        if state.tool_iteration >= state.max_tool_iterations - 2:
+            from langgraph_orchestration.tooling.parser import parse_agent_output
+            parsed = parse_agent_output(output)
+            if parsed.has_tool_calls():
+                prompt += f"\n\n{output}\n\n**SYSTEM ERROR**: You MUST NOT use `<tool_call>`. You are OUT OF TURNS and the tools have been disabled. You MUST write the final markdown report NOW based on the existing context."
+                chat_prompt_retry = engine.build_prompt(user_input=prompt, system_prompt="")
+                output = engine.generate(
+                    chat_prompt_retry,
+                    config=GenerationConfig(max_tokens=4096, temperature=0.2),
+                    stream=False,
+                )
+        
+        output = _sanitize_model_output(output)
+        return StateManager.add_intermediate_output(state, "unified_feature_analysis", output)
+
+    def route_after_unified_analysis(state: AgentState) -> str:
+        if should_continue_tool_loop(state):
+            return "execute_tools"
+        return "cleanup_decompiler"
 
     def feature_analysis_compile_node(state: AgentState) -> AgentState:
         feature = state.feature_analysis_current
         if not feature:
             return state
+
+        raw_output = state.intermediate_outputs.get("unified_feature_analysis", "")
+        print(f"\n\n[DEBUG RAW OUTPUT]\n{raw_output}\n[END DEBUG RAW OUTPUT]\n\n")
+        parts = raw_output.split("---AI_PRIORITISATION_SCORE---")
+        
+        from langgraph_orchestration.core.state_utils import StateManager
+        markdown_report = StateManager.sanitize_output(parts[0].strip())
+        import re
+        # Extract the core report starting from the primary header
+        match = re.search(r'(## What this feature does[\s\S]*)', markdown_report, re.IGNORECASE)
+        if match:
+            markdown_report = match.group(1).strip()
+            
+        # Aggressively strip any hallucinated tool logs that might be embedded anywhere
+        markdown_report = re.sub(r'## TOOL ACTIVITY[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
+        markdown_report = re.sub(r'### Requested Tools[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
+        markdown_report = re.sub(r'### Tool Results[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
+        markdown_report = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', markdown_report, flags=re.IGNORECASE)
+        
+        markdown_report = markdown_report.strip()
+        score_json = parts[1].strip() if len(parts) > 1 else ""
+        if score_json:
+            import re
+            json_match = re.search(r'\{.*\}', score_json, re.DOTALL)
+            if json_match:
+                try:
+                    parsed_score = json.loads(json_match.group(0))
+                    state.categorized_methods.append(parsed_score)
+                    
+                    markdown_report += "\n\n## AI Prioritisation Scoring System\n\n"
+                    method = parsed_score.get("method", "Unknown Method")
+                    tier = parsed_score.get("tier", "Unknown Tier")
+                    category = parsed_score.get("category", "Unknown Category")
+                    reason = parsed_score.get("reason", "No reason provided")
+                    markdown_report += f"- **{method}**\n  - **Tier**: {tier}\n  - **Category**: {category}\n  - **Reasoning**: {reason}\n\n"
+                except json.JSONDecodeError:
+                    state.record_analysis_note("Failed to parse JSON score from unified analysis output.")
+                    markdown_report += "\n\n## AI Prioritisation Scoring System\n\n*(Failed to parse JSON score)*\n"
+        else:
+            markdown_report += "\n\n## AI Prioritisation Scoring System\n\nNo actionable methods or prioritisation targets identified for this component.\n\n"
         report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
+
         output_dir = _resolve_feature_output_dir(report_path, state.workspace_root)
         slug = _slugify_feature(feature.get("name", "feature"))
         output_path = os.path.join(output_dir, f"{slug}_analysis.md")
-        write_text(output_path, _render_feature_report(feature))
+        write_text(output_path, markdown_report)
+        
         state.feature_analysis_reports[feature.get("name", slug)] = output_path
         state.intermediate_outputs["feature_analysis_reports"] = json.dumps(
             state.feature_analysis_reports,
             ensure_ascii=True,
             indent=2,
         )
+        
         state.feature_analysis_current = None
+        state.tool_requests.clear()
+        state.tool_results.clear()
+        state.tool_iteration = 0
+        state.intermediate_outputs.pop("unified_feature_analysis", None)
+        
         return state
 
     def route_after_feature_select(state: AgentState) -> str:
         if state.feature_analysis_current:
-            return "analyze"
+            return "prepare_decompiler"
         return "done"
 
     def parse_firmware_methods_node(state: AgentState) -> AgentState:
@@ -671,9 +868,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         strict_methods = []
         IGNORE_PREFIXES = ("-[UIView", "-[UIResponder", "-[UIViewController", "-[NSObject")
         
-        methods_text = state.intermediate_outputs.get("raw_methods", "")
-        if not methods_text:
-            methods_text = state.user_input 
+        if state.feature_analysis_current:
+            state.categorized_methods = []
+            methods_text = state.feature_analysis_current.get("evidence", "")
+        else:
+            methods_text = state.intermediate_outputs.get("raw_methods", "")
+            if not methods_text:
+                methods_text = state.user_input 
         
         for line in methods_text.splitlines():
             line = line.strip()
@@ -739,16 +940,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             "firmware_diff_report",
             "feature_analysis_reports",
         ]
-
         sections: list[str] = []
         for key in stage_keys:
             text = (state.intermediate_outputs.get(key) or "").strip()
             if text:
                 sections.append(f"## {key}\n{text}")
-
         if state.tool_results:
             sections.append(StateManager.format_tool_activity(state))
-
         output = "\n\n".join(sections) if sections else "No IPSW execution output captured."
         return StateManager.add_intermediate_output(state, "firmware_analysis", output)
 
@@ -802,8 +1000,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     graph.add_node("ipsw_extractor", ipsw_extractor_node)
     graph.add_node("firmware_diff_service", firmware_diff_service_node)
     graph.add_node("feature_analysis_select", feature_analysis_select_node)
-    graph.add_node("feature_analysis_relation", feature_analysis_relation_node)
-    graph.add_node("feature_analysis_decipher", feature_analysis_decipher_node)
+    graph.add_node("prepare_decompiler", prepare_decompiler_node)
+    graph.add_node("unified_feature_analysis", unified_feature_analysis_node)
+    graph.add_node("feature_analysis_tool_executor", tool_executor_node)
+    graph.add_node("cleanup_decompiler", cleanup_decompiler_node)
     graph.add_node("feature_analysis_compile", feature_analysis_compile_node)
     graph.add_node("firmware_analysis", firmware_analysis_node)
     graph.add_node("synthesize", synthesize_output)
@@ -834,12 +1034,22 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         "feature_analysis_select",
         route_after_feature_select,
         {
-            "analyze": "feature_analysis_relation",
+            "prepare_decompiler": "prepare_decompiler",
             "done": "firmware_analysis",
         },
     )
-    graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")
-    graph.add_edge("feature_analysis_decipher", "feature_analysis_compile")
+
+    graph.add_edge("prepare_decompiler", "unified_feature_analysis")
+    graph.add_conditional_edges(
+        "unified_feature_analysis",
+        route_after_unified_analysis,
+        {
+            "execute_tools": "feature_analysis_tool_executor",
+            "cleanup_decompiler": "cleanup_decompiler",
+        }
+    )
+    graph.add_edge("feature_analysis_tool_executor", "unified_feature_analysis")
+    graph.add_edge("cleanup_decompiler", "feature_analysis_compile")
     graph.add_edge("feature_analysis_compile", "feature_analysis_select")
     graph.add_edge("firmware_analysis", "synthesize")
     graph.add_edge("parse_firmware_methods", "categorize_firmware")
@@ -851,10 +1061,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             "synthesize": "synthesize",
         },
     )
-    graph.add_edge("feature_analysis_relation", "feature_analysis_decipher")
-    graph.add_edge("feature_analysis_decipher", "feature_analysis_compile")
-    graph.add_edge("feature_analysis_compile", "feature_analysis_select")
-    graph.add_edge("firmware_analysis", "synthesize")
     graph.add_edge("synthesize", END)
 
     graph.set_entry_point("retrieve_re_context")

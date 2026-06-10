@@ -44,13 +44,13 @@ Tool loop flow:
 
 ## IPSW Service & Firmware Pipeline
 
-The reverse engineering domain features a dedicated, stage-gated firmware analysis pipeline powered by the `ipsw` CLI to autonomously inspect Apple firmware updates.
+The reverse engineering domain features a dedicated, stage-gated firmware analysis pipeline powered by the `ipsw` CLI and a background IDA Pro RPC server to autonomously inspect Apple firmware updates.
 
 **Pipeline Stages:**
-1. **Firmware Resolution & Download**: Resolves device identifiers and build numbers to locate and download target IPSW or OTA artifacts (e.g., full restore images, delta updates).
+1. **Firmware Resolution & Download**: Resolves device identifiers and build numbers to locate and download target IPSW or OTA artifacts (e.g. full restore images, delta updates).
 2. **Extraction**: Extracts critical firmware components such as the `dyld_shared_cache` and `kernelcache` from the acquired artifacts.
 3. **Diffing**: Performs structural binary diffs between an old and new firmware version to identify modified libraries, private frameworks, and introduced symbols/classes.
-4. **Feature Analysis**: Employs LLM-driven inference to analyze the diff evidence, semantically deciphering the high-level purpose of new features, function relations, and potential trigger conditions.
+4. **Feature Analysis**: Employs LLM-driven inference to analyze the diff evidence, semantically deciphering the high-level purpose of new features. This stage connects to a headless IDA Pro 9.1 RPYC server (`idat -A`) to actively map strings/symbols to memory addresses (`search_string`, `lookup_symbol`), decompile functions (`decompile_function`), and trace cross-references (`get_xrefs_to`). A stringent output sanitizer guarantees that internal AI tool-call traces never leak into the final researcher-facing markdown reports.
 5. **Methods Parsing & Categorization**: Extracts and groups relevant Objective-C/Swift methods, prioritizing high-signal targets for subsequent binary disassembly (e.g. in IDA Pro).
 6. **Synthesis**: Aggregates the findings, evidence, and extracted data into a comprehensive final report.
 

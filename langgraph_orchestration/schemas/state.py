@@ -5,7 +5,7 @@ incl. user input, retrieved context, outputs from agents, and
 tool-call history for local agentic workflows.
 """
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
 from langgraph_orchestration.tooling.tool import ToolPolicy, ToolRequest, ToolResult
 
 class AgentState(BaseModel):
@@ -47,7 +47,7 @@ class AgentState(BaseModel):
     )
 
     max_tool_iterations: int = Field(
-        default=8,
+        default=40,
         description="Maximum tool loop iterations before forcing synthesis",
     )
 
@@ -91,17 +91,17 @@ class AgentState(BaseModel):
         description="LLM-selected execution plan for reverse engineering branch",
     )
 
-    feature_analysis_targets: list[dict[str, str]] = Field(
+    feature_analysis_targets: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Feature analysis targets selected from diff report",
     )
 
-    feature_analysis_queue: list[dict[str, str]] = Field(
+    feature_analysis_queue: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Pending feature analysis targets",
     )
 
-    feature_analysis_current: Optional[dict[str, str]] = Field(
+    feature_analysis_current: Optional[dict[str, Any]] = Field(
         default=None,
         description="Active feature analysis target",
     )

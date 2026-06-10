@@ -111,6 +111,11 @@ class StateManager:
                 command = result.metadata.get("command") if result.metadata else None
                 command_line = f"\ncommand: {command}" if command else ""
                 body = result.output or (result.error or "")
+                
+                # Protect against max context length overflow from massive decompiler outputs
+                if len(body) > 4000:
+                    body = body[:2000] + "\n\n...[CONTENT TRUNCATED FOR CONTEXT LENGTH]...\n\n" + body[-2000:]
+                    
                 sections.append(f"{index}. {result.tool_name} [{status}]{command_line}\n{body}")
 
         return "\n".join(sections)

@@ -12,7 +12,7 @@ from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from langgraph_orchestration.retrievers.config import RAGConfigManager
-from langgraph_orchestration.retrievers import QdrantRetriever
+# from langgraph_orchestration.retrievers import QdrantRetriever
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.prompts.shared import get_allowed_tools
 from langgraph_orchestration.tooling.executor import (
@@ -42,7 +42,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     arch_agent = factory.create_architectural_review_agent()
     inference_engine = factory.inference_engine
     # disable for no rag test
-    retriever = QdrantRetriever()
+    # retriever = QdrantRetriever()
     
     # Create graph
     graph = StateGraph(AgentState)
