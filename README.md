@@ -211,8 +211,8 @@ Recommended ingestion policy
 
 ## Dev And Benchmarks
 - Compile check: `python3 -m compileall langgraph_orchestration api.py`
+- IPSW Diff benchmark harness: `python3 benchmarks/test_ipsw_diff.py`
 - No-RAG benchmark harness: `python3 benchmarks/test_no_rag.py`
-- Harness validation: `python3 benchmarks/test_validation.py`
 - LangGraph local dev server with tracing UI:
   1. Create a LangSmith account and generate an API key.
   2. Set tracing env vars in `.env` (used by `langgraph.json`):

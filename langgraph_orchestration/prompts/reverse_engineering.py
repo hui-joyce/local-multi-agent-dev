@@ -142,9 +142,10 @@ def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str
         "- TIER_3: Low Interest/Noise. Proceed only if investigating a specific UI/logging bug.\n\n"
         "OUTPUT INSTRUCTIONS: You MUST output a JSON array containing EXACTLY ONE object representing the component provided. Do NOT output an empty array. No conversational filler.\n"
         "Schema:\n"
+        "[\n"
+        '  {"method": "<component_name_or_summary>", "category": "<SECURITY/AUTH|DATA/IPC|UI/BOILERPLATE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "confidence": <0-100>, "decompile": <true|false>, "reason": "<brief justification based on strings/evidence>"}\n'
         "]\n\n"
-        '  {"method": "<component_name_or_summary>", "category": "<SECURITY/AUTH|DATA/IPC|UI/BOILERPLATE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "reason": "<brief justification based on strings/evidence>"}\n'        "]\n\n"
-        "Important: If there are changes to CStrings related to data syncing or privacy masks (e.g., '%{sensitive}'), do NOT ignore them; categorize as TIER_2 or higher."
+        "Important: If there are changes to CStrings related to data syncing or privacy masks (e.g., '%{sensitive}'), do NOT ignore them; categorize as TIER_2 or higher. Only TIER_1 should default to decompile=true unless you specifically require deep code analysis."
     )
     method_block = f"Diff Evidence to Analyze:\n{retrieved_methods}\n\n" if retrieved_methods else ""
     
@@ -164,42 +165,62 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
 
     workflow = """
     **Workflow:**
-    1.  **Analyze Initial Evidence & Privilege Recon**: Review the provided metadata diff to understand the initial changes (e.g., new symbols, modified strings, version bumps).
-        - Use `get_entitlements` on the binary to determine what security privileges it holds. If it has high-privilege entitlements (like `com.apple.private.*`), elevate the threat tier.
-    2.  **Formulate an Investigative Hypothesis**: Based on the metadata and entitlements, what is the likely purpose of this change?
-    3.  **Gather Decompilation Evidence with Tools** (you have multiple rounds):
 
-        **TOOL SELECTION GUIDE — READ CAREFULLY:**
-        *   **`lookup_symbol`**: Use this ONLY for **exported function symbols** that start with an underscore (e.g., `_MyExampleFunction`).
-        *   **`search_string`**: Use this for **C strings, Objective-C method names, selector names, and any quoted text** from the diff. **NOTE: Returns DATA addresses, NOT function addresses. You MUST pass these addresses to `get_xrefs_to`!**
-        *   **`get_xrefs_to`**: Finds which functions reference a specific data address (e.g., from `search_string`). Use this to find the actual function to decompile!
-        *   **`decompile_function`**: Decompile a function to get C-like pseudo-code.
-        *   **`resolve_objc_dispatch`**: When you see `objc_msgSend(v4, "doSomething")` and need to resolve `v4`'s class.
-        *   **`trace_variable_source`**: If a function takes an untrusted pointer, use this to trace its initialization within the function def-use chains.
-        *   **`rename_local_variable` & `set_comment`**: As you decipher cryptic variables (`v4` -> `myRenamedVar`), you MUST use these tools to annotate the IDA database live.
-        *   **`save_ida_database`**: After making annotations, call this to persist the `.i64` file.
+    **STAGE 0: PRE-DECOMPILATION TRIAGE GATE**
+    Evaluate the diff evidence against the following rules.
+    *High-Signal Indicators:* Added/Removed symbols or ObjC selectors, new CStrings, new entitlements, function count changes, security/privacy/IPC/database terminology.
+    *Low-Signal Indicators:* UUID changes only, version bumps only, __const/__got size changes, small section drift, no symbol/string count changes.
+    
+    *AUTO-PROMOTE RULES:* Elevate to TIER_1 if you see: added exported symbols, security/privacy strings, authentication logic, payload filtering, XPC interfaces, server bags, cryptography, or migration logic.
+    *AUTO-IGNORE RULES:* Classify as TIER_3 if only UUID/version/GOT/section-sizes changed with NO new symbols or strings.
+    
+    If AUTO-IGNORE applies: DO NOT decompile. Output the final metadata-only assessment immediately with `decompile: false`.
+    If HIGH-SIGNAL applies: Proceed to Stage 1.
 
-        **MULTI-ROUND INVESTIGATION — Follow this chain:**
-        *   **Round 1**: Use `lookup_symbol` for exported symbols AND `search_string` for C strings / method names from the diff to get addresses.
-        *   **Round 2**: Use `get_xrefs_to` to find which functions reference those strings/symbols.
-        *   **Round 3+**: Use `decompile_function` to read logic. Use `resolve_objc_dispatch` or `trace_variable_source` to trace data flow deeply. Use `rename_local_variable` to actively document the binary.
+    **STAGE 1: CANDIDATE SELECTION (TOOL BUDGET LIMITS)**
+    You MUST NOT exhaustively search every string/symbol. Observe these strict limits per component:
+    - Max 20 symbol lookups
+    - Max 20 string lookups
+    *Selection Priority:* 1. Added symbols, 2. Removed symbols, 3. Added strings, 4. Security/privacy/IPC strings.
 
-        **CRITICAL:** The diff only provides names, NOT addresses. You CANNOT guess addresses. You must use `lookup_symbol` or `search_string` first to get addresses.
-        **FALLBACK**: If all decompiler tool calls fail with connection errors, state that the decompiler was unavailable and analyze based only on the metadata diff.
+    **TOOL SELECTION GUIDE — READ CAREFULLY:**
+    *   **`find_address`**: Use this to find the memory address of ANY entry listed under **`Symbols:`** or **`CStrings:`** in the diff. Pass the raw string from the diff as the `query`.
+    *   **`get_xrefs_to`**: Finds code that references a specific DATA address. Use this on addresses returned by `find_address` when the result type is `string_data`.
+    *   **`decompile_function`**: Decompile a CODE address to get C-like pseudo-code. Use this on addresses returned by `find_address` when the result type is `symbol`, or on xref addresses.
+    *   **`resolve_objc_dispatch`**: When you see `objc_msgSend(v4, "doSomething")` and need to resolve `v4`'s class.
+    *   **`trace_variable_source`**: If a function takes an untrusted pointer, use this to trace its initialization.
+    *   **`rename_local_variable` & `set_comment`**: Document the binary as you decipher variables.
+    *   **`save_ida_database`**: Persist the `.i64` file after annotating.
 
-    4.  **Synthesize a Comprehensive Report**: Based on the decompiled code and metadata, generate a complete analysis with these sections:
-        *   `## What this feature does`: High-level summary based on decompilation findings.
-        *   `## How is it implemented`: Detailed code logic. Reference decompiled functions, algorithms, and data structures.
-        *   `## How to trigger this feature`: Infer trigger conditions from function names, strings, or framework usage.
-        *   `## Evidence`: Critical evidence — strings, symbol names, decompiled pseudo-code, addresses, and **entitlements**.
-    5.  **Provide AI Prioritisation Score**: After the sections, add `---AI_PRIORITISATION_SCORE---` followed by a JSON object with `method`, `category` (SECURITY/PRIVACY, DATA/IPC/SYNC, UI/LOGGING, METADATA), `tier` (TIER_1, TIER_2, TIER_3), and `reason`.
+    **STAGE 2: LIMITED DECOMPILATION (TOOL BUDGET LIMITS)**
+    - Max 20 xref lookups
+    - Max 20 decompiled functions
+    Focus only on the most critical cross-references that map to high-signal indicators.
+
+    **STAGE 3: REPORTING & CORRELATION**
+    Synthesize findings into these sections:
+    *   `## What this feature does`: High-level summary based on evidence.
+    *   `## How is it implemented`: Detailed code logic if decompiled. You MUST include decompiled pseudocode snippets, call chain context, and data flow tracing.
+
+    *   `## How to trigger this feature`: Infer trigger conditions.
+    *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements).
+    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, `confidence`, `decompile`, and `reason`.
+    If the evidence contains multiple related binaries (e.g. sharing a subsystem or version bump), synthesize them as a single cohesive feature change.
     """ 
     if not has_tool_results:
         output_format_instructions = """
-        **CURRENT STATE: GATHERING EVIDENCE (STAGE 1)**
-        You have not used any tools yet. You CANNOT write the final report yet.
-        You MUST output ONLY `<tool_call>` blocks. DO NOT output any markdown headers, conversational filler, or the final report.
-        **YOUR FIRST ACTION**: Look at the diff evidence carefully. IF there are specific named symbols added or removed (e.g., lines starting with `+ _` under the Symbols section), use `lookup_symbol` on them. IF there are specific quoted strings added or removed under CStrings, use `search_string` on them. If only counts are shown (e.g., `Symbols: 199`) and no specific names are listed, DO NOT guess or hallucinate symbol names; instead, just use `search_string` on the component name itself. You should also call `get_entitlements` on the binary to get its privileges. Do all of these in this round.
+        **CURRENT STATE: PRE-DECOMPILATION TRIAGE (STAGE 0) & CANDIDATE SELECTION (STAGE 1)**
+        You have not used any tools yet. First, evaluate the diff against the AUTO-IGNORE rules.
+        - **IF AUTO-IGNORE APPLIES (TIER_3)**: Do NOT use any tools. Immediately output the final report starting with `## What this feature does` (which will be a metadata-only assessment) and conclude with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": false`.
+        - **IF HIGH-SIGNAL APPLIES (TIER_1/2)**: You MUST use tools to gather evidence. Do NOT output the final report. Output ONLY `<tool_call>` blocks. 
+        
+        **CRITICAL INSTRUCTION FOR LOCAL MODELS**: Ignore any previous general instructions that say "DO NOT include `<tool_call>` JSON". Right now, you are NOT writing the final response. You MUST include the full, valid JSON body inside EVERY `<tool_call>` block!
+
+        **STAGE 1 TOOL MAPPING RULES (follow exactly):**
+        - For ANY item listed under `Symbols:` or `CStrings:` that you want to investigate, call `find_address` (max 20 calls).
+        - Pass the exact text from the diff as the `query` parameter.
+        - Prioritize strings/symbols related to security, privacy, IPC, authentication, or added functionality.
+        Do all applicable calls in this single round.
         """
     else:
         if at_limit:
@@ -211,17 +232,23 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
         """
         else:
             output_format_instructions = """
-        **CURRENT STATE: CONTINUE INVESTIGATION (STAGE 2)**
-        Review the tool results above. You should continue the investigation chain:
-        - If you have **addresses** from `lookup_symbol` or `search_string` but haven't called `get_xrefs_to` yet, call `get_xrefs_to` on those addresses now.
-        - If you have **function addresses** from `get_xrefs_to` but haven't decompiled them, call `decompile_function` on those function addresses now.
+        **CURRENT STATE: LIMITED DECOMPILATION (STAGE 2)**
+        Review the tool results above. You MUST strictly adhere to the tool budget limits:
+        - Max 20 `get_xrefs_to` calls total.
+        - Max 20 `decompile_function` calls total.
+        
+        Continue the investigation chain carefully:
+        - If you have **data addresses** but haven't called `get_xrefs_to` yet, call it on the most critical addresses (up to the limit).
+        - If you have **function addresses** from `get_xrefs_to`, call `decompile_function` on the most promising ones (up to the limit).
         - If you see a function taking an untrusted pointer, trace it using `trace_variable_source`.
         - If you see an `objc_msgSend` block you want to resolve, use `resolve_objc_dispatch`.
         - If you understand a variable or function block, use `rename_local_variable` and `set_comment` to annotate the binary, followed by `save_ida_database`.
-        - If you still have symbols/strings you haven't looked up, look them up now.
 
-        Output ONLY `<tool_call>` blocks if you need more evidence.
-        If you have gathered enough evidence (including at least one decompiled function), output the final report starting with `## What this feature does`.
+        Output ONLY `<tool_call>` blocks if you need more evidence and haven't hit your budget.
+        
+        **CRITICAL INSTRUCTION FOR LOCAL MODELS**: Ignore any previous general instructions that say "DO NOT include `<tool_call>` JSON". Right now, you are NOT writing the final response. You MUST include the full, valid JSON body inside EVERY `<tool_call>` block!
+        
+        If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting with `## What this feature does` and conclude with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": true`.
         """
     _, body = render_prompt(
         "reverse_engineering/unified_analysis.md", 

@@ -30,11 +30,7 @@ class GenerationMetrics:
     generation_speed_tok_s: float  # tokens/second for generation
     total_generation_seconds: float
 
-class MLXInferenceEngine:
-    """MLX-backed inference engine with prompt formatting and metrics"""
-    """MLX-backed inference engine with prompt formatting and metrics"""
-    
-    # Default system prompt for agents
+class MLXInferenceEngine:    
     DEFAULT_SYSTEM_PROMPT = (
         "You are a specialized AI assistant. "
         "Provide concise, actionable responses. "
@@ -216,4 +212,121 @@ class MLXInferenceEngine:
             "has_model": self.model is not None,
             "has_tokenizer": self.tokenizer is not None,
             "system_prompt_length": len(self.system_prompt),
+        }
+
+class GeminiInferenceEngine:    
+    DEFAULT_SYSTEM_PROMPT = (
+        "You are a specialized AI assistant. "
+        "Provide concise, actionable responses. "
+        "Use provided context to inform your answers. "
+        "Do not expose internal reasoning traces or <think> tags in your responses. "
+        "Respond clearly and directly to the user's request."
+    )
+    
+    def __init__(self, system_prompt: Optional[str] = None):
+        self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
+        self.last_metrics: Optional[GenerationMetrics] = None
+        
+        import os
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass
+            
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY environment variable is not set in .env")
+            
+        self.model_name = "gemini-3.1-flash-lite"
+
+    def generate(
+        self,
+        prompt: str,
+        config: Optional[GenerationConfig] = None,
+        stream: bool = False,
+    ) -> Union[str, Iterator[str]]:
+        config = config or GenerationConfig()
+        
+        import urllib.request
+        import urllib.error
+        import json
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+        
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": config.max_tokens,
+                "temperature": config.temperature,
+                "topP": config.top_p,
+                "topK": config.top_k,
+            }
+        }
+        
+        req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
+        
+        try:
+            with urllib.request.urlopen(req) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                
+                # Check if there is text in the response
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    candidate = result["candidates"][0]
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        text = "".join(part.get("text", "") for part in candidate["content"]["parts"])
+                        if stream:
+                            return iter([text])
+                        return text
+                return ""
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            raise RuntimeError(f"Gemini generation failed: {e.code} - {error_body}") from e
+        except Exception as e:
+            raise RuntimeError(f"Generation failed: {str(e)}") from e
+            
+    def generate_with_metrics(
+        self,
+        prompt: str,
+        config: Optional[GenerationConfig] = None,
+    ) -> tuple[str, GenerationMetrics]:
+        start_time = time.time()
+        text = self.generate(prompt, config)
+        total_time = time.time() - start_time
+        
+        metrics = GenerationMetrics(
+            ttft_seconds=0.0,
+            prompt_tokens=0,
+            generated_tokens=len(text.split()), # approximate
+            prompt_generation_speed_tok_s=0.0,
+            generation_speed_tok_s=0.0,
+            total_generation_seconds=round(total_time, 3),
+        )
+        self.last_metrics = metrics
+        return text, metrics
+
+    def build_prompt(
+        self,
+        user_input: str,
+        context: Optional[list[str]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        system = system_prompt or self.system_prompt
+        
+        context_section = ""
+        if context:
+            context_section = "## Relevant Context\n"
+            for i, doc in enumerate(context, 1):
+                context_section += f"{i}. {doc}\n"
+            context_section += "\n"
+        
+        prompt = f"System: {system}\n\nUser Context:\n{context_section}\n\nUser Input: {user_input}"
+        return prompt
+        
+    def get_model_info(self) -> dict:
+        return {
+            "has_model": True,
+            "has_tokenizer": False,
+            "system_prompt_length": len(self.system_prompt),
+            "engine": "gemini"
         }

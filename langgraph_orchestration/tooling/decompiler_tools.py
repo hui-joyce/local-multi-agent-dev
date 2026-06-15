@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 import rpyc
+from typing import Union
 from dotenv import load_dotenv
 
 from langchain_core.tools import tool
@@ -11,167 +12,376 @@ load_dotenv()
 
 DECOMPILER_HOST = "localhost"
 DECOMPILER_PORT = 18861
+
+# larger than the server-side _run_on_main_thread max timeout (300s)
+# so the server always has time to complete and return cleanly before the client-side timeout fires
+RPC_TIMEOUT = 360
 IDA_EXECUTABLE_PATH = os.getenv("IDA_PATH")
 IDA_RPC_SERVER_SCRIPT = os.getenv("IDA_RPC_SCRIPT_PATH")
+
+def _connect() -> rpyc.Connection:
+    """Open a fresh rpyc connection with a consistent timeout"""
+    return rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": RPC_TIMEOUT})
 
 @tool
 def decompile_function(address: int) -> str:
     """Decompiles the function at the given address"""
-    try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
-        decompiled_code = conn.root.exposed_decompile_function(address)
-        conn.close()
-        return decompiled_code
-    except ConnectionRefusedError:
-        return f"# ERROR: Connection to decompiler service was refused. Is the IDA Pro RPC server running on port {DECOMPILER_PORT}?"
-    except Exception as e:
-        return f"# ERROR: An unexpected error occurred during decompilation: {e}"
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            result = conn.root.exposed_decompile_function(address)
+            return result
+        except ConnectionRefusedError:
+            return f"# ERROR: Connection refused. Is IDA Pro RPC server running on port {DECOMPILER_PORT}?"
+        except TimeoutError:
+            return "# ERROR: Decompiler request timed out."
+        except EOFError as e:
+            last_error = e
+            wait = 2 * (attempt + 1)
+            print(f"[decompile_function] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception as e:
+            return f"# ERROR: {e}"
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return f"# ERROR: Decompiler stream closed after 3 attempts: {last_error}"
+
 
 @tool
 def get_xrefs_to(address: int) -> list[dict]:
     """Finds code cross-references to a given address"""
-    try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
-        xrefs = conn.root.exposed_get_xrefs_to(address)
-        conn.close()
-        return xrefs
-    except ConnectionRefusedError:
-        return [{"error": f"Connection to decompiler service was refused on port {DECOMPILER_PORT}."}]
-    except Exception as e:
-        return [{"error": f"An unexpected error occurred: {e}"}]
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            xrefs = conn.root.exposed_get_xrefs_to(address)
+            return list(xrefs) if xrefs else []
+        except ConnectionRefusedError:
+            return [{"error": f"Connection refused on port {DECOMPILER_PORT}."}]
+        except TimeoutError:
+            return [{"error": "Decompiler request timed out."}]
+        except EOFError as e:
+            last_error = e
+            wait = 2 * (attempt + 1)
+            print(f"[get_xrefs_to] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception as e:
+            return [{"error": f"Unexpected error: {e}"}]
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return [{"error": f"Stream closed after 3 attempts: {last_error}"}]
+
 
 @tool
-def search_string(target_string: str) -> list:
-    """Searches the binary for a specific string and returns a list of memory addresses where it is found.
-    NOTE: These are DATA addresses, not function addresses. You MUST pass these addresses to `get_xrefs_to` to find which functions reference the string. Do NOT use `decompile_function` directly on these addresses."""
-    try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 120})
-        addresses = conn.root.exposed_search_string(target_string)
-        # Materialize the rpyc netref list into a plain Python list
-        result = [int(a) for a in addresses] if addresses else []
-        conn.close()
-        return result
-    except ConnectionRefusedError:
-        return ["error: Connection to decompiler refused. Is IDA Pro running?"]
-    except TimeoutError:
-        return ["error: Decompiler request timed out"]
-    except EOFError:
-        return ["error: Decompiler connection closed unexpectedly"]
-    except Exception as e:
-        return [f"error: {str(e)}"]
+def find_address(query: str) -> Union[dict, str]:
+    """Finds an address in the binary by symbol name, C-string, or ObjC selector.
+    Accepts diff-report kebab-case names, raw symbol names, ObjC method syntax, and plain strings."""
+    import re
 
-@tool
-def lookup_symbol(symbol_name: str) -> str:
-    """Looks up the memory address of a symbol (like a function name or global variable) in the binary. Returns hex address string or error."""
-    try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 120})
-        addr = conn.root.exposed_lookup_symbol(symbol_name)
-        conn.close()
-        if addr and addr != 0:
-            return hex(int(addr))
-        return f"error: Symbol '{symbol_name}' not found in binary"
-    except ConnectionRefusedError:
-        return "error: Connection to decompiler refused. Is IDA Pro running?"
-    except TimeoutError:
-        return "error: Decompiler request timed out"
-    except EOFError:
-        return "error: Decompiler connection closed unexpectedly"
-    except Exception as e:
-        return f"error: {str(e)}"
+    original_query = query
+    query = re.sub(r'^[-+]\s+', '', query).strip()  # strip diff markers (+/-)
+    query = re.sub(r'^"|"$', '', query)              # strip surrounding quotes
+
+    # Reject ObjC type encodings (method signature)     
+    # eg metadata like B36@0:8@16B24@28, which is not searchable names              
+    if re.match(r'^[a-zA-Z@\*\^v]{1,3}\d+[@:^]', query):
+        return (
+            f"error: '{original_query}' is an ObjC type encoding (method signature), "
+            f"not a searchable symbol or string. Skip this query."
+        )
+
+    # Classify query format and extract canonical token            
+    is_objc_selector = False
+    canonical = query
+
+    if query.startswith("-[") or query.startswith("+["):
+        m = re.search(r'\[.*? ([^\]]+)\]', query)
+        if m:
+            canonical = m.group(1)
+            is_objc_selector = True
+
+    elif "_block_invoke" in query and "-[" in query:
+        m = re.search(r'\[.*? ([^\]]+)\]', query)
+        if m:
+            canonical = m.group(1)
+            is_objc_selector = True
+
+    elif query.startswith("_objc_msgSend$"):
+        canonical = query.replace("_objc_msgSend$", "")
+        is_objc_selector = True
+
+    elif ":" in query:
+        is_objc_selector = True
+
+    # Build set of name variants to try             
+    def _kebab_to_camel(s: str) -> str:
+        parts = s.replace("_", "-").split("-")
+        return parts[0] + "".join(p.title() for p in parts[1:]) if len(parts) > 1 else s
+
+    def _kebab_to_snake(s: str) -> str:
+        return s.replace("-", "_")
+
+    symbol_variants: list[str] = []
+    string_variants: list[str] = []
+
+    if is_objc_selector:
+        # try with and without leading _ 
+        base = canonical.lstrip("_")
+        string_variants = list(dict.fromkeys([
+            base,
+            canonical,                      # original 
+            _kebab_to_camel(base),          
+        ]))
+    else:
+        base = canonical
+        snake = _kebab_to_snake(base)
+        camel = _kebab_to_camel(base)
+
+        # Symbol candidates
+        symbol_variants = list(dict.fromkeys([
+            base, "_" + base,
+            snake, "_" + snake,
+            camel, "_" + camel,
+        ]))
+        # String candidates
+        string_variants = list(dict.fromkeys([base, snake, camel]))
+
+        # handles diff-report slugs that never exist as a combined symbol
+        if "-" in base:
+            parts = base.split("-", 1)  # split on FIRST hyphen: [ClassName, method-name]
+            class_part = parts[0]
+            method_kebab = parts[1] if len(parts) > 1 else ""
+            method_camel = _kebab_to_camel(method_kebab)
+            method_snake = _kebab_to_snake(method_kebab)
+            for extra in [class_part, method_camel, "_" + method_camel,
+                          method_snake, "_" + method_snake]:
+                if extra and extra not in symbol_variants:
+                    symbol_variants.append(extra)
+
+    # Try every variant against both lookups, with retry on EOF   
+
+    # For ObjC selectors, use the text before the first ':' as the IDA
+    # selector stem, e.g. sel_shouldAcceptGroupMessagePayloadWithExistingChat
+    objc_stem = None
+    if is_objc_selector and ":" in canonical.lstrip("_"):
+        objc_stem = canonical.lstrip("_").split(":")[0]
+
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+
+            # part a - Exact symbol lookup for each variant (non-ObjC only)
+            if symbol_variants:
+                for variant in symbol_variants:
+                    addr = conn.root.exposed_lookup_symbol(variant)
+                    if addr and addr != 0:
+                        return {
+                            "type": "symbol",
+                            "query": variant,
+                            "original": original_query,
+                            "address": hex(int(addr)),
+                        }
+
+            # part b - String search for each variant (covers __cstring + __objc_methname)
+            for variant in string_variants:
+                addresses = conn.root.exposed_search_string(variant)
+                if addresses:
+                    return {
+                        "type": "string_data",
+                        "query": variant,
+                        "original": original_query,
+                        "addresses": [hex(int(a)) for a in addresses],
+                    }
+
+            # part c - Fuzzy fallback via Names() (both symbols + ObjC selectors)
+            fuzzy_token = objc_stem if objc_stem else _kebab_to_snake(canonical).replace("_", "")
+            fuzzy_results = conn.root.exposed_lookup_symbol_fuzzy(fuzzy_token)
+            if fuzzy_results:
+                best = fuzzy_results[0]
+                return {
+                    "type": "symbol_fuzzy",
+                    "query": best["name"],
+                    "original": original_query,
+                    "address": hex(int(best["address"])),
+                    "all_matches": [
+                        {"name": r["name"], "address": hex(int(r["address"]))}
+                        for r in fuzzy_results
+                    ],
+                }
+
+
+
+            return (
+                f"error: Could not find '{canonical}' (from '{original_query}') "
+                f"as symbol, string, or fuzzy name match."
+            )
+
+        except ConnectionRefusedError:
+            return "error: Connection to decompiler refused. Is IDA Pro running?"
+        except TimeoutError:
+            return "error: Decompiler request timed out"
+        except EOFError as e:
+            last_error = e
+            wait = 3 * (attempt + 1)
+            print(f"[find_address] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception as e:
+            return f"error: {e}"
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    return f"error: Decompiler connection closed after 3 attempts: {last_error}"
+
+
 
 @tool
 def rename_local_variable(func_address: int, old_name: str, new_name: str) -> bool:
-    """Renames a local variable within a function's decompilation using the remote IDA Pro service"""
+    """Renames a local variable within a function's decompilation"""
     try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
-        success = conn.root.exposed_rename_local_variable(func_address, old_name, new_name)
+        conn = _connect()
+        result = conn.root.exposed_rename_local_variable(func_address, old_name, new_name)
         conn.close()
-        return success
-    except ConnectionRefusedError:
-        return False
+        return result
     except Exception:
         return False
 
+
 @tool
 def start_ida_server_for_binary(binary_path: str) -> str:
-    """
-    Starts an IDA Pro instance in the background with the RPC server for a specific binary.
-    Wait until the server is responsive before returning.
-    """
+    """Launches the IDA Pro application with the RPC server script for a specific binary"""
     if not IDA_EXECUTABLE_PATH or not os.path.isfile(IDA_EXECUTABLE_PATH):
-        return "# ERROR: IDA Pro executable path is not configured or invalid. Please set the IDA_PATH environment variable in your .env file."
+        return "# ERROR: IDA_PATH not set or invalid."
     if not IDA_RPC_SERVER_SCRIPT or not os.path.isfile(IDA_RPC_SERVER_SCRIPT):
-        return "# ERROR: IDA RPC server script path is not configured or invalid. Please set the IDA_RPC_SCRIPT_PATH environment variable in your .env file."
+        return "# ERROR: IDA_RPC_SCRIPT_PATH not set or invalid."
     if not os.path.isfile(binary_path):
-        return f"# ERROR: Binary file not found at '{binary_path}'."
+        return f"# ERROR: Binary not found: '{binary_path}'."
+
     stop_ida_server.invoke({})
+
+    import subprocess
+    import socket
+    import glob
+    
+    # Force kill any lingering ida64/idat processes just in case
+    subprocess.run(["pkill", "-9", "-f", "idat"], capture_output=True)
+    subprocess.run(["pkill", "-9", "-f", "ida64"], capture_output=True)
+    
+    # Clean up any corrupted IDA databases from previous aborted runs
+    for ext in [".i64", ".id0", ".id1", ".id2", ".nam", ".til"]:
+        try:
+            db_file = binary_path + ext
+            if os.path.exists(db_file):
+                os.remove(db_file)
+        except Exception:
+            pass
+
+    # Wait for the port to be fully released
+    for _ in range(60):  
+        try:
+            with socket.create_connection((DECOMPILER_HOST, DECOMPILER_PORT), timeout=1):
+                time.sleep(1)
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            break
+    else:
+        return "# ERROR: Port 18861 is still in use after attempting to kill old IDA instances."
+
+    # Launch IDA in the background
     command = [
         IDA_EXECUTABLE_PATH,
-        "-A",  # autonomous mode
+        "-A",
+        "-c",
         "-L/tmp/ida.log",
         f"-S{IDA_RPC_SERVER_SCRIPT}",
         binary_path,
     ]
     try:
-        env = os.environ.copy()
         log_file = open("/tmp/ida_rpc_server.log", "w")
-        subprocess.Popen(command, stdout=log_file, stderr=log_file, stdin=subprocess.DEVNULL, env=env)
+        subprocess.Popen(command, stdout=log_file, stderr=log_file, stdin=subprocess.DEVNULL, env=os.environ.copy())
     except Exception as e:
-        return f"# ERROR: Failed to start IDA Pro process: {e}"
-    for _ in range(300):  # Wait up to 10 mins
+        return f"# ERROR: Failed to start IDA Pro: {e}"
+
+    for _ in range(300):  # Wait up to 10 minutes
         try:
-            with rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 2}) as conn:
-                return f"Successfully started and connected to IDA Pro RPC server for binary: {os.path.basename(binary_path)}."
-        except ConnectionRefusedError:
+            with rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 2}):
+                return f"Successfully started IDA Pro RPC server for: {os.path.basename(binary_path)}."
+        except (ConnectionRefusedError, TimeoutError, OSError):
             time.sleep(2)
-            
+
     return "# ERROR: Timed out waiting for IDA Pro RPC server to start."
+
 
 @tool
 def stop_ida_server() -> str:
     """Connects to the running IDA Pro RPC server and requests a shutdown"""
+    import socket
+    import subprocess
+    msg = "Shutdown signal sent."
     try:
+        with socket.create_connection((DECOMPILER_HOST, DECOMPILER_PORT), timeout=2):
+            pass
         with rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 5}) as conn:
             conn.root.exposed_shutdown()
-        return "Shutdown signal sent to IDA Pro RPC server."
-    except ConnectionRefusedError:
-        return "No active IDA Pro RPC server found to stop."
-    except EOFError:
-        return "Shutdown signal sent to IDA Pro RPC server (connection closed by peer)."
     except Exception as e:
-        return f"Shutdown signal sent, but connection terminated abnormally: {e}"
+        msg = f"Shutdown failed or connection terminated: {e}"
+        
+    # kill lingering idat processes 
+    try:
+        subprocess.run(["pkill", "-9", "idat"], capture_output=True)
+    except Exception:
+        pass
+
+    return msg
+
 
 @tool
 def set_comment(address: int, comment: str) -> bool:
     """Sets a comment at a specific address in the disassembly"""
     try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
-        success = conn.root.exposed_set_comment(address, comment)
+        conn = _connect()
+        result = conn.root.exposed_set_comment(address, comment)
         conn.close()
-        return success
-    except ConnectionRefusedError:
-        return False
+        return result
     except Exception:
         return False
+
 
 @tool
 def save_ida_database() -> str:
     """Saves the current IDA Pro database (.i64) with any annotations made"""
     try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
+        conn = _connect()
         success = conn.root.exposed_save_ida_database("")
         conn.close()
         return "Successfully saved IDA database." if success else "Failed to save IDA database."
     except ConnectionRefusedError:
         return "Connection refused."
+    except TimeoutError:
+        return "Error: Request timed out."
     except Exception as e:
         return f"Error saving database: {e}"
+
 
 @tool
 def get_entitlements(binary_path: str) -> str:
     """Extracts entitlements from a Mach-O binary using ipsw"""
     try:
-        import subprocess
         result = subprocess.run(["ipsw", "ent", binary_path], capture_output=True, text=True, check=True)
         return result.stdout or result.stderr
     except subprocess.CalledProcessError as e:
@@ -179,28 +389,34 @@ def get_entitlements(binary_path: str) -> str:
     except Exception as e:
         return f"Error: {e}"
 
+
 @tool
 def resolve_objc_dispatch(func_ea: int, call_ea: int) -> str:
-    """Attempts to resolve the objc_msgSend class and selector at call_ea inside func_ea using Hex-Rays AST"""
+    """Attempts to resolve the objc_msgSend class and selector at call_ea inside func_ea"""
     try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
+        conn = _connect()
         result = conn.root.exposed_resolve_objc_dispatch(func_ea, call_ea)
         conn.close()
         return result
     except ConnectionRefusedError:
         return "Connection refused."
+    except TimeoutError:
+        return "Error: Request timed out."
     except Exception as e:
         return f"Error: {e}"
+
 
 @tool
 def trace_variable_source(func_ea: int, var_name: str) -> str:
     """Traces the source of a variable inside a function by dumping the def-use context"""
     try:
-        conn = rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT)
+        conn = _connect()
         result = conn.root.exposed_trace_variable_source(func_ea, var_name)
         conn.close()
         return result
     except ConnectionRefusedError:
         return "Connection refused."
+    except TimeoutError:
+        return "Error: Request timed out."
     except Exception as e:
         return f"Error: {e}"

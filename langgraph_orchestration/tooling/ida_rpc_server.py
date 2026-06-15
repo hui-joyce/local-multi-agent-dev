@@ -18,11 +18,13 @@ if not ida_hexrays.init_hexrays_plugin():
 _work_queue: queue.Queue = queue.Queue()
 
 def _run_on_main_thread(func, *args, timeout=120):
-    """Submit a callable to be executed on the main thread and wait for the result."""
     result_event = threading.Event()
+    cancel_event = threading.Event()
     result_container = {"value": None, "error": None}
 
     def task():
+        if cancel_event.is_set():
+            return  
         try:
             result_container["value"] = func(*args)
         except Exception as e:
@@ -33,6 +35,7 @@ def _run_on_main_thread(func, *args, timeout=120):
     _work_queue.put(task)
 
     if not result_event.wait(timeout=timeout):
+        cancel_event.set()  
         raise TimeoutError(f"Main thread execution timed out after {timeout}s")
 
     if result_container["error"] is not None:
@@ -169,13 +172,19 @@ class DecompilerService(rpyc.Service):
             return 0
 
     def exposed_lookup_symbol(self, symbol_name: str):
-        """Looks up the memory address of a given symbol"""
+        """Looks up the memory address of a given symbol by exact name.
+        Tries the raw name, with/without leading underscore."""
         print(f"[DecompilerService] Request to lookup symbol: {symbol_name}")
         def _do():
-            import ida_name
-            ea = idc.get_name_ea_simple(symbol_name)
-            if ea != idc.BADADDR:
-                return ea
+            import idc
+            candidates = [
+                symbol_name,
+                "_" + symbol_name if not symbol_name.startswith("_") else symbol_name[1:],
+            ]
+            for c in candidates:
+                ea = idc.get_name_ea_simple(c)
+                if ea != idc.BADADDR:
+                    return ea
             return 0
         try:
             return _run_on_main_thread(_do)
@@ -183,19 +192,57 @@ class DecompilerService(rpyc.Service):
             print(f"Error in lookup_symbol: {e}")
             return 0
 
+    def exposed_lookup_symbol_fuzzy(self, token: str):
+        """
+        Fuzzy symbol lookup: 
+        -scans IDA's Names() table for entries that contain
+        the token as a substring (case-insensitive, ignoring _ and - separators)
+        -checks for ObjC sel_ prefix variants
+        -returns a list of {name, address} dicts for the top-20 matches
+        """
+        print(f"[DecompilerService] Fuzzy lookup for: {token}")
+        def _do():
+            import idautils
+            import idc
+            needle = token.lower().replace("-", "").replace("_", "")
+
+            sel_name = "sel_" + token
+            ea = idc.get_name_ea_simple(sel_name)
+            if ea != idc.BADADDR:
+                return [{"name": sel_name, "address": int(ea)}]
+
+            matches = []
+            for ea, name in idautils.Names():
+                norm = name.lower().replace("_", "").replace("-", "")
+                if needle in norm:
+                    matches.append({"name": name, "address": int(ea)})
+                    if len(matches) >= 20:
+                        break
+            return matches
+        try:
+            return _run_on_main_thread(_do, timeout=120)
+        except Exception as e:
+            print(f"Error in lookup_symbol_fuzzy: {e}")
+            return []
+
     def exposed_search_string(self, target_string: str):
-        """Searches for a string in the binary and returns a list of addresses where it was found"""
         def _do():
             found = []
-            import idautils
-            for s in idautils.Strings():
-                if target_string in str(s):
-                    found.append(int(s.ea))
+            try:
+                import idautils
+                for s in idautils.Strings():
+                    s_str = str(s)
+                    if s_str == target_string or target_string in s_str:
+                        found.append(int(s.ea))
+                        if len(found) >= 100:
+                            break
+            except Exception as e:
+                print(f"[DecompilerService] Error in search_string: {e}")
             return found
         try:
-            return _run_on_main_thread(_do)
+            return _run_on_main_thread(_do, timeout=300)
         except Exception as e:
-            print(f"Error in search_string: {e}")
+            print(f"Error in search_string outer: {e}")
             return []
 
     def exposed_save_ida_database(self, out_path: str = ""):
@@ -227,7 +274,7 @@ class DecompilerService(rpyc.Service):
                         idx = len(lines) - 1
                         start = max(0, idx - 5)
                         return "\n".join(lines[start:idx+1])
-                # If exact ea match fails, just return the whole function
+                # if exact ea match fails, just return the whole function
                 return "\n".join([ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()])
             except Exception as e:
                 return f"error: {e}"
@@ -260,12 +307,19 @@ class DecompilerService(rpyc.Service):
 def start_server(port):
     print(f"[DecompilerService] Starting RPC server on port {port}...")
     print("[DecompilerService] Waiting for connections from your agent...")
-    t = ThreadedServer(
-        DecompilerService,
-        port=port,
-        protocol_config={'allow_public_attrs': True}
-    )
-    t.start()
+    try:
+        t = ThreadedServer(
+            DecompilerService,
+            port=port,
+            protocol_config={'allow_public_attrs': True}
+        )
+        t.start()
+    except Exception as e:
+        print(f"[DecompilerService] FATAL ERROR: Server failed to start: {e}")
+        import ida_pro
+        ida_pro.qexit(1)
+        import os
+        os._exit(1)
 
 
 if __name__ == "__main__":
@@ -279,7 +333,7 @@ if __name__ == "__main__":
     th.start()
     print("[DecompilerService] Server thread started. Main thread pumping work queue.")
 
-    # Main thread loop
+    # main thread loop
     while True:
         try:
             task = _work_queue.get(timeout=0.1)

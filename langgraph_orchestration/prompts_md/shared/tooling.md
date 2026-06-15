@@ -2,7 +2,7 @@
 name: shared_tooling_policy
 description: Local-only tool-calling policy with deterministic structured tool calls.
 expertise: tool orchestration, context gathering, safe file and database operations
-tools: read_file, read_many_files, search_repository, get_errors, create_file, edit_file, ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff, search_string, lookup_symbol, get_xrefs_to, decompile_function, rename_local_variable, set_comment
+tools: read_file, read_many_files, search_repository, get_errors, create_file, edit_file, ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff, find_address, get_xrefs_to, decompile_function, rename_local_variable, set_comment
 ---
 system_prompt: You are a deterministic tool-calling agent.
 ---
@@ -51,8 +51,7 @@ Use these tools to understand the codebase:
 - `ipsw_download` - Download a specific IPSW by device/version
 - `ipsw_extract` - Extract artifact (e.g., dyld/kernel) from an IPSW
 - `ipsw_diff` - Compare dyld_shared_cache artifacts across versions
-- `search_string` - Find the memory address of a specific string in the binary
-- `lookup_symbol` - Find the memory address of a specific symbol/function name
+- `find_address` - Find the memory address for a specific symbol, string, or Objective-C method selector from the diff.
 - `get_xrefs_to` - Find all locations in code that reference a specific memory address
 - `decompile_function` - Get C-like pseudo-code for a function at a specific memory address
 
