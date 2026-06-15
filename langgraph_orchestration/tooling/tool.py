@@ -48,7 +48,7 @@ class ToolResult(BaseModel):
 class ToolPolicy(BaseModel):
     requires_context_before_write: bool = True
     confirm_destructive_actions: bool = True
-    max_iterations: int = 8
+    max_iterations: int = 40
     allowed_tools: list[str] = Field(default_factory=list)
     read_only_until_context_complete: bool = True
 

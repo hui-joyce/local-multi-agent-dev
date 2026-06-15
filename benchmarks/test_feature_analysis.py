@@ -16,7 +16,7 @@ from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.schemas.state import AgentState
 
-REPORT_PATH = Path("artifacts/firmware_diff/20260609-134404/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
+REPORT_PATH = Path("artifacts/firmware_diff/20260615-041208/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
 
 @dataclass
 class FeatureAnalysisCase:
@@ -38,7 +38,7 @@ class FeatureAnalysisResult:
 def build_feature_case() -> FeatureAnalysisCase:    
     return FeatureAnalysisCase(
         case_id="RE-FEATURE-ANALYSIS-26-4-1",
-        description="Feature analysis on 26.4.1 vs 26.4.2 diff report (concise).",
+        description="Feature analysis on 26.4.1 vs 26.4.2 diff report.",
         report_path=REPORT_PATH,
         user_input=(
             "Run feature analysis on diff report: "
@@ -50,10 +50,13 @@ def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
     report_text = case.report_path.read_text(encoding="utf-8")
     
     parts = report_text.split("\n#### ")
-    if len(parts) > 2:
+    if len(parts) > 1:
         # parts[0] is the header/intro
-        report_text = parts[0] + "\n#### " + "\n#### ".join(parts[2:])
+        header = parts[0]
+        dylib_parts = [p for p in parts[1:] if ".framework/" in p or ".dylib" in p or "Updated" in p or "Added" in p or "Modified" in p]
         
+        if dylib_parts:
+            report_text = header + "\n#### " + "\n#### ".join(dylib_parts)
     state = AgentState(user_input=case.user_input)
     state.intermediate_outputs["firmware_diff_report_path"] = str(case.report_path)
     state.intermediate_outputs["firmware_diff_report"] = report_text

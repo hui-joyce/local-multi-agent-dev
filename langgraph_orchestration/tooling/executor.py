@@ -344,27 +344,18 @@ class IDAToolExecutor(BaseToolExecutor):
     def __init__(self, workspace_root: Optional[str] = None, ida_instance: Optional[Any] = None):
         super().__init__(workspace_root)
         self.ida_instance = ida_instance
-        self._ida_modules = self._load_ida_modules(ida_instance)
-        self._ida_available = bool(self._ida_modules.get("idc") and self._ida_modules.get("ida_funcs"))
 
     def execute(self, tool_request: ToolRequest) -> ToolResult:
         handlers = {
             "read_file": self._read_file,
             "read_many_files": self._read_many_files,
-            "read_decompilation": self._read_decompilation,
-            "read_disassembly": self._read_disassembly,
-            "xrefs_to": self._xrefs_to,
-            "xrefs_from": self._xrefs_from,
-            "lookup_funcs": self._lookup_funcs,
-            "basic_blocks": self._basic_blocks,
             "ipsw_cli": self._ipsw_cli,
             "ipsw_download": self._ipsw_download,
             "ipsw_extract": self._ipsw_extract,
             "ipsw_diff": self._ipsw_diff,
             "decompile_function": self._remote_decompile_function,
             "get_xrefs_to": self._remote_get_xrefs_to,
-            "search_string": self._remote_search_string,
-            "lookup_symbol": self._remote_lookup_symbol,
+            "find_address": self._remote_find_address,
             "rename_local_variable": self._remote_rename_local_variable,
             "set_comment": self._remote_set_comment,
             "start_ida_server_for_binary": self._remote_start_ida_server_for_binary,
@@ -398,197 +389,11 @@ class IDAToolExecutor(BaseToolExecutor):
                 source="ipsw" if tool_name.startswith("ipsw") else "ida",
             )
 
-    def _load_ida_modules(self, ida_instance: Optional[Any]) -> dict[str, Any]:
-        modules: dict[str, Any] = {
-            "idaapi": ida_instance,
-            "idc": None,
-            "idautils": None,
-            "ida_funcs": None,
-            "ida_hexrays": None,
-            "ida_gdl": None,
-            "ida_lines": None,
-        }
-        for name in ["idaapi", "idc", "idautils", "ida_funcs", "ida_hexrays", "ida_gdl", "ida_lines"]:
-            if modules.get(name) is not None:
-                continue
-            try:
-                modules[name] = importlib.import_module(name)
-            except Exception:
-                modules[name] = None
-        return modules
-
     def _read_file(self, req: ToolRequest) -> ToolResult:
         return VSCodeToolExecutor(self.workspace_root)._read_file(req)
 
     def _read_many_files(self, req: ToolRequest) -> ToolResult:
         return VSCodeToolExecutor(self.workspace_root)._read_many_files(req)
-
-    def _offline_cache_path(self, prefix: str, target: str) -> str:
-        safe_target = re.sub(r"[^A-Za-z0-9_.-]", "_", target)
-        return os.path.join(self.workspace_root, ".ida_cache", f"{prefix}_{safe_target}.txt")
-
-    def _read_offline_cache(self, prefix: str, target: str) -> Optional[str]:
-        path = self._offline_cache_path(prefix, target)
-        if not os.path.exists(path):
-            return None
-        with open(path, "r", encoding="utf-8") as handle:
-            return handle.read()
-
-    def _resolve_ea(self, target: Any) -> Optional[int]:
-        if isinstance(target, int):
-            return target
-        if target is None:
-            return None
-
-        idc = self._ida_modules.get("idc")
-        idaapi = self._ida_modules.get("idaapi")
-        if idc is None:
-            return None
-
-        value = str(target).strip()
-        if value.lower().startswith("0x"):
-            try:
-                return int(value, 16)
-            except ValueError:
-                return None
-
-        try:
-            numeric = int(value)
-            return numeric
-        except ValueError:
-            pass
-
-        ea = idc.get_name_ea_simple(value)
-        badaddr = getattr(idaapi, "BADADDR", 0xFFFFFFFFFFFFFFFF) if idaapi is not None else 0xFFFFFFFFFFFFFFFF
-        if ea == badaddr:
-            return None
-        return int(ea)
-
-    def _require_live_ida(self, tool_name: str) -> Optional[ToolResult]:
-        if self._ida_available:
-            return None
-        return ToolResult(
-            tool_name=tool_name,
-            success=False,
-            output="",
-            error=f"{tool_name} requires a live IDA Pro session",
-        )
-
-    def _read_decompilation(self, req: ToolRequest) -> ToolResult:
-        func_name = req.arguments.get("function") or req.target
-        if not func_name:
-            return ToolResult(tool_name="read_decompilation", success=False, output="", error="No function provided")
-
-        offline = self._read_offline_cache("decompile", str(func_name))
-        if offline:
-            return ToolResult(
-                tool_name="read_decompilation",
-                success=True,
-                output=offline,
-                metadata={"function": func_name, "source": "cache"},
-            )
-
-        not_live = self._require_live_ida("read_decompilation")
-        if not_live:
-            return not_live
-
-        ida_hexrays = self._ida_modules.get("ida_hexrays")
-        ida_lines = self._ida_modules.get("ida_lines")
-        if ida_hexrays is None:
-            return ToolResult(
-                tool_name="read_decompilation",
-                success=False,
-                output="",
-                error="Hex-Rays decompiler is unavailable in this IDA environment",
-            )
-
-        ea = self._resolve_ea(func_name)
-        if ea is None:
-            return ToolResult(
-                tool_name="read_decompilation",
-                success=False,
-                output="",
-                error=f"Unable to resolve function: {func_name}",
-            )
-
-        cfunc = ida_hexrays.decompile(ea)
-        if cfunc is None:
-            return ToolResult(
-                tool_name="read_decompilation",
-                success=False,
-                output="",
-                error=f"Unable to decompile function at {hex(ea)}",
-            )
-
-        lines = cfunc.get_pseudocode() or []
-        cleaned: list[str] = []
-        for line in lines:
-            text = getattr(line, "line", str(line))
-            if ida_lines is not None:
-                text = ida_lines.tag_remove(text)
-            cleaned.append(text)
-
-        return ToolResult(
-            tool_name="read_decompilation",
-            success=True,
-            output="\n".join(cleaned).strip() or str(cfunc),
-            metadata={"function": str(func_name), "ea": hex(ea)},
-        )
-
-    def _read_disassembly(self, req: ToolRequest) -> ToolResult:
-        target = req.arguments.get("address") or req.arguments.get("function") or req.target
-        if not target:
-            return ToolResult(tool_name="read_disassembly", success=False, output="", error="No target provided")
-
-        offline = self._read_offline_cache("disasm", str(target))
-        if offline:
-            return ToolResult(
-                tool_name="read_disassembly",
-                success=True,
-                output=offline,
-                metadata={"target": target, "source": "cache"},
-            )
-
-        not_live = self._require_live_ida("read_disassembly")
-        if not_live:
-            return not_live
-
-        idc = self._ida_modules["idc"]
-        ida_funcs = self._ida_modules["ida_funcs"]
-        idaapi = self._ida_modules.get("idaapi")
-
-        ea = self._resolve_ea(target)
-        if ea is None:
-            return ToolResult(
-                tool_name="read_disassembly",
-                success=False,
-                output="",
-                error=f"Unable to resolve address/function: {target}",
-            )
-
-        max_instructions = int(req.arguments.get("max_instructions", 200))
-        func = ida_funcs.get_func(ea)
-        end_ea = func.end_ea if func else None
-        badaddr = getattr(idaapi, "BADADDR", 0xFFFFFFFFFFFFFFFF) if idaapi is not None else 0xFFFFFFFFFFFFFFFF
-
-        lines: list[str] = []
-        current = ea
-        for _ in range(max_instructions):
-            if end_ea is not None and current >= end_ea:
-                break
-            asm = idc.generate_disasm_line(current, 0) or ""
-            lines.append(f"{current:#x}: {asm}")
-            nxt = idc.next_head(current, end_ea if end_ea is not None else badaddr)
-            if nxt in (None, badaddr) or nxt <= current:
-                break
-            current = nxt
-
-        return ToolResult(
-            tool_name="read_disassembly",
-            success=True,
-            output="\n".join(lines),
-            metadata={"target": str(target), "instruction_count": len(lines)},
-        )
 
     def _remote_decompile_function(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import decompile_function
@@ -597,7 +402,7 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="decompile_function", success=False, output="", error="Missing address argument")
         
         try:
-            addr_int = self._resolve_ea(address) or int(str(address), 16) if isinstance(address, str) and address.startswith("0x") else int(address)
+            addr_int = self._parse_address(address)
         except (ValueError, TypeError):
             return ToolResult(tool_name="decompile_function", success=False, output="", error="Invalid address format")
         output = decompile_function.invoke({"address": addr_int})
@@ -613,7 +418,7 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="get_xrefs_to", success=False, output="", error="Missing address argument")
         
         try:
-            addr_int = self._resolve_ea(address) or int(str(address), 16) if isinstance(address, str) and address.startswith("0x") else int(address)
+            addr_int = self._parse_address(address)
         except (ValueError, TypeError):
             return ToolResult(tool_name="get_xrefs_to", success=False, output="", error="Invalid address format")
         output = get_xrefs_to.invoke({"address": addr_int})
@@ -623,37 +428,28 @@ class IDAToolExecutor(BaseToolExecutor):
         output_str = json.dumps(output, indent=2) if not isinstance(output, str) else output
         return ToolResult(tool_name="get_xrefs_to", success=True, output=output_str)
         
-    def _remote_search_string(self, req: ToolRequest) -> ToolResult:
-        from langgraph_orchestration.tooling.decompiler_tools import search_string
+    def _remote_find_address(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import find_address
         import json
-        target_string = req.arguments.get("target_string") or req.target
-        if not target_string:
-            return ToolResult(tool_name="search_string", success=False, output="", error="Missing target_string argument")
+        query = req.arguments.get("query") or req.target
+        if not query:
+            return ToolResult(tool_name="find_address", success=False, output="", error="Missing query argument")
+            
+        output = find_address.invoke({"query": query})
         
-        output = search_string.invoke({"target_string": target_string})
-        
-        if isinstance(output, list) and len(output) > 0 and isinstance(output[0], str) and output[0].startswith("error:"):
-            return ToolResult(tool_name="search_string", success=False, output="", error=output[0])
+        if isinstance(output, str) and output.startswith("error:"):
+            return ToolResult(tool_name="find_address", success=False, output="", error=output)
             
-        if not output:
-            return ToolResult(tool_name="search_string", success=False, output="", error=f"String '{target_string}' not found")
+        if isinstance(output, dict):
+            # Tell the agent exactly what it found so it can use the correct follow-up tool
+            result_str = json.dumps(output, indent=2)
+            if output["type"] == "symbol":
+                result_str += "\n\nNOTE: This is a CODE symbol. You MUST use `decompile_function` on this address."
+            elif output["type"] == "string_data":
+                result_str += "\n\nNOTE: This is a string DATA address. You MUST use `get_xrefs_to` on these addresses to find the code referencing it."
+            return ToolResult(tool_name="find_address", success=True, output=result_str)
             
-        output_str = json.dumps([hex(a) if isinstance(a, int) else a for a in output], indent=2) if isinstance(output, list) else str(output)
-        return ToolResult(tool_name="search_string", success=True, output=output_str)
-
-    def _remote_lookup_symbol(self, req: ToolRequest) -> ToolResult:
-        from langgraph_orchestration.tooling.decompiler_tools import lookup_symbol
-        symbol_name = req.arguments.get("symbol_name") or req.target
-        if not symbol_name:
-            return ToolResult(tool_name="lookup_symbol", success=False, output="", error="Missing symbol_name argument")
-            
-        output = lookup_symbol.invoke({"symbol_name": symbol_name})
-        output_str = str(output) if output else ""
-        
-        if output_str.startswith("error:"):
-            return ToolResult(tool_name="lookup_symbol", success=False, output="", error=output_str)
-            
-        return ToolResult(tool_name="lookup_symbol", success=True, output=output_str)
+        return ToolResult(tool_name="find_address", success=False, output="", error=f"Unexpected response: {output}")
     
     def _remote_rename_local_variable(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import rename_local_variable
@@ -665,7 +461,7 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Missing arguments")
             
         try:
-            addr_int = self._resolve_ea(func_address) or int(str(func_address), 16) if isinstance(func_address, str) and func_address.startswith("0x") else int(func_address)
+            addr_int = self._parse_address(func_address)
         except (ValueError, TypeError):
             return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Invalid func_address format")
         success = rename_local_variable.invoke({"func_address": addr_int, "old_name": old_name, "new_name": new_name})
@@ -682,7 +478,7 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="set_comment", success=False, output="", error="Missing arguments")
             
         try:
-            addr_int = self._resolve_ea(address) or int(str(address), 16) if isinstance(address, str) and address.startswith("0x") else int(address)
+            addr_int = self._parse_address(address)
         except (ValueError, TypeError):
             return ToolResult(tool_name="set_comment", success=False, output="", error="Invalid address format")
         success = set_comment.invoke({"address": addr_int, "comment": comment})
@@ -737,135 +533,13 @@ class IDAToolExecutor(BaseToolExecutor):
         output = trace_variable_source.invoke({"func_ea": int(func_ea), "var_name": var_name})
         return ToolResult(tool_name="trace_variable_source", success=True, output=str(output))
 
-    def _xrefs_to(self, req: ToolRequest) -> ToolResult:
-        target = req.arguments.get("address") or req.target
-        if not target:
-            return ToolResult(tool_name="xrefs_to", success=False, output="", error="No target provided")
-
-        not_live = self._require_live_ida("xrefs_to")
-        if not_live:
-            return not_live
-
-        idautils = self._ida_modules["idautils"]
-        ea = self._resolve_ea(target)
-        if ea is None:
-            return ToolResult(tool_name="xrefs_to", success=False, output="", error=f"Unable to resolve: {target}")
-
-        refs = list(idautils.XrefsTo(ea, 0))
-        output = "\n".join(f"{xref.frm:#x} -> {xref.to:#x} (type={xref.type})" for xref in refs)
-        return ToolResult(
-            tool_name="xrefs_to",
-            success=True,
-            output=output,
-            metadata={"target": str(target), "count": len(refs)},
-        )
-
-    def _xrefs_from(self, req: ToolRequest) -> ToolResult:
-        target = req.arguments.get("address") or req.target
-        if not target:
-            return ToolResult(tool_name="xrefs_from", success=False, output="", error="No target provided")
-
-        not_live = self._require_live_ida("xrefs_from")
-        if not_live:
-            return not_live
-
-        idautils = self._ida_modules["idautils"]
-        ea = self._resolve_ea(target)
-        if ea is None:
-            return ToolResult(tool_name="xrefs_from", success=False, output="", error=f"Unable to resolve: {target}")
-
-        refs = list(idautils.XrefsFrom(ea, 0))
-        output = "\n".join(f"{xref.frm:#x} -> {xref.to:#x} (type={xref.type})" for xref in refs)
-        return ToolResult(
-            tool_name="xrefs_from",
-            success=True,
-            output=output,
-            metadata={"target": str(target), "count": len(refs)},
-        )
-
-    def _lookup_funcs(self, req: ToolRequest) -> ToolResult:
-        pattern = req.arguments.get("pattern") or req.target
-        if not pattern:
-            return ToolResult(tool_name="lookup_funcs", success=False, output="", error="No pattern provided")
-
-        not_live = self._require_live_ida("lookup_funcs")
-        if not_live:
-            return not_live
-
-        idautils = self._ida_modules["idautils"]
-        idc = self._ida_modules["idc"]
-        max_results = int(req.arguments.get("max_results", 200))
-
-        needle = str(pattern).lower()
-        matches: list[str] = []
-        for ea in idautils.Functions():
-            name = idc.get_func_name(ea) or ""
-            if needle in name.lower():
-                matches.append(f"{ea:#x}: {name}")
-                if len(matches) >= max_results:
-                    break
-
-        return ToolResult(
-            tool_name="lookup_funcs",
-            success=True,
-            output="\n".join(matches),
-            metadata={"pattern": str(pattern), "count": len(matches), "limited": len(matches) >= max_results},
-        )
-
-    def _basic_blocks(self, req: ToolRequest) -> ToolResult:
-        function_target = req.arguments.get("function") or req.target
-        if not function_target:
-            return ToolResult(tool_name="basic_blocks", success=False, output="", error="No function provided")
-
-        not_live = self._require_live_ida("basic_blocks")
-        if not_live:
-            return not_live
-
-        ida_funcs = self._ida_modules["ida_funcs"]
-        ida_gdl = self._ida_modules.get("ida_gdl")
-
-        if ida_gdl is None:
-            return ToolResult(
-                tool_name="basic_blocks",
-                success=False,
-                output="",
-                error="ida_gdl is unavailable in this IDA environment",
-            )
-
-        ea = self._resolve_ea(function_target)
-        if ea is None:
-            return ToolResult(
-                tool_name="basic_blocks",
-                success=False,
-                output="",
-                error=f"Unable to resolve function: {function_target}",
-            )
-
-        func = ida_funcs.get_func(ea)
-        if func is None:
-            return ToolResult(
-                tool_name="basic_blocks",
-                success=False,
-                output="",
-                error=f"No function found at {hex(ea)}",
-            )
-
-        flow = ida_gdl.FlowChart(func)
-        lines: list[str] = []
-        count = 0
-        for block in flow:
-            succs = [f"{succ.start_ea:#x}" for succ in block.succs()]
-            lines.append(
-                f"block {block.id}: {block.start_ea:#x}-{block.end_ea:#x}; succs=[{', '.join(succs)}]"
-            )
-            count += 1
-
-        return ToolResult(
-            tool_name="basic_blocks",
-            success=True,
-            output="\n".join(lines),
-            metadata={"function": str(function_target), "ea": hex(ea), "block_count": count},
-        )
+    def _parse_address(self, address: Any) -> int:
+        if isinstance(address, int):
+            return address
+        val = str(address).strip()
+        if val.lower().startswith("0x"):
+            return int(val, 16)
+        return int(val)
 
     def _run_ipsw(self, args: list[str], timeout: int = 120) -> ToolResult:
         if not args:

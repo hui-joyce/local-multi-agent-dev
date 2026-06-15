@@ -314,8 +314,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 "source": source or "component",
                 "evidence": evidence,
                 "allowed_tool_names": [
-                    "search_string",
-                    "lookup_symbol",
+                    "find_address",
                     "decompile_function",
                     "get_xrefs_to",
                     "rename_local_variable",
@@ -329,10 +328,78 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             if binary_path:
                 target_entry["binary_path"] = binary_path
             targets.append(target_entry)
-            if len(targets) >= limit:
-                break
             idx = peek
-        return targets
+
+        # triage filter, drop LOW_SIGNAL components before they reach the queue 
+        high_signal_targets = []
+        for t in targets:
+            signal = _triage_evidence(t.get("evidence", ""))
+            t["_triage_signal"] = signal
+            if signal == "HIGH_SIGNAL":
+                high_signal_targets.append(t)
+            else:
+                print(f"[TRIAGE] Skipping {t.get('name', '?')} — LOW_SIGNAL (metadata-only changes)")
+        return high_signal_targets
+
+    def _triage_evidence(evidence: str) -> str:
+        """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'."""
+        import re as _re
+
+        # High-signal: explicit added/removed lines in Symbols or CStrings sections
+        symbol_change = _re.search(
+            r'^[Ss]ymbols\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
+            evidence, _re.MULTILINE
+        )
+        cstring_change = _re.search(
+            r'^[Cc][Ss]trings\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
+            evidence, _re.MULTILINE
+        )
+        entitlement_change = _re.search(
+            r'^[Ee]ntitlements\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
+            evidence, _re.MULTILINE
+        )
+
+        for block_match in [symbol_change, cstring_change, entitlement_change]:
+            if block_match:
+                block = block_match.group(0)
+                for line in block.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith('+') or stripped.startswith('-'):
+                        return "HIGH_SIGNAL"
+
+        # treat function count changes as high-signal
+        func_change = _re.search(
+            r'Functions\s*:\s*(\d+)\s*->\s*(\d+)|Functions:\s*(\d+)',
+            evidence
+        )
+        func_lines = _re.findall(r'^[+-]\s*Functions\s*:', evidence, _re.MULTILINE)
+        if func_lines:
+            return "HIGH_SIGNAL"
+
+        for line in evidence.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(('+', '-')):
+                # Skip pure UUID/version/section-size lines 
+                if _re.match(
+                    r'^[+\-]\s*('                   # prefixed diff line
+                    r'UUID:\s*[0-9A-Fa-f\-]+'       # UUID
+                    r'|\d+\.\d+\.\d+\.\d+\.\d+'     # version string like 1450.500.221.2.9
+                    r'|__TEXT\.__'                  # section size (e.g. __TEXT.__const)
+                    r'|__DATA\.__'                  # data section
+                    r'|__LINKEDIT'                  # linkedit segment
+                    r'|__AUTH\.__'                  # auth section
+                    r'|/usr/lib/'                   # system dylibs
+                    r'|/System/Library/'            # framework/private framework dylib deps
+                    r'|/usr/local/lib/'             # local dylibs
+                    r')',
+                    stripped
+                ):
+                    continue
+                return "HIGH_SIGNAL"
+
+        return "LOW_SIGNAL"
 
     def _invoke_feature_llm(role: str, feature: dict[str, str], report_text: str) -> str:
         try:
@@ -677,8 +744,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         extracted_binary = None
 
         if feature_binary_path:
-            # The diff report gives us e.g. "/System/Library/Messages/PlugIns/iMessage.imservice/iMessage"
-            # Look for it under any build subdirectory in .ipsw_features/
             clean_path = feature_binary_path.lstrip("/")
             if os.path.isdir(output_dir):
                 for entry in os.listdir(output_dir):
@@ -687,7 +752,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         extracted_binary = candidate
                         break
 
-        # Strategy 2: If not found pre-extracted, try extracting from IPSW
+        # if not found pre-extracted, try extracting from IPSW
         if not extracted_binary:
             local_ipsws = _collect_confirmed_local_artifacts(state)
             _, new_ipsw = _select_diff_pair(local_ipsws)
@@ -740,50 +805,126 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         if not feature:
             return state
         from langgraph_orchestration.prompts.reverse_engineering import build_unified_feature_analysis_prompt
-        
+
+        stage1_tools = {"find_address"}
+        stage2_tools = {"get_xrefs_to", "decompile_function"}
+        used_tool_names = {r.tool_name for r in state.tool_results}
+        has_stage1_results = bool(used_tool_names & stage1_tools)
+        has_stage2_results = bool(used_tool_names & stage2_tools)
+        hard_at_limit = state.tool_iteration >= state.max_tool_iterations
+
         prompt = build_unified_feature_analysis_prompt(
             user_input=state.user_input,
             component_evidence=feature.get("evidence", ""),
             component_name=feature.get("name", "Unknown Component"),
             has_tool_results=bool(state.tool_results),
-            at_limit=(state.tool_iteration >= state.max_tool_iterations - 2)
+            at_limit=hard_at_limit,
         )
         context_blocks = []
         if state.tool_results:
             context_blocks.append(StateManager.format_tool_activity(state))
-            
+
         if context_blocks:
             prompt += "\n\n=== RECENT TOOL EXECUTION CONTEXT ===\n" + "\n\n".join(context_blocks) + "\n=====================================\n"
-            if state.tool_iteration >= state.max_tool_iterations - 2:
-                prompt += "\n**CRITICAL FINAL INSTRUCTION**: You have reached the maximum allowed tool calls. You MUST NOT output any more `<tool_call>` blocks. You MUST output the final report EXACTLY starting with the header `## What this feature does`, followed by the other sections and the JSON score. Do not write any conversational filler."
+
+            if hard_at_limit:
+                # Budget fully exhausted 
+                prompt += (
+                    "\n**CRITICAL FINAL INSTRUCTION**: You have reached the absolute tool call limit. "
+                    "You MUST NOT output any more `<tool_call>` blocks. "
+                    "Output the final report NOW starting EXACTLY with `## What this feature does`."
+                )
+            elif has_stage1_results and not has_stage2_results:
+                # Collect addresses from Stage 1 tool results to guide the model
+                symbol_addrs = []
+                string_addrs = []
+                import json
+                for r in state.tool_results:
+                    if r.tool_name == "find_address" and r.success and r.output.strip():
+                        # Extract the JSON part before the NOTE: string
+                        json_part = r.output.split("\n\nNOTE:")[0]
+                        try:
+                            data = json.loads(json_part)
+                            if data.get("type") == "symbol":
+                                symbol_addrs.append(data.get("address"))
+                                prompt += "\n**HINT**: You have found a CODE symbol address. To investigate its logic, you MUST call `decompile_function` on that address now."
+                            elif data.get("type") == "string_data":
+                                addrs = data.get("addresses", [])
+                                string_addrs.append(", ".join(addrs))
+                        except Exception:
+                            pass
+                addr_block = ""
+                if symbol_addrs:
+                    addr_block += f"- **Exported symbol addresses** (use `decompile_function`): {', '.join(symbol_addrs)}\n"
+                if string_addrs:
+                    addr_block += f"- **String data addresses** (use `get_xrefs_to` FIRST): {'; '.join(string_addrs)}\n"
+                prompt += (
+                    f"\n**CRITICAL STAGE 2 INSTRUCTION — MANDATORY DECOMPILATION**: "
+                    f"You have completed Stage 1 and obtained these memory addresses:\n"
+                    f"{addr_block}\n"
+                    f"You MUST now proceed to Stage 2. You are NOT allowed to write the final report yet.\n"
+                    f"**Execute in this exact order** (to avoid IDA stream timeouts):\n"
+                    f"  STEP A — Call `get_xrefs_to` for EACH string data address above (all xrefs first, before any decompile).\n"
+                    f"  STEP B — Call `decompile_function` on the exported symbol address.\n"
+                    f"  STEP C — Call `decompile_function` on the most interesting CALLER functions found in Step A.\n"
+                    f"  STEP D — Trace the full data flow: caller → function → what it does with the data.\n"
+                    f"Output ONLY `<tool_call>` blocks in this order. Do NOT write the report yet."
+                )
+            elif has_stage2_results:
+                # Stage 2 done — mandate final report
+                prompt += (
+                    "\n**CRITICAL STAGE 3 INSTRUCTION**: You have completed decompilation. "
+                    "You MUST now write the final detailed report with full data-flow tracing. "
+                    "Start EXACTLY with `## What this feature does`. Include decompiled pseudocode and caller chains in `## How is it implemented`. "
+                    "End with `---AI_PRIORITISATION_SCORE---` and the JSON score."
+                )
             else:
-                prompt += "\n**CRITICAL FINAL INSTRUCTION**: Evaluate the tool results above. If you need more information, output ONLY `<tool_call>` blocks. If you have enough evidence to conclude, you MUST output the final report starting EXACTLY with the header `## What this feature does`, followed by the other sections and the JSON score. Do not write any conversational filler or constraints."
-            prompt += "\n\nIf generating the report, use this EXACT format:\n## What this feature does\n[Summary]\n## How is it implemented\n[Details]\n## How to trigger this feature\n[Triggers]\n## Evidence\n[Evidence]\n---AI_PRIORITISATION_SCORE---\n{\"method\": \"...\", \"category\": \"...\", \"tier\": \"...\", \"reason\": \"...\"}"
-            
-        print(f"\n\n[DEBUG STATE] tool_iteration={state.tool_iteration}, max_tool_iterations={state.max_tool_iterations}, has_tool_results={bool(state.tool_results)}, at_limit={state.tool_iteration >= state.max_tool_iterations - 2}")
+                # Intermediate state 
+                prompt += (
+                    "\n**INSTRUCTION**: Evaluate the tool results. If you need more data, output ONLY `<tool_call>` blocks. "
+                    "Do NOT write the final report until Stage 2 decompilation is complete."
+                )
+
+            prompt += (
+                "\n\nIf generating the report, use this EXACT format:\n"
+                "## What this feature does\n[High-level summary]\n"
+                "## How is it implemented\n[Include decompiled pseudocode, call chains, and data-flow trace]\n"
+                "## How to trigger this feature\n[Conditions that invoke this code path]\n"
+                "## Evidence\n[Addresses, symbols, strings, decompiled function excerpts]\n"
+                "---AI_PRIORITISATION_SCORE---\n"
+                '{"method": "...", "category": "...", "tier": "...", "confidence": "...", "decompile": true, "reason": "..."}'
+            )
+
+        print(f"\n\n[DEBUG STATE] tool_iteration={state.tool_iteration}/{state.max_tool_iterations} "
+              f"stage1={has_stage1_results} stage2={has_stage2_results} hard_at_limit={hard_at_limit}")
         print(f"\n\n[DEBUG PROMPT]\n{prompt}\n[END DEBUG PROMPT]\n\n")
+
         from langgraph_orchestration.inference.inference_engine import GenerationConfig
         engine = _get_feature_engine()
         chat_prompt = engine.build_prompt(user_input=prompt, system_prompt="")
         output = engine.generate(
             chat_prompt,
-            config=GenerationConfig(max_tokens=4096, temperature=0.2),
+            config=GenerationConfig(max_tokens=3000, temperature=0.2),
             stream=False,
         )
-        
-        # Self-correction: if we are at the limit and it stubbornly used a tool call, force a regeneration
-        if state.tool_iteration >= state.max_tool_iterations - 2:
+
+        # if at limit and model still tries a tool call, force a report
+        if hard_at_limit:
             from langgraph_orchestration.tooling.parser import parse_agent_output
             parsed = parse_agent_output(output)
             if parsed.has_tool_calls():
-                prompt += f"\n\n{output}\n\n**SYSTEM ERROR**: You MUST NOT use `<tool_call>`. You are OUT OF TURNS and the tools have been disabled. You MUST write the final markdown report NOW based on the existing context."
+                prompt += (
+                    f"\n\n{output}\n\n"
+                    "**SYSTEM ERROR**: Tool calls are disabled. You are OUT OF TURNS. "
+                    "Write the final markdown report NOW using the evidence already gathered."
+                )
                 chat_prompt_retry = engine.build_prompt(user_input=prompt, system_prompt="")
                 output = engine.generate(
                     chat_prompt_retry,
-                    config=GenerationConfig(max_tokens=4096, temperature=0.2),
+                    config=GenerationConfig(max_tokens=3000, temperature=0.2),
                     stream=False,
                 )
-        
+
         output = _sanitize_model_output(output)
         return StateManager.add_intermediate_output(state, "unified_feature_analysis", output)
 
@@ -809,7 +950,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         if match:
             markdown_report = match.group(1).strip()
             
-        # Aggressively strip any hallucinated tool logs that might be embedded anywhere
+        # Strip any hallucinated tool logs that might be embedded anywhere
         markdown_report = re.sub(r'## TOOL ACTIVITY[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
         markdown_report = re.sub(r'### Requested Tools[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
         markdown_report = re.sub(r'### Tool Results[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
@@ -859,6 +1000,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
     def route_after_feature_select(state: AgentState) -> str:
+        """All items in the queue are already HIGH_SIGNAL (filtered at build time)."""
         if state.feature_analysis_current:
             return "prepare_decompiler"
         return "done"

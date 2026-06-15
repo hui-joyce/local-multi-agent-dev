@@ -17,12 +17,15 @@ if not ida_hexrays.init_hexrays_plugin():
 
 _work_queue: queue.Queue = queue.Queue()
 
-def _run_on_main_thread(func, *args, timeout=120):
-    """Submit a callable to be executed on the main thread and wait for the result."""
+def _run_on_main_thread(func, *args, timeout=30):
+    """Submit a callable to be executed on the main thread and wait for the result"""
     result_event = threading.Event()
+    cancel_event = threading.Event()
     result_container = {"value": None, "error": None}
 
     def task():
+        if cancel_event.is_set():
+            return  
         try:
             result_container["value"] = func(*args)
         except Exception as e:
@@ -33,6 +36,7 @@ def _run_on_main_thread(func, *args, timeout=120):
     _work_queue.put(task)
 
     if not result_event.wait(timeout=timeout):
+        cancel_event.set()  
         raise TimeoutError(f"Main thread execution timed out after {timeout}s")
 
     if result_container["error"] is not None:
@@ -173,9 +177,16 @@ class DecompilerService(rpyc.Service):
         print(f"[DecompilerService] Request to lookup symbol: {symbol_name}")
         def _do():
             import ida_name
+            import idc
             ea = idc.get_name_ea_simple(symbol_name)
             if ea != idc.BADADDR:
                 return ea
+            if symbol_name.startswith("_"):
+                ea = idc.get_name_ea_simple(symbol_name[1:])
+                if ea != idc.BADADDR: return ea
+            else:
+                ea = idc.get_name_ea_simple("_" + symbol_name)
+                if ea != idc.BADADDR: return ea
             return 0
         try:
             return _run_on_main_thread(_do)
@@ -184,13 +195,50 @@ class DecompilerService(rpyc.Service):
             return 0
 
     def exposed_search_string(self, target_string: str):
-        """Searches for a string in the binary and returns a list of addresses where it was found"""
+        """Searches for a string in known string sections only (fast, targeted bin_search)"""
         def _do():
             found = []
-            import idautils
-            for s in idautils.Strings():
-                if target_string in str(s):
-                    found.append(int(s.ea))
+            try:
+                import ida_bytes
+                import ida_segment
+                import idaapi
+                import idautils
+
+                encoded = target_string.encode("utf-8")
+                hex_pattern = " ".join(f"{b:02x}" for b in encoded)
+                pattern = ida_bytes.compiled_binpat_vec_t()
+                ida_bytes.parse_binpat_str(pattern, 0, hex_pattern, 16)
+
+                TARGET_SUFFIXES = (
+                    "__TEXT.__cstring",
+                    "__TEXT.__objc_methname",
+                    "__TEXT.__oslogstring",
+                    "__TEXT.__ustring",
+                )
+
+                for seg_ea in idautils.Segments():
+                    seg = ida_segment.getseg(seg_ea)
+                    if not seg:
+                        continue
+                    seg_name = idc.get_segm_name(seg_ea)
+                    # Match both standalone ("__TEXT.__cstring") and DSC-prefixed
+                    # ("iMessage.__TEXT.__cstring") section names.
+                    if not any(seg_name.endswith(suffix) for suffix in TARGET_SUFFIXES):
+                        continue
+                    ea = seg.start_ea
+                    while ea < seg.end_ea:
+                        res = ida_bytes.bin_search(ea, seg.end_ea, pattern, ida_bytes.BIN_SEARCH_FORWARD)
+                        ea_val = res[0] if isinstance(res, tuple) else res
+                        if ea_val == idaapi.BADADDR:
+                            break
+                        found.append(int(ea_val))
+                        ea = ea_val + len(encoded)
+                        if len(found) >= 100:
+                            break
+                    if len(found) >= 100:
+                        break
+            except Exception as e:
+                print(f"[DecompilerService] Error in search_string: {e}")
             return found
         try:
             return _run_on_main_thread(_do)
@@ -227,7 +275,7 @@ class DecompilerService(rpyc.Service):
                         idx = len(lines) - 1
                         start = max(0, idx - 5)
                         return "\n".join(lines[start:idx+1])
-                # If exact ea match fails, just return the whole function
+                # if exact ea match fails, just return the whole function
                 return "\n".join([ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()])
             except Exception as e:
                 return f"error: {e}"
@@ -260,12 +308,19 @@ class DecompilerService(rpyc.Service):
 def start_server(port):
     print(f"[DecompilerService] Starting RPC server on port {port}...")
     print("[DecompilerService] Waiting for connections from your agent...")
-    t = ThreadedServer(
-        DecompilerService,
-        port=port,
-        protocol_config={'allow_public_attrs': True}
-    )
-    t.start()
+    try:
+        t = ThreadedServer(
+            DecompilerService,
+            port=port,
+            protocol_config={'allow_public_attrs': True}
+        )
+        t.start()
+    except Exception as e:
+        print(f"[DecompilerService] FATAL ERROR: Server failed to start: {e}")
+        import ida_pro
+        ida_pro.qexit(1)
+        import os
+        os._exit(1)
 
 
 if __name__ == "__main__":
@@ -279,7 +334,7 @@ if __name__ == "__main__":
     th.start()
     print("[DecompilerService] Server thread started. Main thread pumping work queue.")
 
-    # Main thread loop
+    # main thread loop
     while True:
         try:
             task = _work_queue.get(timeout=0.1)

@@ -1,0 +1,42 @@
+{
+  "generated_at_utc": "2026-06-15T05:54:59.035102+00:00",
+  "result": {
+    "case_id": "RE-FEATURE-ANALYSIS-26-4-1",
+    "description": "Feature analysis on 26.4.1 vs 26.4.2 diff report.",
+    "report_path": "artifacts/firmware_diff/20260615-041208/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md",
+    "agent_chain": [
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "unified_feature_analysis",
+      "firmware_analysis",
+      "reverse_engineering_synthesize"
+    ],
+    "latency_seconds": 1865.118,
+    "report_count": 7,
+    "report_paths": {
+      "iMessage": "artifacts/firmware_diff/20260615-041208/feature_analysis/iMessage_analysis.md",
+      "AppPredictionClient": "artifacts/firmware_diff/20260615-041208/feature_analysis/AppPredictionClient_analysis.md",
+      "AppPredictionFoundation": "artifacts/firmware_diff/20260615-041208/feature_analysis/AppPredictionFoundation_analysis.md",
+      "AppPredictionInternal": "artifacts/firmware_diff/20260615-041208/feature_analysis/AppPredictionInternal_analysis.md",
+      "IMSharedUtilities": "artifacts/firmware_diff/20260615-041208/feature_analysis/IMSharedUtilities_analysis.md",
+      "PosterFuturesKit": "artifacts/firmware_diff/20260615-041208/feature_analysis/PosterFuturesKit_analysis.md",
+      "PosterLegibilityKit": "artifacts/firmware_diff/20260615-041208/feature_analysis/PosterLegibilityKit_analysis.md"
+    }
+  }
+}
