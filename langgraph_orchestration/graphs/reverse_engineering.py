@@ -55,7 +55,14 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
     graph = StateGraph(AgentState)
 
-    def _parse_firmware_targets(user_input: str) -> list[dict[str, str]]:
+    def _parse_firmware_targets(state: AgentState) -> list[dict[str, str]]:
+        if "parsed_firmware_targets" in state.intermediate_outputs:
+            try:
+                return json.loads(state.intermediate_outputs["parsed_firmware_targets"])
+            except Exception:
+                pass
+
+        user_input = state.user_input
         targets: list[dict[str, str]] = []
         seen: set[tuple[str, str, str]] = set()
 
@@ -68,6 +75,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             targets.append({"device": device, "version": version, "build": build})
 
         if targets:
+            state.intermediate_outputs["parsed_firmware_targets"] = json.dumps(targets)
             return targets
 
         device_match = re.search(r"\b(iPhone\d+,\d+|iPad\d+,\d+|Watch\d+,\d+|AppleTV\d+,\d+)\b", user_input)
@@ -80,6 +88,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 seen.add(key)
                 targets.append({"device": device_match.group(1), "version": version, "build": ""})
 
+        state.intermediate_outputs["parsed_firmware_targets"] = json.dumps(targets)
         return targets
 
     def _run_tool_requests(state: AgentState, requests: list[ToolRequest]) -> tuple[list[ToolResult], list[str]]:
@@ -127,17 +136,26 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         lowered = (user_input or "").lower()
         if not ("download" in lowered and "extract" in lowered):
             return False
-        if "only" in lowered and "do not perform" in lowered:
-            return True
         blocked = ["compare", "diff", "vulnerable", "disassembly", "inference", "analysis"]
-        return not any(token in lowered for token in blocked)
+        has_blocked = any(token in lowered for token in blocked)
+        if has_blocked:
+            if "only" in lowered and "do not perform" in lowered:
+                return True
+            return False
+        return True
 
     def _collect_confirmed_local_artifacts(state: AgentState) -> list[str]:
+        if "confirmed_local_ipsws" in state.intermediate_outputs:
+            try:
+                return json.loads(state.intermediate_outputs["confirmed_local_ipsws"])
+            except Exception:
+                pass
+
         download_dir = _download_output_dir(state)
         if not os.path.isdir(download_dir):
             return []
 
-        targets = _parse_firmware_targets(state.user_input)
+        targets = _parse_firmware_targets(state)
         artifacts: list[str] = []
 
         for target in targets:
@@ -159,9 +177,20 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         full_path = os.path.join(download_dir, name)
                         if os.path.isfile(full_path):
                             artifacts.append(full_path)
+                continue
+                
+            if version and build:
+                suffix = f"_{version}_{build}_Restore.ipsw"
+                for name in os.listdir(download_dir):
+                    if name.endswith(suffix):
+                        full_path = os.path.join(download_dir, name)
+                        if os.path.isfile(full_path):
+                            artifacts.append(full_path)
 
         if targets:
-            return sorted(set(artifacts))
+            artifacts = sorted(set(artifacts))
+            state.intermediate_outputs["confirmed_local_ipsws"] = json.dumps(artifacts)
+            return artifacts
 
         for name in os.listdir(download_dir):
             if not name.endswith(".ipsw"):
@@ -170,7 +199,9 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             if os.path.isfile(full_path):
                 artifacts.append(full_path)
 
-        return sorted(set(artifacts))
+        artifacts = sorted(set(artifacts))
+        state.intermediate_outputs["confirmed_local_ipsws"] = json.dumps(artifacts)
+        return artifacts
 
     def _parse_version_tuple(version: str) -> tuple[int, ...]:
         return tuple(int(part) for part in version.split(".") if part.isdigit())
@@ -185,11 +216,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
         return sorted(paths, key=key)
 
-    def _select_diff_pair(paths: list[str]) -> tuple[str | None, str | None]:
+    def _select_diff_pair(state: AgentState, paths: list[str]) -> tuple[str | None, str | None]:
+        if "diff_pair_old" in state.intermediate_outputs and "diff_pair_new" in state.intermediate_outputs:
+            old = state.intermediate_outputs["diff_pair_old"] or None
+            new = state.intermediate_outputs["diff_pair_new"] or None
+            return old, new
+
         if len(paths) < 2:
             return None, None
         ordered = _order_ipsw_paths(paths)
-        return ordered[0], ordered[-1]
+        old, new = ordered[0], ordered[-1]
+        state.intermediate_outputs["diff_pair_old"] = old or ""
+        state.intermediate_outputs["diff_pair_new"] = new or ""
+        return old, new
 
     def _format_version_from_ipsw(path: str) -> str | None:
         name = os.path.basename(path)
@@ -401,136 +440,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
         return "LOW_SIGNAL"
 
-    def _invoke_feature_llm(role: str, feature: dict[str, str], report_text: str) -> str:
-        try:
-            engine = _get_feature_engine()
-        except Exception as exc:
-            return f"LLM unavailable: {exc}"
 
-        name = feature.get("name", "unknown")
-        feature_type = feature.get("feature_type", "component")
-        evidence = feature.get("evidence", "")
-
-        if len(evidence) > 2000:
-            evidence = f"{evidence[:2000]}..."
-        report_title = _extract_report_title(report_text)
-        context = []
-
-        if report_title:
-            context.append(f"Diff Report: {report_title}")
-        if evidence:
-            context.append(f"Evidence:\n{evidence}")
-
-        if role == "function_relation":
-            system_prompt = (
-                "You are a reverse engineering analyst specializing in call graph context. "
-                "Summarize likely callers, entry points, and connected components. "
-                "If evidence is insufficient, state what is missing. Be concise. "
-                "CRITICAL: Do not echo your role, task, or instructions. Output ONLY the final analysis."            
-                )
-            user_input = (
-                "Describe how this feature is implemented and its call graph context. "
-                "Be concise and evidence-based.\n"
-                f"Feature: {name}\n"
-                f"Type: {feature_type}"
-            )
-        elif role == "trigger":
-            system_prompt = (
-                "You are a reverse engineering analyst focusing on trigger conditions. "
-                "Describe how the feature is activated (IPC, launchd, user actions, configs). "
-                "If unknown, state that clearly. Be concise. "
-                "CRITICAL: Do not echo your role, task, or instructions. Output ONLY the final analysis."
-            )
-            user_input = (
-                "Explain how this feature is triggered. Be concise and evidence-based. "
-                f"Feature: {name}\n"
-                f"Type: {feature_type}"
-            )
-        else:
-            system_prompt = (
-                "You are a reverse engineering analyst specializing in semantic extraction. "
-                "Infer the high-level purpose from the diff evidence in 1-3 sentences. "
-                "If uncertain, state the confidence and missing evidence. "
-                "CRITICAL: Do not echo your role, task, or instructions. Output ONLY the final analysis."            
-            )
-            user_input = (
-                "Summarize what this feature does at a high level. Be concise and evidence-based. "
-                f"Feature: {name}\n"
-                f"Type: {feature_type}"
-            )
-        prompt = engine.build_prompt(
-            user_input=user_input,
-            context=context,
-            system_prompt=system_prompt,
-        )
-        output = engine.generate(
-            prompt,
-            config=GenerationConfig(max_tokens=600, temperature=0.2),
-            stream=False,
-        )
-        return _sanitize_model_output(output)
-
-    def _render_feature_report(feature: dict[str, str]) -> str:
-        def _strip_thinking(text: str) -> str:
-            if not text:
-                return ""
-            
-            cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-            cleaned = re.sub(r"<tool_call>.*?(?:</tool_call>|$)", "", cleaned, flags=re.DOTALL)
-            
-            if "<think>" in cleaned:
-                parts = cleaned.split("<think>", 1)
-                before = parts[0]
-                after = parts[1]
-                match = re.search(r"(\n\s*#|\n\s*\d+\.\s+\*\*|\n\s*\*\*)", after)
-                if match:
-                    cleaned = before + after[match.start():]
-                else:
-                    cleaned = cleaned.replace("<think>", "")
-            lines = []
-            
-            meta_keywords = [
-                "Role:", "Task:", "Constraint:", "Input:", 
-                "Target Feature:", "Type:", "Path:", "Thinking Process:",
-                "Analyze the Request:", "Analyze the Evidence:", "Synthesize Findings:"
-            ]
-            
-            for line in cleaned.splitlines():
-                stripped_line = line.lstrip(" \t-*").strip()
-                if any(stripped_line.startswith(kw) for kw in meta_keywords):
-                    continue
-                if re.match(r"^\d+\.\s+(Synthesize|Determine|Analyze)", stripped_line):
-                    continue
-                if line.strip() in ["1.", "2.", "3.", "-", "*"]:
-                    continue
-                    
-                lines.append(line)
-            
-            result = "\n".join(lines).strip()
-            result = re.sub(r"\n{3,}", "\n\n", result)
-            return result if result else ""
-
-        relation = _strip_thinking(feature.get("relation", ""))
-        decipher = _strip_thinking(feature.get("decipher", ""))
-        trigger = _strip_thinking(feature.get("trigger", ""))
-
-        lines = [
-            f"# Feature Analysis: {feature.get('name', 'unknown')}",
-            "",
-            "## What this feature does",
-            decipher or "No summary available.",
-            "",
-            "## How is it implemented",
-            relation or "No implementation summary available.",
-            "",
-            "## How to trigger this feature",
-            trigger or "No trigger summary available.",
-            "",
-            "## Evidence",
-            f"- Source: {feature.get('source', 'unknown')}",
-            f"- Evidence: {feature.get('evidence', '')}",
-        ]
-        return "\n".join(lines).strip() + "\n"
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
         lowered_input = (state.user_input or "").lower()
@@ -574,7 +484,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return StateManager.add_retrieved_context(state, context)
 
     def firmware_locator_node(state: AgentState) -> AgentState:
-        targets = _parse_firmware_targets(state.user_input)
+        targets = _parse_firmware_targets(state)
         if not targets and os.getenv("IPSW_DOWNLOADS_API_ENABLE") == "1":
             catalog = FirmwareCatalogService()
             identifier = catalog.resolve_by_model_hint(state.user_input)
@@ -599,7 +509,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         )
 
     def firmware_downloader_node(state: AgentState) -> AgentState:
-        targets = _parse_firmware_targets(state.user_input)
+        targets = _parse_firmware_targets(state)
         requests: list[ToolRequest] = []
         output_dir = _download_output_dir(state)
         os.makedirs(output_dir, exist_ok=True)
@@ -641,9 +551,35 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             payload["note"] = "No confirmed local artifacts available; extraction skipped."
         return StateManager.add_intermediate_output(state, "ipsw_extractor", json.dumps(payload, ensure_ascii=True, indent=2))
 
+    def _find_dsc_for_ipsw(ipsw_path: str, workspace_root: str | None) -> str | None:
+        """Scan .ipsw_extracted/<stem>/ for the base dyld_shared_cache_arm64e file"""
+        import glob as _glob
+        stem = os.path.basename(ipsw_path).replace(".ipsw", "")
+        extracted_root = os.path.join(workspace_root or os.getcwd(), ".ipsw_extracted")
+        pattern = os.path.join(extracted_root, stem, "**", "dyld_shared_cache_arm64e")
+        matches = _glob.glob(pattern, recursive=True)
+        if matches:
+            return matches[0]
+        # broader fallback: any subdirectory whose name starts with the build ID
+        build_id = stem.split("_")[0] if "_" in stem else stem
+        pattern2 = os.path.join(extracted_root, f"*{build_id}*", "**", "dyld_shared_cache_arm64e")
+        matches2 = _glob.glob(pattern2, recursive=True)
+        return matches2[0] if matches2 else None
+
+    def _find_kernelcache_for_ipsw(ipsw_path: str, workspace_root: str | None) -> str | None:
+        """Scan .ipsw_extracted/<stem>/ for the kernelcache release file"""
+        import glob as _glob
+        stem = os.path.basename(ipsw_path).replace(".ipsw", "")
+        extracted_root = os.path.join(workspace_root or os.getcwd(), ".ipsw_extracted")
+        pattern = os.path.join(extracted_root, stem, "**", "kernelcache*")
+        matches = [p for p in _glob.glob(pattern, recursive=True) if "release" in os.path.basename(p)]
+        if matches:
+            return matches[0]
+        return None
+
     def firmware_diff_service_node(state: AgentState) -> AgentState:
         local_ipsws = _collect_confirmed_local_artifacts(state)
-        old_ipsw, new_ipsw = _select_diff_pair(local_ipsws)
+        old_ipsw, new_ipsw = _select_diff_pair(state, local_ipsws)
         if not old_ipsw or not new_ipsw:
             payload = {"status": "skipped", "reason": "Need two IPSW artifacts for firmware diff."}
             return StateManager.add_intermediate_output(state, "firmware_diff_report", json.dumps(payload, ensure_ascii=True, indent=2))
@@ -664,6 +600,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             except Exception:
                 pass
 
+        # if the extractor state didn't record DSC/kernel paths (e.g.
+        # stderr path regex missed them), scan .ipsw_extracted/ directly
+        workspace_root = state.workspace_root
+        for ipsw_path in (old_ipsw, new_ipsw):
+            if not dyld_map.get(ipsw_path):
+                found = _find_dsc_for_ipsw(ipsw_path, workspace_root)
+                if found:
+                    dyld_map[ipsw_path] = found
+            if not kernel_map.get(ipsw_path):
+                found = _find_kernelcache_for_ipsw(ipsw_path, workspace_root)
+                if found:
+                    kernel_map[ipsw_path] = found
+
         request = FirmwareDiffRequest(
             old_ipsw=old_ipsw,
             new_ipsw=new_ipsw,
@@ -677,9 +626,28 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         service = FirmwareDiffService(workspace_root=state.workspace_root)
         result = service.run(request)
 
-        report_text = read_text(result.artifacts.report_markdown)
-        state = StateManager.add_intermediate_output(state, "firmware_diff_report", report_text)
-        state.intermediate_outputs["firmware_diff_report_path"] = result.artifacts.report_markdown
+        # use the raw framework-diff README.md 
+        framework_diff_path = result.artifacts.framework_diff
+        if framework_diff_path and os.path.isfile(framework_diff_path):
+            diff_report_text = read_text(framework_diff_path)
+            diff_report_path = framework_diff_path
+        else:
+            # Fallback: walk raw_diff_dir for README.md
+            diff_report_path = ""
+            diff_report_text = ""
+            raw_dir = result.artifacts.raw_diff_dir
+            if raw_dir and os.path.isdir(raw_dir):
+                for root, _, files in os.walk(raw_dir):
+                    if "README.md" in files:
+                        diff_report_path = os.path.join(root, "README.md")
+                        diff_report_text = read_text(diff_report_path)
+                        break
+            if not diff_report_path:
+                diff_report_path = result.artifacts.report_markdown
+                diff_report_text = read_text(diff_report_path)
+
+        state = StateManager.add_intermediate_output(state, "firmware_diff_report", diff_report_text)
+        state.intermediate_outputs["firmware_diff_report_path"] = diff_report_path
         if result.artifacts.raw_diff_dir:
             state.intermediate_outputs["firmware_raw_diff_dir"] = result.artifacts.raw_diff_dir
         return state
@@ -734,6 +702,15 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         from langgraph_orchestration.tooling.decompiler_tools import start_ida_server_for_binary
         import subprocess
 
+        def _find_macho_in_dir(directory: str, target_name: str) -> str | None:
+            for root, _, files in os.walk(directory):
+                for file in files:
+                    if file == target_name:
+                        candidate = os.path.join(root, file)
+                        if _is_macho_binary(candidate):
+                            return candidate
+            return None
+
         component_name = feature.get("name")
         if not component_name:
             return state
@@ -752,39 +729,82 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         extracted_binary = candidate
                         break
 
-        # if not found pre-extracted, try extracting from IPSW
+        # if not found pre-extracted, try extracting from IPSW or DSC
         if not extracted_binary:
-            local_ipsws = _collect_confirmed_local_artifacts(state)
-            _, new_ipsw = _select_diff_pair(local_ipsws)
 
-            if not new_ipsw:
-                state.record_analysis_note("No new IPSW found. Skipping decompiler preparation.")
-                return state
+            import glob
+            local_ipsws = _collect_confirmed_local_artifacts(state)
+            _, new_ipsw = _select_diff_pair(state, local_ipsws)
 
             os.makedirs(output_dir, exist_ok=True)
-            # Use the exact binary path for extraction pattern if available
-            pattern = f".*{re.escape(os.path.basename(feature_binary_path))}$" if feature_binary_path else f".*{re.escape(component_name)}$"
-            try:
-                subprocess.run(
-                    ["ipsw", "extract", new_ipsw, "--files", "--pattern", pattern, "-o", output_dir],
-                    check=True,
-                    capture_output=True
-                )
-            except subprocess.CalledProcessError as e:
-                state.record_analysis_note(f"Failed to extract {component_name} from {new_ipsw}: {e.stderr}")
-                return state
-
-            # Walk output_dir and find the exact Mach-O binary
             target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
-            for root, _, files in os.walk(output_dir):
-                for file in files:
-                    if file == target_basename:
-                        candidate = os.path.join(root, file)
-                        if _is_macho_binary(candidate):
-                            extracted_binary = candidate
+
+            # Strategy 2a: DSC dylib extraction from .ipsw_extracted/ (FASTEST & NO DMG MOUNT)
+            if feature_binary_path:
+                dsc_path = None
+                if new_ipsw:
+                    dsc_path = _find_dsc_for_ipsw(new_ipsw, state.workspace_root)
+                
+                if dsc_path:
+                    try:
+                        subprocess.run(
+                            ["ipsw", "dyld", "extract", dsc_path, feature_binary_path, "-o", output_dir],
+                            check=True,
+                            capture_output=True
+                        )
+                    except subprocess.CalledProcessError as e:
+                        stderr = e.stderr.decode(errors='replace') if isinstance(e.stderr, bytes) else str(e.stderr)
+                        if "not found in cache" in stderr:
+                            state.record_analysis_note("Component not found in DSC (proceeding to filesystem extraction fallback).")
+                        else:
+                            # Keep it concise
+                            error_line = [line for line in stderr.split('\n') if '⨯' in line or 'Error' in line]
+                            short_err = error_line[0] if error_line else stderr[:100]
+                            state.record_analysis_note(f"DSC extract failed ({os.path.basename(dsc_path)}): {short_err}")
+                    
+                    extracted_binary = _find_macho_in_dir(output_dir, target_basename)
+
+            # Strategy 2b: Check existing DMG mounts (left by ipsw diff)
+            if not extracted_binary and feature_binary_path:
+                for mount_dir in glob.glob("/private/tmp/*.mount"):
+                    if os.path.isdir(mount_dir):
+                        mounted_file = os.path.join(mount_dir, feature_binary_path.lstrip("/"))
+                        if os.path.isfile(mounted_file):
+                            import shutil
+                            dest_path = os.path.join(output_dir, target_basename)
+                            shutil.copy2(mounted_file, dest_path)
+                            extracted_binary = dest_path
+                            state.record_analysis_note(f"Copied binary from existing mount: {mount_dir}")
                             break
-                if extracted_binary:
-                    break
+
+            # Strategy 2c: Direct file extraction from IPSW archive (FALLBACK for daemons/apps)
+            if not extracted_binary and new_ipsw:
+                pattern = f".*{re.escape(target_basename)}$"
+                try:
+                    subprocess.run(
+                        ["ipsw", "extract", new_ipsw, "--files", "--pattern", pattern, "-o", output_dir],
+                        check=True,
+                        capture_output=True
+                    )
+                except subprocess.CalledProcessError as e:
+                    stderr = e.stderr.decode(errors='replace') if isinstance(e.stderr, bytes) else str(e.stderr)
+                    if "hdiutil: attach failed" in stderr or "Permission denied" in stderr:
+                        state.record_analysis_note(
+                            "Environment restricted from mounting DMGs. Skipping filesystem extraction for this non-DSC binary."
+                        )
+                    else:
+                        error_line = [line for line in stderr.split('\n') if '⨯' in line or 'Error' in line]
+                        short_err = error_line[0] if error_line else stderr[:100]
+                        state.record_analysis_note(f"Failed to extract {component_name} from {new_ipsw}: {short_err}")
+
+                if not extracted_binary:
+                    extracted_binary = _find_macho_in_dir(output_dir, target_basename)
+
+            if not extracted_binary and not feature_binary_path:
+                state.record_analysis_note(
+                    f"No binary_path in feature entry for {component_name}; "
+                    "cannot attempt extraction. Decompiler unavailable."
+                )
 
         if extracted_binary:
             state.record_analysis_note(f"Decompiler target: {extracted_binary}")
@@ -871,7 +891,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     f"Output ONLY `<tool_call>` blocks in this order. Do NOT write the report yet."
                 )
             elif has_stage2_results:
-                # Stage 2 done — mandate final report
+                # Stage 2 done 
                 prompt += (
                     "\n**CRITICAL STAGE 3 INSTRUCTION**: You have completed decompilation. "
                     "You MUST now write the final detailed report with full data-flow tracing. "
@@ -1010,13 +1030,9 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         strict_methods = []
         IGNORE_PREFIXES = ("-[UIView", "-[UIResponder", "-[UIViewController", "-[NSObject")
         
-        if state.feature_analysis_current:
-            state.categorized_methods = []
-            methods_text = state.feature_analysis_current.get("evidence", "")
-        else:
-            methods_text = state.intermediate_outputs.get("raw_methods", "")
-            if not methods_text:
-                methods_text = state.user_input 
+        methods_text = state.intermediate_outputs.get("raw_methods", "")
+        if not methods_text:
+            methods_text = state.user_input 
         
         for line in methods_text.splitlines():
             line = line.strip()
@@ -1107,15 +1123,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             state.agent_chain.append("reverse_engineering_synthesize")
             return state
 
+        final = state.intermediate_outputs.get("firmware_analysis", "")
+        if final:
+            state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(final)
+            state.agent_chain.append("reverse_engineering_synthesize")
+            return state
+
         report = state.intermediate_outputs.get("firmware_diff_report", "")
         if report:
             state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(report)
             state.agent_chain.append("reverse_engineering_synthesize")
             return state
 
-        final = state.intermediate_outputs.get("firmware_analysis", "")
-        if not final:
-            final = "IPSW execution pipeline completed without synthesized content."
+        final = "IPSW execution pipeline completed without synthesized content."
 
         state.branch_outputs["reverse_engineering"] = StateManager.sanitize_output(final)
         state.agent_chain.append("reverse_engineering_synthesize")

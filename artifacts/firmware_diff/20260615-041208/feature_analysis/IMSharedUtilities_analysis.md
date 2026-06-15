@@ -1,55 +1,60 @@
 ## What this feature does
-This feature introduces server bag handling logic into the iMessage shared utilities framework. Specifically, it adds two new functions: `_IMServerBagValueForKnownSender` and `_IMSharedHelperPayloadByStrippingServerBagKeys`. The functionality appears to be related to processing and modifying iMessage payloads based on sender identity (known vs unknown). The strings "Server bag set, stripping payload keys" and "known-sender"/"unknown-sender" suggest the code determines if a sender is known and then strips specific keys from the message payload accordingly. This is likely part of the iMessage server bag mechanism used for message metadata and delivery tracking.
+This feature implements a server bag (identity) management system for iMessage, specifically handling the logic to determine if a sender is "known" or "unknown" and to strip specific keys from the message payload based on that status. The system uses a lookup table (`_IMServerBagValueForKnownSender`) to check sender identity and a processing function (`_IMSharedHelperPayloadByStrippingServerBagKeys`) to modify the message payload accordingly. The strings "known-sender" and "unknown-sender" suggest a binary classification of contacts, while "Server bag set, stripping payload keys..." indicates a transformation step that removes metadata from the message body before transmission or storage.
 
 ## How is it implemented
-The implementation consists of two new functions that work together:
+The implementation consists of two primary functions:
 
-1. **`_IMServerBagValueForKnownSender`**: This function appears to retrieve or calculate a server bag value specifically for known senders. Based on the naming convention and the "known-sender" string, it likely checks the sender's status in the server bag and returns an appropriate value.
+1.  **`_IMServerBagValueForKnownSender` (0x1a9c92778)**: This function appears to be a lookup or calculation routine. It takes a sender identifier (likely a phone number or handle) and returns a value indicating whether the sender is "known". It calls `sub_1A9FBF540` to retrieve data from a global table at `0x1E673F8D0` and `sub_1A9FB8BE0` to process it. The check `((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0` suggests a bit-manipulation check, possibly validating the integrity of the retrieved data or checking a specific flag.
 
-2. **`_IMSharedHelperPayloadByStrippingServerBagKeys`**: This function takes a payload and strips server bag keys from it, but only for known senders. The string "Server bag set, stripping payload keys %@ for sender (known: %{BOOL}d)" suggests this function accepts parameters for the payload and a boolean indicating whether the sender is known.
+2.  **`_IMSharedHelperPayloadByStrippingServerBagKeys` (0x1a9c927f8)**: This is the core payload processing function. It takes a payload (`a1`), a server bag (`a2`), and a sender type flag (`a3`).
+    *   It first determines the sender type (`v21 = 138412546` likely corresponds to `known-sender` or `unknown-sender` based on the string offsets).
+    *   It calls `sub_1A9FC0660` (likely a logging or state update function) and `sub_1A9FBF540` (data retrieval).
+    *   It uses `sub_1A9FB8BE0` to process the payload.
+    *   It calls `sub_1A9FADC40` to validate the result.
+    *   **Crucially**, if the sender is known (`v11` resolves to "IMSharedHelper" via `objc_msgSend`), it calls `MEMORY[0x1AB32E860]` with the format string `"Server bag set, stripping payload keys %@ for sender (known: %{BOOL}d)"`. This function call is responsible for actually stripping keys from the payload.
+    *   It then enters a loop that processes the payload further, calling `sub_1A9FB8340`, `sub_1A9FADA20`, and various `MEMORY[...]` functions (likely IPC or database operations like `0x1AB32EEC0`, `0x1AB32ED20`, `0x1AB32ED60`, `0x1AB32ED90`, `0x1AB32E7D0`).
+    *   The function returns the modified payload (`a1` or a result from `sub_1A9C92980`).
 
-The implementation flow appears to be:
-- Check if the sender is known (using the "known-sender" logic)
-- If known, strip server bag keys from the payload
-- Return the modified payload
+**Call Chain Context:**
+The `find_address` results show that the string "Server bag set, stripping payload keys..." is located at `0x1a9f19fca`. The `get_xrefs_to` calls on the string addresses returned empty results, suggesting that the string is not directly referenced by other code in the binary, but is instead passed as an argument to the function `IMSharedHelperPayloadByStrippingServerBagKeys` (as seen in the decompiled output: `MEMORY[0x1AB32E860](..., "Server bag set, stripping payload keys...", ...)`). This implies the string is a constant resource used by the function, rather than a dynamically referenced string in the call graph.
 
-The functions are likely called in sequence or in specific contexts where server bag processing is needed. The framework is `IMSharedUtilities`, which suggests these utilities are shared across iMessage components.
+**Data Flow Trace:**
+1.  **Input**: Payload (`a1`), Server Bag (`a2`), Sender Type Flag (`a3`).
+2.  **Step 1**: Retrieve global data (`sub_1A9FC0660`, `sub_1A9FBF540`).
+3.  **Step 2**: Determine if sender is known (`_IMServerBagValueForKnownSender` logic).
+4.  **Step 3**: If sender is known (`a3` is true or derived), set a flag (`v21 = 138412546`).
+5.  **Step 4**: Call the server bag processing function (`MEMORY[0x1AB32E860]`) with the "Server bag set..." string. This function modifies the payload (`a2`) to strip keys.
+6.  **Step 5**: Process the payload in a loop (`sub_1A9FB8340`, `sub_1A9FADA20`, etc.), potentially involving IPC or database lookups.
+7.  **Output**: Modified payload.
 
 ## How to trigger this feature
 The feature is triggered when:
-1. An iMessage is being processed and the sender is identified as "known"
-2. The message payload contains server bag keys that need to be stripped
-3. The code path is executed during iMessage payload processing or server bag handling
-
-The trigger conditions are likely:
-- Presence of a known sender in the message chain
-- Detection of server bag keys in the payload that should be removed
-- Specific iMessage processing contexts where server bag manipulation is required
+1.  A message is being prepared for transmission or storage.
+2.  The sender's identity is available (passed as `a2` or derived).
+3.  The system needs to determine if the sender is "known" or "unknown".
+4.  The payload needs to be modified based on the sender's status (stripping server bag keys for known senders).
+The presence of the `a3` parameter suggests that the caller can explicitly pass a flag indicating whether the sender is known, or the function itself might infer it from the server bag (`a2`). The `if (a3)` check implies that the "known-sender" path is conditional on this flag.
 
 ## Evidence
-**Symbols Added:**
-- `_IMServerBagValueForKnownSender` - Function for retrieving server bag values for known senders
-- `_IMSharedHelperPayloadByStrippingServerBagKeys` - Function for stripping server bag keys from payloads
-
-**Strings Added:**
-- `"%@-%@-r1"` - Likely a format string for server bag key generation or identification
-- `"Server bag set, stripping payload keys %@ for sender (known: %{BOOL}d)"` - Descriptive string explaining the stripping functionality
-- `"known-sender"` - String literal used for sender identification
-- `"unknown-sender"` - String literal for unknown sender identification
-
-**Binary Changes:**
-- UUID changed from `F29C6B2A-61F6-32C3-B955-F42B045906D4` to `34548AD5-80C8-394A-8960-9C594FADBA4B`
-- Function count increased from 18684 to 18686 (2 new functions)
-- Symbol count increased from 3774 to 3776 (2 new symbols)
-- CStrings count increased from 21352 to 21359 (7 new strings)
-- Text section size increased from `0x321b20` to `0x321d28`
-
-**Framework:** `/System/Library/PrivateFrameworks/IMSharedUtilities.framework/IMSharedUtilities`
+*   **Symbols**:
+    *   `_IMServerBagValueForKnownSender`: Added symbol, likely a lookup function for sender identity.
+    *   `_IMSharedHelperPayloadByStrippingServerBagKeys`: Added symbol, the main payload processing function.
+*   **CStrings**:
+    *   `"%@-%@-r1"`: Likely a format string for a server bag key.
+    *   `"Server bag set, stripping payload keys %@ for sender (known: %{BOOL}d)"`: The key string used by the payload processing function, indicating the action being performed.
+    *   `"known-sender"` and `"unknown-sender"`: Strings used for sender classification.
+*   **Addresses**:
+    *   `0x1a9c92778`: Address of `_IMServerBagValueForKnownSender`.
+    *   `0x1a9c927f8`: Address of `_IMSharedHelperPayloadByStrippingServerBagKeys`.
+    *   `0x1a9f19fca`: Address of the "Server bag set..." string.
+*   **Decompiled Functions**:
+    *   `IMServerBagValueForKnownSender`: Shows logic for determining sender status.
+    *   `IMSharedHelperPayloadByStrippingServerBagKeys`: Shows the full flow of payload modification, including the call to the function that uses the "Server bag set..." string.
 
 ## AI Prioritisation Scoring System
 
-- **symbol_analysis**
-  - **Tier**: TIER_2
-  - **Category**: messaging
-  - **Reasoning**: High-signal indicators present (new symbols, security/IPC-related strings, server bag functionality) but decompiler connection failed. Feature is related to iMessage server bag processing which is important but not critical security issue. Cannot verify exact implementation without decompilation.
+- **Symbol and String Analysis**
+  - **Tier**: TIER_1
+  - **Category**: Messaging/Privacy
+  - **Reasoning**: Added symbols (_IMServerBagValueForKnownSender, _IMSharedHelperPayloadByStrippingServerBagKeys) and strings ('known-sender', 'unknown-sender', 'Server bag set...') indicate a new feature for managing iMessage sender identity and payload modification. The AUTO-PROMOTE RULES for 'added exported symbols' and 'security/privacy strings' apply. The feature logic involves stripping message keys based on sender status, which is a significant privacy and messaging functionality change.
 

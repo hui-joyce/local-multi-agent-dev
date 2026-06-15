@@ -6,8 +6,8 @@
 - Diff report: artifacts/firmware_diff/20260615-041208/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md
 
 ## Execution
-- Latency: 1865.118s
-- Agent chain: unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, firmware_analysis, reverse_engineering_synthesize
+- Latency: 1285.249s
+- Agent chain: unified_feature_analysis, unified_feature_analysis, unified_feature_analysis, firmware_analysis, reverse_engineering_synthesize
 - Feature reports: 7
 
 ## Report Outputs

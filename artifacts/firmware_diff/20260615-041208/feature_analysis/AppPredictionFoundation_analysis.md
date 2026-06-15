@@ -1,51 +1,31 @@
 ## What this feature does
-The `AppPredictionFoundation` framework has been updated to introduce a new notification mechanism for purging predictive model data. The diff reveals the addition of a global constant key (`__kATXBiomeNotificationPurgeCompleteKey`) and a corresponding notification string (`"biomeNotificationPurgeComplete_174515357"`). This indicates the implementation of a system-level notification that fires when the AppPredictionFoundation successfully clears its internal cache or prediction models, likely to inform the system or a parent process (e.g., the Biome framework) that resources have been freed. The version bump from 627.11.0.0.0 to 627.11.0.1.0 suggests this is a new feature added in this specific update cycle.
+The feature is a notification mechanism related to "biome" (likely a typo or internal naming for "biome" in the context of AppPredictionFoundation). It involves a notification key `__kATXBiomeNotificationPurgeCompleteKey` and a corresponding notification string `biomeNotificationPurgeComplete_174515357`. The feature appears to be triggered when a "purge complete" event occurs, possibly related to a background task or process that purges some data or state associated with "biome".
 
 ## How is it implemented
-Based on the symbol and string evidence, the implementation involves a notification system. The framework likely defines a global constant for the notification key and posts a notification with the specified string when a purge operation completes.
+The implementation involves:
+1. A notification key `__kATXBiomeNotificationPurgeCompleteKey` (address: `0x2792cf9a8`).
+2. A notification string `biomeNotificationPurgeComplete_174515357` (address: `0x22b144051`).
 
-**Inferred Implementation Logic:**
-1.  **Global Constant Definition:** A new global variable is added to store the notification key.
-    ```c
-    // Inferred from symbol: __kATXBiomeNotificationPurgeCompleteKey
-    static const NSString *ATXBiomeNotificationPurgeCompleteKey = @"biomeNotificationPurgeComplete_174515357";
-    ```
-2.  **Notification Posting:** When the internal model purging logic finishes, the framework posts a notification using the new key.
-    ```c
-    // Inferred logic flow
-    if (purgeComplete) {
-        [[NSNotificationCenter defaultCenter] postNotificationName:ATXBiomeNotificationPurgeCompleteKey object:nil userInfo:nil];
-    }
-    ```
-3.  **Data Flow:** The notification allows external components (like the Biome framework) to listen for the `biomeNotificationPurgeComplete_174515357` event and react accordingly (e.g., re-fetching models, updating UI, or logging).
-
-**Call Chain Context:**
-The feature is likely triggered by an internal method within `AppPredictionFoundation` that handles the cleanup of its prediction cache. The notification is the final step in this cleanup sequence, signaling completion to observers.
+The notification key is a code symbol, but the decompilation at this address failed, suggesting it might be a constant or a small function. The string data address `0x22b144051` has no cross-references, meaning no code is directly referencing this string. This suggests the string might be used indirectly or in a different context.
 
 ## How to trigger this feature
-The feature is triggered internally by the `AppPredictionFoundation` framework when it executes a model purge operation. This is not a user-initiated action but rather an automatic process within the framework's lifecycle, likely occurring:
-*   When the app enters the background and needs to free up memory.
-*   When a specific time interval has passed since the last model usage.
-*   When a specific memory threshold is exceeded.
-*   Upon a specific system event or configuration flag that mandates cache clearing.
-
-The external trigger for the *notification* is simply listening to the `biomeNotificationPurgeComplete_174515357` notification center.
+The feature is likely triggered by a "purge complete" event, which could be a background task completion, a user action, or a system event. The exact trigger conditions are not clear from the current evidence, but it's likely related to the completion of a purge operation.
 
 ## Evidence
-*   **Framework:** `/System/Library/PrivateFrameworks/AppPredictionFoundation.framework/AppPredictionFoundation`
-*   **Version Change:** `627.11.0.0.0` -> `627.11.0.1.0` (Indicates new feature addition).
-*   **Symbol Count:** Increased by 1 (3712 -> 3713).
-    *   **Added Symbol:** `__kATXBiomeNotificationPurgeCompleteKey` (Global constant for notification key).
-*   **String Count:** Increased by 2 (1804 -> 1806).
-    *   **Added String:** `"biomeNotificationPurgeComplete_174515357"` (The actual notification name).
-*   **Dependencies:** No new dependencies added (`ProtocolBuffer`, `libSystem`, `libobjc` remain unchanged).
-*   **UUID:** Changed (Standard binary update, likely due to code changes).
-*   **Missing Decompilation:** The decompiler connection was refused, preventing analysis of the actual function logic. However, the static evidence (symbols/strings) strongly points to a notification-based completion signal for a background purge task.
+- **Symbol**: `__kATXBiomeNotificationPurgeCompleteKey` (address: `0x2792cf9a8`)
+- **String**: `biomeNotificationPurgeComplete_174515357` (address: `0x22b144051`)
+- **Diff Changes**:
+  - Added symbol: `__kATXBiomeNotificationPurgeCompleteKey`
+  - Added string: `biomeNotificationPurgeComplete_174515357`
+  - UUID change: `3A728CE2-1258-34D1-9CA5-A24EF18D17B0` -> `2D5B33EB-E469-31E9-A0C9-376A458A0107`
+  - Function count: `991` -> `991` (no change)
+  - Symbol count: `3712` -> `3713` (added 1 symbol)
+  - CStrings count: `1804` -> `1806` (added 2 strings)
 
 ## AI Prioritisation Scoring System
 
-- **Static Analysis (Diff)**
+- **symbol_and_string_addition**
   - **Tier**: TIER_2
-  - **Category**: System Notification / Cache Management
-  - **Reasoning**: High-signal indicators (new symbol, new string) suggest a new notification feature for cache purging. However, decompiler connection failed, preventing verification of the actual implementation logic and confidence in the inferred behavior. Tier 2 due to potential system-level impact on prediction models.
+  - **Category**: notification
+  - **Reasoning**: Added notification key and string suggest a new notification feature, but decompilation failed and no code references the string, indicating limited functionality or indirect usage.
 

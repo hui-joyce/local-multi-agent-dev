@@ -17,8 +17,7 @@ if not ida_hexrays.init_hexrays_plugin():
 
 _work_queue: queue.Queue = queue.Queue()
 
-def _run_on_main_thread(func, *args, timeout=30):
-    """Submit a callable to be executed on the main thread and wait for the result"""
+def _run_on_main_thread(func, *args, timeout=120):
     result_event = threading.Event()
     cancel_event = threading.Event()
     result_container = {"value": None, "error": None}
@@ -173,20 +172,19 @@ class DecompilerService(rpyc.Service):
             return 0
 
     def exposed_lookup_symbol(self, symbol_name: str):
-        """Looks up the memory address of a given symbol"""
+        """Looks up the memory address of a given symbol by exact name.
+        Tries the raw name, with/without leading underscore."""
         print(f"[DecompilerService] Request to lookup symbol: {symbol_name}")
         def _do():
-            import ida_name
             import idc
-            ea = idc.get_name_ea_simple(symbol_name)
-            if ea != idc.BADADDR:
-                return ea
-            if symbol_name.startswith("_"):
-                ea = idc.get_name_ea_simple(symbol_name[1:])
-                if ea != idc.BADADDR: return ea
-            else:
-                ea = idc.get_name_ea_simple("_" + symbol_name)
-                if ea != idc.BADADDR: return ea
+            candidates = [
+                symbol_name,
+                "_" + symbol_name if not symbol_name.startswith("_") else symbol_name[1:],
+            ]
+            for c in candidates:
+                ea = idc.get_name_ea_simple(c)
+                if ea != idc.BADADDR:
+                    return ea
             return 0
         try:
             return _run_on_main_thread(_do)
@@ -194,56 +192,57 @@ class DecompilerService(rpyc.Service):
             print(f"Error in lookup_symbol: {e}")
             return 0
 
+    def exposed_lookup_symbol_fuzzy(self, token: str):
+        """
+        Fuzzy symbol lookup: 
+        -scans IDA's Names() table for entries that contain
+        the token as a substring (case-insensitive, ignoring _ and - separators)
+        -checks for ObjC sel_ prefix variants
+        -returns a list of {name, address} dicts for the top-20 matches
+        """
+        print(f"[DecompilerService] Fuzzy lookup for: {token}")
+        def _do():
+            import idautils
+            import idc
+            needle = token.lower().replace("-", "").replace("_", "")
+
+            sel_name = "sel_" + token
+            ea = idc.get_name_ea_simple(sel_name)
+            if ea != idc.BADADDR:
+                return [{"name": sel_name, "address": int(ea)}]
+
+            matches = []
+            for ea, name in idautils.Names():
+                norm = name.lower().replace("_", "").replace("-", "")
+                if needle in norm:
+                    matches.append({"name": name, "address": int(ea)})
+                    if len(matches) >= 20:
+                        break
+            return matches
+        try:
+            return _run_on_main_thread(_do, timeout=120)
+        except Exception as e:
+            print(f"Error in lookup_symbol_fuzzy: {e}")
+            return []
+
     def exposed_search_string(self, target_string: str):
-        """Searches for a string in known string sections only (fast, targeted bin_search)"""
         def _do():
             found = []
             try:
-                import ida_bytes
-                import ida_segment
-                import idaapi
                 import idautils
-
-                encoded = target_string.encode("utf-8")
-                hex_pattern = " ".join(f"{b:02x}" for b in encoded)
-                pattern = ida_bytes.compiled_binpat_vec_t()
-                ida_bytes.parse_binpat_str(pattern, 0, hex_pattern, 16)
-
-                TARGET_SUFFIXES = (
-                    "__TEXT.__cstring",
-                    "__TEXT.__objc_methname",
-                    "__TEXT.__oslogstring",
-                    "__TEXT.__ustring",
-                )
-
-                for seg_ea in idautils.Segments():
-                    seg = ida_segment.getseg(seg_ea)
-                    if not seg:
-                        continue
-                    seg_name = idc.get_segm_name(seg_ea)
-                    # Match both standalone ("__TEXT.__cstring") and DSC-prefixed
-                    # ("iMessage.__TEXT.__cstring") section names.
-                    if not any(seg_name.endswith(suffix) for suffix in TARGET_SUFFIXES):
-                        continue
-                    ea = seg.start_ea
-                    while ea < seg.end_ea:
-                        res = ida_bytes.bin_search(ea, seg.end_ea, pattern, ida_bytes.BIN_SEARCH_FORWARD)
-                        ea_val = res[0] if isinstance(res, tuple) else res
-                        if ea_val == idaapi.BADADDR:
-                            break
-                        found.append(int(ea_val))
-                        ea = ea_val + len(encoded)
+                for s in idautils.Strings():
+                    s_str = str(s)
+                    if s_str == target_string or target_string in s_str:
+                        found.append(int(s.ea))
                         if len(found) >= 100:
                             break
-                    if len(found) >= 100:
-                        break
             except Exception as e:
                 print(f"[DecompilerService] Error in search_string: {e}")
             return found
         try:
-            return _run_on_main_thread(_do)
+            return _run_on_main_thread(_do, timeout=300)
         except Exception as e:
-            print(f"Error in search_string: {e}")
+            print(f"Error in search_string outer: {e}")
             return []
 
     def exposed_save_ida_database(self, out_path: str = ""):

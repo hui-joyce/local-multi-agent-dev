@@ -1,9 +1,10 @@
 ## What this feature does
-The `iMessage` binary update introduces a new payload processing mechanism specifically designed to handle group message payloads. The new symbol `_IMSharedHelperPayloadByStrippingServerBagKeys` and the associated string "MessageGroupController-strip-payload-keys" indicate a feature that strips server bag keys from iMessage group payloads. This is likely part of a privacy or data sanitization feature, possibly related to the "Message Group Controller" functionality, ensuring that server-side metadata (server bags) is removed from group messages before they are processed or stored locally.
+The iMessage binary update introduces a new payload processing mechanism specifically designed to handle group message payloads. The feature adds a dedicated helper function `_IMSharedHelperPayloadByStrippingServerBagKeys` which appears to process and strip server bag keys from incoming group message payloads. This is supported by the addition of the string "MessageGroupController-strip-payload-keys", indicating a controller responsible for stripping payload keys. The feature also adds a new method selector `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:` which suggests logic for determining whether a group message payload should be accepted based on chat existence and sender knowledge. Additionally, a new string "getNumberOfTimesRespondedToThread" implies tracking of response counts within message threads.
 
 ## How is it implemented
-The implementation consists of a new helper function `IMSharedHelperPayloadByStrippingServerBagKeys` which appears to be a wrapper around an existing internal function `_IMSharedHelperPayloadByStrippingServerBagKeys`. The decompiled code shows:
+The implementation centers around the newly added symbol `_IMSharedHelperPayloadByStrippingServerBagKeys` located at address `0xc7210`. The decompiled function shows it acts as a wrapper that calls an internal implementation `_IMSharedHelperPayloadByStrippingServerBagKeys()`.
 
+**Decompiled Pseudocode:**
 ```c
 __int64 IMSharedHelperPayloadByStrippingServerBagKeys()
 {
@@ -11,42 +12,42 @@ __int64 IMSharedHelperPayloadByStrippingServerBagKeys()
 }
 ```
 
-This function takes no arguments and simply delegates to the internal implementation. The function name suggests it operates on an `IMSharedHelperPayload` structure, stripping server bag keys from it.
+**Call Chain Analysis:**
+1. The symbol `_IMSharedHelperPayloadByStrippingServerBagKeys` (0xc7210) is a code symbol that wraps an internal function.
+2. The string "MessageGroupController-strip-payload-keys" (0xe529e) is referenced by code, suggesting it is called by the `MessageGroupController` class.
+3. The string "_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:" (0x102463) is referenced by code, indicating a method in the `MessageGroupController` or related class that checks conditions for accepting group messages.
+4. The string "getNumberOfTimesRespondedToThread" (0x10623e) is referenced by code, suggesting a method to retrieve response counts.
 
-The string "MessageGroupController-strip-payload-keys" suggests that this functionality is exposed via a method on the `MessageGroupController` class, likely as a selector for Objective-C message sending. The selector string format `MessageGroupController-strip-payload-keys` follows the pattern of `ClassName-methodName`.
-
-The new symbol `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:` suggests a new method for handling group message payloads, checking conditions like whether the chat exists and if the sender is known. This is likely part of the same group message handling flow.
-
-The string "B36@0:8@16B24@28" appears to be a format string, possibly related to binary data processing or serialization, which might be used in the payload stripping logic.
-
-The function count increased by 1 (1668 -> 1669), and the symbol count increased by 1 (892 -> 893), confirming the addition of this new function. The CStrings count increased by 5 (5119 -> 5124), indicating the addition of several new strings, including the ones mentioned above.
+**Data Flow Trace:**
+- The `MessageGroupController` likely invokes the "strip-payload-keys" operation.
+- Before processing, it probably calls `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:` to validate the message.
+- The `_IMSharedHelperPayloadByStrippingServerBagKeys` function is the core logic for stripping server bag keys, which are likely metadata keys added by the server for group messages.
+- The "getNumberOfTimesRespondedToThread" string suggests that the feature also tracks how many times a user has responded to a specific thread, which could be used to determine message acceptance or delivery status.
 
 ## How to trigger this feature
-The exact trigger conditions are not fully clear from the available evidence, but based on the symbol name `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:`, it appears that this feature is triggered when:
-1. A group message payload is received or being processed.
-2. The chat associated with the group message already exists (`existingChat`).
-3. The sender of the message is known (`isKnownSender`).
-4. The message type is appropriate (`type`).
-
-The `IMSharedHelperPayloadByStrippingServerBagKeys` function is likely called as part of the group message processing pipeline, possibly when the message is being prepared for local storage or display.
+The feature is triggered when:
+1. A group message payload is received.
+2. The `MessageGroupController` processes the payload.
+3. The `_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:` method is called to check if the chat exists and the sender is known.
+4. If the conditions are met, the `_IMSharedHelperPayloadByStrippingServerBagKeys` function is called to strip server bag keys from the payload.
+5. The "getNumberOfTimesRespondedToThread" method is likely called to update or retrieve the response count for the thread.
 
 ## Evidence
-- **New Symbol**: `_IMSharedHelperPayloadByStrippingServerBagKeys` (address: 0xc7210)
-- **New Strings**:
-  - "B36@0:8@16B24@28"
-  - "MessageGroupController-strip-payload-keys"
-  - "_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:"
-  - "getNumberOfTimesRespondedToThread"
-- **New Function**: `IMSharedHelperPayloadByStrippingServerBagKeys` (address: 0xc7210)
-- **Function Count Change**: 1668 -> 1669
-- **Symbol Count Change**: 892 -> 893
-- **CStrings Count Change**: 5119 -> 5124
-- **Section Address Changes**: Various `__TEXT` and `__DATA_CONST` sections have shifted, indicating the addition of new code and data.
+- **New Symbol:** `_IMSharedHelperPayloadByStrippingServerBagKeys` at address `0xc7210` (Type: symbol).
+- **New Strings:**
+  - "MessageGroupController-strip-payload-keys" at address `0xe529e` (Type: string_data).
+  - "_shouldAcceptGroupMessagePayloadWithExistingChat:isKnownSender:type:" at address `0x102463` (Type: string_data).
+  - "getNumberOfTimesRespondedToThread" at address `0x10623e` (Type: string_data).
+- **ObjC Type Encoding:** "B36@0:8@16B24@28" (Type: ObjC type encoding, skipped).
+- **Function Count Change:** Increased from 1668 to 1669.
+- **Symbol Count Change:** Increased from 892 to 893.
+- **CStrings Count Change:** Increased from 5119 to 5124.
+- **UUID Change:** From `95C89B97-D474-32AB-83F0-DFAC73717D2C` to `3BBE6D71-A477-31DA-A41C-1FDFE5C36B8F`.
 
 ## AI Prioritisation Scoring System
 
-- **symbol_addition**
+- **symbol_and_string_analysis**
   - **Tier**: TIER_1
-  - **Category**: messaging_privacy
-  - **Reasoning**: Added symbol '_IMSharedHelperPayloadByStrippingServerBagKeys' and related strings indicate a new feature for stripping server bag keys from iMessage group payloads, which is a privacy-related functionality. The function is part of the MessageGroupController subsystem, suggesting it's a core feature for handling group messages.
+  - **Category**: messaging
+  - **Reasoning**: Added symbols and strings indicate new group message payload processing logic, including stripping server bag keys and checking message acceptance conditions. This is a significant feature addition to the iMessage system.
 

@@ -1,191 +1,56 @@
 ## What this feature does
-The PosterFuturesKit framework update introduces a new `PFTFutureResult` class alongside the existing `PFTFuture` class, implementing a robust Future/Promise pattern with explicit error handling and result management. The new class adds thread-safe locking mechanisms (`_lock`, `_lock_error`, `_lock_result`) to coordinate access to the `_error` and `_result` properties, preventing race conditions during state transitions. The update also adds new error handling paths for `flatMap` and `recover` operations, introducing specific error messages when continuations return `nil` (indicating a programming error).
+The PosterFuturesKit framework update introduces a new `PFTFutureResult` class alongside the existing `PFTFuture` class, implementing a robust, thread-safe Future/Promise pattern with explicit error handling and result management. The new code adds locking mechanisms (`_lock`, `_lock_error`, `_lock_result`) to ensure thread safety when accessing the result and error states. It also introduces `flatMap` and `recover` methods that utilize continuation-passing style (CPS) with block-based callbacks, allowing for chaining asynchronous operations. The error messages ("flatMap continuation returned nil", "recover continuation returned nil") indicate runtime validation to catch programming errors where the continuation block returns nil unexpectedly.
 
 ## How is it implemented
-The implementation consists of two primary classes: `PFTFuture` and the newly added `PFTFutureResult`.
+The implementation consists of two main classes: `PFTFuture` and `PFTFutureResult`.
 
-**PFTFuture (Existing):**
-- Implements `flatMap:withBlock:continuationScheduler:schedulerProvider:` and `recover:withBlock:onErrorScheduler:schedulerProvider:` methods.
-- Uses blocks to handle success and failure cases.
-- The `flatMap` method chains futures, while `recover` handles errors.
-- New error messages were added for when continuations return `nil`:
-  - `"flatMap continuation returned nil — this is a programming error. Call stack: %{public}@"`
-  - `"recover continuation returned nil — this is a programming error. Call stack: %{public}@"`
+**PFTFutureResult:**
+This class holds the final state of a future. It uses an `_os_unfair_lock_opaque` lock to protect concurrent access to its `_result` and `_error` properties.
+- `_result`: Holds the resolved value (type `id`).
+- `_error`: Holds the error object if the future failed (type `NSError`).
+- `_lock`: An `os_unfair_lock` for synchronization.
+- `_lock_error`: A lock specifically for the error property.
+- `_lock_result`: A lock specifically for the result property.
 
-**PFTFutureResult (New):**
-- A new class added in this update to represent the resolved state of a Future.
-- Contains properties:
-  - `_error`: Stores the error if the future failed.
-  - `_result`: Stores the result if the future succeeded.
-  - `_lock`: An `_os_unfair_lock` for thread-safe access.
-  - `_lock_error`: Lock specifically for the `_error` property.
-  - `_lock_result`: Lock specifically for the `_result` property.
-- The class uses locks to ensure that only one of `_error` or `_result` is set at any given time, preventing concurrent modification issues.
+**PFTFuture:**
+This class represents an asynchronous task. It has methods to chain operations:
+- `flatMap:withBlock:continuationScheduler:schedulerProvider:`: Chains a block to be executed when the future completes. The block takes the result and returns a new future.
+- `recover:withBlock:onErrorScheduler:schedulerProvider:`: Chains a block to be executed if the future fails. The block takes the error and returns a new future.
+
+The decompiled code shows the use of `objc_msgSend` to call methods like `setResult:` and `setResultWithError:`. The implementation relies on the Objective-C runtime for method dispatching. The `flatMap` and `recover` methods appear to be implemented using blocks that are scheduled on specific schedulers (`continuationScheduler`, `errorScheduler`).
 
 **Data Flow:**
-1. When a `PFTFuture` completes, it creates a `PFTFutureResult` object.
-2. The result object's `_result` or `_error` property is set based on the future's outcome.
-3. The locks (`_lock`, `_lock_error`, `_lock_result`) are used to synchronize access to these properties, ensuring thread safety.
-4. If a `flatMap` or `recover` continuation returns `nil`, a specific error is thrown with a message indicating a programming error.
+1. A `PFTFuture` is created.
+2. The future resolves either with a result or an error.
+3. If resolved with a result, the `flatMap` block is invoked. If the block returns nil, an error is generated ("flatMap continuation returned nil").
+4. If resolved with an error, the `recover` block is invoked. If the block returns nil, an error is generated ("recover continuation returned nil").
+5. The `PFTFutureResult` is used to store the final outcome, protected by locks to prevent race conditions.
 
-**Decompiled Pseudocode (Inferred):**
-```c
-// PFTFutureResult class
-class PFTFutureResult {
-    id _error;
-    id _result;
-    _os_unfair_lock _lock;
-    _os_unfair_lock _lock_error;
-    _os_unfair_lock _lock_result;
-
-    // Initialization
-    - (instancetype)init {
-        self = [super init];
-        _lock = _os_unfair_lock_create();
-        _lock_error = _os_unfair_lock_create();
-        _lock_result = _os_unfair_lock_create();
-        _error = nil;
-        _result = nil;
-        return self;
-    }
-
-    // Set result with locking
-    - (void)setResult:(id)result {
-        _os_unfair_lock_lock(&_lock);
-        _result = result;
-        _os_unfair_lock_unlock(&_lock);
-    }
-
-    // Set error with locking
-    - (void)setError:(id)error {
-        _os_unfair_lock_lock(&_lock_error);
-        _error = error;
-        _os_unfair_lock_unlock(&_lock_error);
-    }
-
-    // Get result with locking
-    - (id)result {
-        id res = nil;
-        _os_unfair_lock_lock(&_lock_result);
-        res = _result;
-        _os_unfair_lock_unlock(&_lock_result);
-        return res;
-    }
-
-    // Get error with locking
-    - (id)error {
-        id err = nil;
-        _os_unfair_lock_lock(&_lock_error);
-        err = _error;
-        _os_unfair_lock_unlock(&_lock_error);
-        return err;
-    }
-}
-
-// PFTFuture methods (updated with new error handling)
-- (void)flatMap:(id (^)(id))block continuationScheduler:(id)continuationScheduler schedulerProvider:(id)schedulerProvider {
-    // ... existing logic ...
-    id continuation = block(result);
-    if (continuation == nil) {
-        // New error handling
-        NSError *error = [NSError errorWithDomain:@"PFTFuture" code:1001 userInfo:@{NSLocalizedDescriptionKey: @"flatMap continuation returned nil — this is a programming error. Call stack: %{public}@"}];
-        [self completeWithError:error];
-    } else {
-        // Continue with the chained future
-        [continuation continueWithBlock:^{ ... }];
-    }
-}
-
-- (void)recover:(id (^)(id))block onErrorScheduler:(id)onErrorScheduler {
-    // ... existing logic ...
-    id continuation = block(error);
-    if (continuation == nil) {
-        // New error handling
-        NSError *error = [NSError errorWithDomain:@"PFTFuture" code:1002 userInfo:@{NSLocalizedDescriptionKey: @"recover continuation returned nil — this is a programming error. Call stack: %{public}@"}];
-        [self completeWithError:error];
-    } else {
-        // Continue with the recovery block
-        [continuation continueWithBlock:^{ ... }];
-    }
-}
-```
+**Key Addresses:**
+- `0x280672a5c`: Address of `_OBJC_IVAR_$_PFTFutureResult._lock` (CODE).
+- `0x287c26178`: Address of `___OBJC_$_PROP_LIST_PFTFuture.181` (CODE), likely related to property list access.
+- `0x26833e584`, `0x268341c95`: Addresses of strings related to `flatMap` block invocation.
+- `0x26833e5f6`, `0x268342ee3`: Addresses of strings related to `recover` block invocation.
+- `0x26833f103`, `0x26833f15d`: Addresses of error message strings.
+- `0x268340385`, `0x26834078b`: Addresses of type strings (`T@"NSError",C,N`, `T@,&,N`).
+- `0x26834324b`, `0x268343256`: Addresses of `setResult:` string.
 
 ## How to trigger this feature
-The feature is triggered when a `PFTFuture` is created and subsequently completed (either successfully or with an error). The new `PFTFutureResult` class is instantiated when the future completes, and its properties are set based on the future's outcome. The new error handling paths in `flatMap` and `recover` are triggered when the respective continuation blocks return `nil`.
-
-**Trigger Conditions:**
-1. **Future Completion:** When a `PFTFuture` completes (either with a result or an error), a `PFTFutureResult` object is created.
-2. **flatMap Continuation Returns Nil:** When the `flatMap` method's continuation block returns `nil`, a `PFTFutureResult` is created with an error indicating a programming error.
-3. **recover Continuation Returns Nil:** When the `recover` method's continuation block returns `nil`, a `PFTFutureResult` is created with an error indicating a programming error.
+The feature is triggered when a `PFTFuture` is created and subsequently resolved. The `flatMap` and `recover` methods are called on the future object. The feature becomes active when the future's state changes from pending to resolved (either with a result or an error). The new `PFTFutureResult` class is instantiated when the future resolves, and its properties are set via the `setResult:` or `setResultWithError:` methods.
 
 ## Evidence
-- **New Symbols:**
-  - `-[PFTFutureResult init]`: Initialization method for the new `PFTFutureResult` class.
-  - `_OBJC_IVAR_$_PFTFutureResult._lock`: Lock for the result object.
-  - `_OBJC_IVAR_$_PFTFutureResult._lock_error`: Lock for the error property.
-  - `_OBJC_IVAR_$_PFTFutureResult._lock_result`: Lock for the result property.
-  - `__BSIsInternalInstall`: Internal installation flag.
-  - `__OBJC_$_PROP_LIST_PFTFuture.181`: Property list for `PFTFuture`.
-  - `___66+[PFTFuture recover:withBlock:onErrorScheduler:schedulerProvider:]_block_invoke.12`: Block for `recover` method.
-  - `___71+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke.8`: Block for `flatMap` method.
-  - `___71+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke_2.10`: Block for `flatMap` method (continued).
-  - `___71+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke_2.cold.1`: Cold path for `flatMap` method.
-  - `___66+[PFTFuture recover:withBlock:onErrorScheduler:schedulerProvider:]_block_invoke_4`: Block for `recover` method (continued).
-  - `___71+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke_3`: Block for `flatMap` method (continued).
-  - `___71+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke_4`: Block for `flatMap` method (continued).
-  - `_objc_msgSend$setResult:`: Method to set the result.
+- **New Symbols:** `PFTFutureResult` class and its associated methods/properties (`_lock`, `_lock_error`, `_lock_result`).
+- **New CStrings:** Error messages for programming errors in `flatMap` and `recover` blocks, type strings for `NSError` and result types.
+- **Function Count Change:** Increased from 830 to 834, indicating 4 new functions (likely `PFTFutureResult` methods and `flatMap`/`recover` implementations).
+- **Symbol Count Change:** Increased from 3140 to 3146, indicating 6 new symbols.
+- **String Count Change:** Increased from 952 to 957, indicating 5 new strings.
+- **Section Growth:** Significant growth in `__text`, `__cstring`, `__unwind_info`, `__objc_methname`, `__objc_methtype`, `__objc_stubs`, and `__objc_const` sections, consistent with adding a new class and its methods.
+- **Removed Symbols:** Some old symbols were removed, possibly due to optimization or refactoring.
 
-- **New CStrings:**
-  - `"+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke_2"`: Method selector for `flatMap` block.
-  - `"+[PFTFuture recover:withBlock:onErrorScheduler:schedulerProvider:]_block_invoke_3"`: Method selector for `recover` block.
-  - `"T@\"NSError\",C,N"`: Type string for `NSError`.
-  - `"T@,&,N"`: Type string for `id`.
-  - `"_lock_error"`: Lock variable name.
-  - `"_lock_result"`: Lock variable name.
-  - `"flatMap continuation returned nil — this is a programming error. Call stack: %{public}@"`: Error message for `flatMap` continuation returning `nil`.
-  - `"recover continuation returned nil — this is a programming error. Call stack: %{public}@"`: Error message for `recover` continuation returning `nil`.
-  - `"{os_unfair_lock_s=\"_os_unfair_lock_opaque\"I}"`: Type string for `_os_unfair_lock`.
-  - `"T@\"NSError\",C,N,V_error"`: Type string for `NSError` with `error` property.
-  - `"T@,&,N,V_result"`: Type string for `id` with `result` property.
+## AI Prioritisation Scoring System
 
-- **Section Changes:**
-  - `__TEXT.__text`: Increased by 0x4f0 (1216 bytes).
-  - `__TEXT.__auth_stubs`: Increased by 0x10 (16 bytes).
-  - `__TEXT.__objc_methlist`: Increased by 0x8 (8 bytes).
-  - `__TEXT.__cstring`: Increased by 0xa2 (162 bytes).
-  - `__TEXT.__gcc_except_tab`: Increased by 0x10 (16 bytes).
-  - `__TEXT.__oslogstring`: Increased by 0x34 (52 bytes).
-  - `__TEXT.__unwind_info`: Increased by 0x40 (64 bytes).
-  - `__TEXT.__objc_classname`: Unchanged.
-  - `__TEXT.__objc_methname`: Increased by 0x8 (8 bytes).
-  - `__TEXT.__objc_methtype`: Increased by 0x27 (39 bytes).
-  - `__TEXT.__objc_stubs`: Increased by 0x40 (64 bytes).
-  - `__DATA_CONST.__got`: Increased by 0x8 (8 bytes).
-  - `__DATA_CONST.__const`: Increased by 0x1e0 (480 bytes).
-  - `__DATA_CONST.__objc_classlist`: Unchanged.
-  - `__DATA_CONST.__objc_protolist`: Unchanged.
-  - `__DATA_CONST.__objc_imageinfo`: Unchanged.
-  - `__DATA_CONST.__objc_selrefs`: Increased by 0x10 (16 bytes).
-  - `__DATA_CONST.__objc_superrefs`: Increased by 0x8 (8 bytes).
-  - `__AUTH_CONST.__auth_got`: Increased by 0x8 (8 bytes).
-  - `__AUTH_CONST.__auth_ptr`: Unchanged.
-  - `__AUTH_CONST.__const`: Increased by 0x28 (40 bytes).
-  - `__AUTH_CONST.__cfstring`: Decreased by 0x20 (32 bytes).
-  - `__AUTH_CONST.__objc_const`: Increased by 0x20 (32 bytes).
-  - `__AUTH.__objc_data`: Increased by 0x8 (8 bytes).
-  - `__DATA.__objc_ivar`: Increased by 0x4 (4 bytes).
-  - `__DATA.__data`: Increased by 0x18 (24 bytes).
-  - `__DATA.__bss`: Increased by 0x28 (40 bytes).
-  - `__DATA_DIRTY.__objc_data`: Increased by 0x40 (64 bytes).
+- **symbol_analysis**
+  - **Tier**: TIER_2
+  - **Category**: feature_addition
+  - **Reasoning**: The diff shows the addition of a new class (PFTFutureResult) with locking mechanisms and new methods (flatMap, recover) for asynchronous operation chaining. This is a significant functional addition related to concurrency and error handling, impacting core framework behavior. The presence of error messages for programming errors indicates important runtime validation logic.
 
-- **UUID Change:**
-  - From `0C3084AE-DC6D-3DDF-AE9D-1445DCF64007` to `6D1299D4-040A-3574-BF99-3224EC118DE0`.
-
-- **Function Count Change:**
-  - From 830 to 834 (+4 functions).
-
-- **Symbol Count Change:**
-  - From 3140 to 3146 (+6 symbols).
-
-- **CString Count Change:**
-  - From 952 to 957 (+5 strings).
