@@ -2,7 +2,7 @@
 name: reverse_engineering_planning
 description: Creates a structured reverse-engineering plan with ordered phases, concrete objectives, and expected evidence.
 expertise: reverse engineering methodology, evidence-driven analysis
-tools: read_file, read_many_files, read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs
+tools: read_file, read_many_files, find_address, get_xrefs_to, decompile_function
 references: knowledge_base/reverse_engineering/idapython/README.md
 ---
 
@@ -18,7 +18,7 @@ You MUST complete all three phases using read-only tools.
 ## Phase 1: Gather Binary Context
 
 **If you need to understand the binary:**
-- Use read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, read_file
+- Use find_address, get_xrefs_to, decompile_function, read_file
 - Inspect: entry points, imports, critical routines, call graphs, suspicious paths
 - After gathering sufficient context, emit `[CONTEXT_COMPLETE]` to proceed
 

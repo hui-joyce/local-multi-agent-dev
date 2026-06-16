@@ -1,99 +1,81 @@
 ## What this feature does
-The update introduces a new notification length tracking and validation system for the AppPredictionClient framework. It replaces the previous `body`, `subtitle`, and `title` string fields with numeric length fields (`bodyLength`, `subtitleLength`, `titleLength`) and adds corresponding getter/setter methods. This change suggests a shift from storing raw notification text to tracking the character count of notification components, likely for UI layout calculations, notification summarization logic, or bandwidth optimization. The new `ATXUserNotification` and `ATXPBUserNotification` classes manage these length properties, while `ATXMissedNotificationRankingBiomeStream` and `ATXUserNotificationDigestBiomeStream` handle cleanup of these events.
+The `AppPredictionClient` framework has been updated to introduce a new notification length tracking and management system, replacing the previous body/subtitle/title tracking. The new implementation focuses on tracking the character count of notification titles, subtitles, and body lengths, along with flags indicating whether these fields are present. This suggests a shift towards optimizing notification display by tracking length metrics rather than raw content, likely for predictive rendering or UI layout calculations. The feature introduces new Objective-C classes (`ATXPBUserNotification`, `ATXUserNotification`, `ATXMissedNotificationRankingBiomeStream`) and associated selectors for managing these length properties.
 
 ## How is it implemented
-The implementation consists of several Objective-C classes that manage notification length properties:
+The implementation consists of several key components:
 
-1. **`ATXPBUserNotification`** (Property-based):
-   - Properties: `_bodyLength`, `_subtitleLength`, `_titleLength` (unsigned long long)
-   - Methods: `bodyLength`, `hasBodyLength`, `hasSubtitleLength`, `hasTitleLength`, `setBodyLength:`, `setHasBodyLength:`, `setHasSubtitleLength:`, `setHasTitleLength:`, `setSubtitleLength:`, `setTitleLength:`
-   - The `bodyLength` property getter returns the length value.
-   - The `hasBodyLength` property getter returns a boolean indicating if the length is set.
-   - The setter methods (`setBodyLength:`, `setHasBodyLength:`, etc.) allow setting the length and the "has" flag independently.
+1. **New Notification Classes**:
+   - `ATXPBUserNotification`: A new class that tracks notification length properties (bodyLength, subtitleLength, titleLength) with corresponding getter and setter methods.
+   - `ATXUserNotification`: An updated version of the existing notification class with similar length tracking properties.
+   - `ATXMissedNotificationRankingBiomeStream`: A class that manages missed notifications, with a `deleteAllEvents` method that prunes events based on a predicate block.
 
-2. **`ATXUserNotification`** (Property-based):
-   - Properties: `_bodyLength`, `_subtitleLength`, `_titleLength` (unsigned long long)
-   - Methods: `setBodyLength:`, `setSubtitleLength:`, `setTitleLength:`
-   - Similar to `ATXPBUserNotification` but without the getter/has methods.
+2. **Length Property Management**:
+   - **Getters**: `bodyLength`, `hasBodyLength`, `hasSubtitleLength`, `hasTitleLength`
+   - **Setters**: `setBodyLength:`, `setHasBodyLength:`, `setSubtitleLength:`, `setHasTitleLength:`
+   - The length properties are stored as `unsignedLongLong` values, indicating they track character counts.
 
-3. **`ATXMissedNotificationRankingBiomeStream`** and **`ATXUserNotificationDigestBiomeStream`**:
-   - Both have a `deleteAllEvents` method that clears all notification events in the stream.
-   - The `ATXUserNotificationDigestBiomeStream` also has a `jsonDict` method that likely serializes the notification data to JSON.
+3. **Key Decompiled Functions**:
+   ```c
+   // -[ATXMissedNotificationRankingBiomeStream deleteAllEvents]
+   void *__fastcall -[ATXMissedNotificationRankingBiomeStream deleteAllEvents](__int64 a1)
+   {
+     return objc_msgSend(*(id *)(a1 + 8), "pruneWithPredicateBlock:", &__block_literal_global_18);
+   }
+   ```
+   This function deletes all events from a missed notification stream by calling a pruning method with a predicate block.
 
-**Data Flow Trace:**
-- Notification data is structured with length fields instead of raw text.
-- When a notification is created or updated, the length of the body, subtitle, and title can be set individually.
-- The `has*Length` flags indicate whether the length field is populated.
-- The `deleteAllEvents` methods in the stream classes are used to clear notification history, possibly when the user dismisses notifications or when the system needs to free up space.
-- The `jsonDict` method in `ATXUserNotificationDigestBiomeStream` suggests that the notification data is serialized to JSON for transmission or storage.
+   ```c
+   // -[ATXPBUserNotification bodyLength]
+   __int64 __fastcall -[ATXPBUserNotification bodyLength](__int64 a1)
+   {
+     return *(_QWORD *)(a1 + 24);
+   }
+   ```
+   Retrieves the body length from a notification object.
 
-**Key Code Snippets (Inferred from Strings and Symbols):**
-```objective-c
-// ATXPBUserNotification
-@property (nonatomic, assign) unsigned long long _bodyLength;
-@property (nonatomic, assign) unsigned long long _subtitleLength;
-@property (nonatomic, assign) unsigned long long _titleLength;
+   ```c
+   // -[ATXPBUserNotification hasBodyLength]
+   __int64 __fastcall -[ATXPBUserNotification hasBodyLength](__int64 a1)
+   {
+     return (*(unsigned __int8 *)(a1 + 216) >> 2) & 1;
+   }
+   ```
+   Checks if the body length property is set.
 
-- (unsigned long long)bodyLength {
-    return self->_bodyLength;
-}
+   ```c
+   // -[ATXPBUserNotification setBodyLength:]
+   __int64 __fastcall -[ATXPBUserNotification setBodyLength:](__int64 result, __int64 a2, __int64 a3)
+   {
+     *(_DWORD *)(result + 216) |= 4u;
+     *(_QWORD *)(result + 24) = a3;
+     return result;
+   }
+   ```
+   Sets the body length value and marks the property as present.
 
-- (BOOL)hasBodyLength {
-    return self->_bodyLength != 0;
-}
-
-- (void)setBodyLength:(unsigned long long)arg1 {
-    self->_bodyLength = arg1;
-}
-
-- (void)setHasBodyLength:(BOOL)arg1 {
-    self->_bodyLength = arg1 ? 1 : 0;
-}
-
-// Similar for subtitleLength and titleLength
-
-// ATXUserNotification
-@property (nonatomic, assign) unsigned long long _bodyLength;
-@property (nonatomic, assign) unsigned long long _subtitleLength;
-@property (nonatomic, assign) unsigned long long _titleLength;
-
-- (void)setBodyLength:(unsigned long long)arg1 {
-    self->_bodyLength = arg1;
-}
-
-// ATXMissedNotificationRankingBiomeStream
-- (void)deleteAllEvents {
-    // Clears all events in the stream
-}
-
-// ATXUserNotificationDigestBiomeStream
-- (NSDictionary *)jsonDict {
-    // Serializes notification data to JSON
-    // Includes fields like: appSpecifiedScore, badge, bodyLength, numberOfNotificationsInStack, positionInStack, recordTimestamp, timestamp, attachmentType, priorityStatus, summaryStatus, urgency, isGroupMessage, isMessage, isNotificationSummaryEnabled, isPartOfStack, isPriorityNotificationEnabled, isStackSummary, isSummarized
-}
-```
+4. **Data Flow**:
+   - Notification objects store length properties at specific offsets (24 bytes for bodyLength, 216 bytes for length flags).
+   - The `deleteAllEvents` method uses a predicate block to filter and remove events, suggesting dynamic notification management.
+   - String constants like `TQ,N,V_bodyLength` indicate property tracking in a structured format.
 
 ## How to trigger this feature
-The feature is triggered by:
-1. **Notification Creation/Update**: When a notification is created or updated, the `bodyLength`, `subtitleLength`, and `titleLength` properties are set based on the notification content.
-2. **Notification Dismissal**: When a user dismisses a notification, the `deleteAllEvents` method in `ATXMissedNotificationRankingBiomeStream` or `ATXUserNotificationDigestBiomeStream` is called to clear the notification from the stream.
-3. **Notification Serialization**: When a notification needs to be serialized (e.g., for transmission to another device or for storage), the `jsonDict` method in `ATXUserNotificationDigestBiomeStream` is called to generate the JSON representation.
-
-The feature is likely triggered by the system's notification management logic, which uses the `AppPredictionClient` framework to handle notification data and streams.
+The feature is triggered when:
+1. Notifications are processed or displayed, and the system needs to track their length properties.
+2. The `ATXMissedNotificationRankingBiomeStream` is used to manage missed notifications, with `deleteAllEvents` called to prune events based on a predicate.
+3. The new notification classes (`ATXPBUserNotification`, `ATXUserNotification`) are instantiated and their length properties are set or retrieved.
+4. The UUID change suggests this is a new or significantly modified feature in the 26.4.2 update.
 
 ## Evidence
-- **Symbols**: Added symbols include `ATXPBUserNotification` methods (`bodyLength`, `hasBodyLength`, `setBodyLength:`, etc.), `ATXUserNotification` methods (`setBodyLength:`, `setSubtitleLength:`, `setTitleLength:`), and `deleteAllEvents` methods in `ATXMissedNotificationRankingBiomeStream` and `ATXUserNotificationDigestBiomeStream`.
-- **CStrings**: Added strings include `"TQ,N,V_bodyLength"`, `"TQ,N,V_subtitleLength"`, `"TQ,N,V_titleLength"`, `"_bodyLength"`, `"_subtitleLength"`, `"_titleLength"`, `"hasBodyLength"`, `"hasSubtitleLength"`, `"hasTitleLength"`, `"setBodyLength:"`, `"setHasBodyLength:"`, `"setHasSubtitleLength:"`, `"setHasTitleLength:"`, `"setSubtitleLength:"`, `"setTitleLength:"`, `"unsignedLongLongValue"`, and a JSON schema string with fields like `bodyLength`, `subtitleLength`, `titleLength`, etc.
-- **Addresses**: The `find_address` tool successfully located the string data addresses for the new symbols and strings. The `get_xrefs_to` tool did not find any code references to these string data addresses, indicating that the strings are likely used as constants or in data structures rather than being directly referenced by executable code.
-- **UUID Change**: The UUID of the framework has changed, indicating a significant update to the framework's identity.
-- **Function Count Increase**: The number of functions has increased from 10834 to 10845, suggesting the addition of new functions.
-- **Symbol Count Increase**: The number of symbols has increased from 35817 to 35854, indicating the addition of new symbols.
-- **CString Count Increase**: The number of C strings has increased from 16113 to 16134, indicating the addition of new strings.
+- **New Symbols**: 12 new Objective-C methods and 3 new instance variables related to notification length tracking.
+- **New CStrings**: Strings like `TQ,N,V_bodyLength`, `TQ,N,V_subtitleLength`, `TQ,N,V_titleLength` indicate property tracking.
+- **Address Changes**: Significant changes in section sizes (`__TEXT.__text`, `__TEXT.__objc_methlist`, etc.) indicate substantial code additions.
+- **Decompiled Functions**: Key functions show length property management and event pruning logic.
+- **String Constants**: Long string like `"{?=\"appSpecifiedScore\"b1\"badge\"b1\"bodyLength\"b1\"numberOfNotificationsInStack\"b1\"positionInStack\"b1\"recordTimestamp\"b1\"timestamp\"b1\"attachmentType\"b1\"priorityStatus\"b1\"summaryStatus\"b1\"urgency\"b1\"isGroupMessage\"b1\"isMessage\"b1\"isNotificationSummaryEnabled\"b1\"isPartOfStack\"b1\"isPriorityNotificationEnabled\"b1\"isStackSummary\"b1\"isSummarized\"b1\"}"` suggests a complex notification metadata structure.
 
 ## AI Prioritisation Scoring System
 
-- **Symbol and String Analysis**
-  - **Tier**: TIER_2
-  - **Category**: Notification Management
-  - **Reasoning**: The diff shows a clear shift from storing raw notification text (body, subtitle, title) to tracking numeric lengths (bodyLength, subtitleLength, titleLength) with associated getter/setter methods. This indicates a significant architectural change in how notifications are represented and managed, likely for UI layout, summarization, or bandwidth optimization. The addition of new classes (ATXPBUserNotification, ATXUserNotification) and methods (deleteAllEvents, jsonDict) suggests enhanced notification handling capabilities. While the evidence is strong, the lack of direct code references to the new strings (get_xrefs_to returned empty) prevents full decompilation and verification of the implementation details.
+- **symbol_analysis**
+  - **Tier**: 2
+  - **Category**: notification_management
+  - **Reasoning**: New notification length tracking system with significant code additions, suggesting a feature for optimizing notification display and management.
 

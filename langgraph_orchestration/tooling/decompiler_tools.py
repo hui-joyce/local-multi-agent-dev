@@ -24,8 +24,10 @@ def _connect() -> rpyc.Connection:
     return rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": RPC_TIMEOUT})
 
 @tool
-def decompile_function(address: int) -> str:
+def decompile_function(address: Union[int, str]) -> str:
     """Decompiles the function at the given address"""
+    if isinstance(address, str):
+        address = int(address, 16) if address.startswith("0x") else int(address)
     last_error = None
     for attempt in range(3):
         conn = None
@@ -54,15 +56,20 @@ def decompile_function(address: int) -> str:
 
 
 @tool
-def get_xrefs_to(address: int) -> list[dict]:
+def get_xrefs_to(address: Union[int, str]) -> list[dict]:
     """Finds code cross-references to a given address"""
+    if isinstance(address, str):
+        address = int(address, 16) if address.startswith("0x") else int(address)
     last_error = None
     for attempt in range(3):
         conn = None
         try:
             conn = _connect()
             xrefs = conn.root.exposed_get_xrefs_to(address)
-            return list(xrefs) if xrefs else []
+            if xrefs:
+                # Convert the RPyC netrefs to local python dicts
+                return [{str(k): (int(v) if isinstance(v, int) else str(v)) for k, v in dict(x).items()} for x in xrefs]
+            return []
         except ConnectionRefusedError:
             return [{"error": f"Connection refused on port {DECOMPILER_PORT}."}]
         except TimeoutError:
@@ -143,6 +150,11 @@ def find_address(query: str) -> Union[dict, str]:
             canonical,                      # original 
             _kebab_to_camel(base),          
         ]))
+        symbol_variants = list(dict.fromkeys([
+            query,                          # e.g., _objc_msgSend$isFinished
+            canonical,                      # e.g., isFinished
+            "_objc_msgSend$" + base,        # fallback stub
+        ]))
     else:
         base = canonical
         snake = _kebab_to_snake(base)
@@ -188,12 +200,39 @@ def find_address(query: str) -> Union[dict, str]:
                 for variant in symbol_variants:
                     addr = conn.root.exposed_lookup_symbol(variant)
                     if addr and addr != 0:
-                        return {
-                            "type": "symbol",
-                            "query": variant,
-                            "original": original_query,
-                            "address": hex(int(addr)),
-                        }
+                        # Determine if this is a function or data
+                        is_func = False
+                        func_start = addr
+                        try:
+                            boundaries = conn.root.exposed_get_function_boundaries(addr)
+                            if boundaries and boundaries[0] != 0:
+                                is_func = True
+                                func_start = boundaries[0]
+                        except Exception:
+                            pass
+                        
+                        seg_name = ""
+                        try:
+                            seg_name = conn.root.exposed_get_segment_name(addr)
+                        except Exception:
+                            pass
+
+                        if is_func and seg_name != "__stubs":
+                            return {
+                                "type": "symbol",
+                                "query": variant,
+                                "original": original_query,
+                                "address": hex(int(func_start)),
+                                "segment": seg_name,
+                            }
+                        else:
+                            return {
+                                "type": "data_symbol",
+                                "query": variant,
+                                "original": original_query,
+                                "address": hex(int(addr)),
+                                "segment": seg_name,
+                            }
 
             # part b - String search for each variant (covers __cstring + __objc_methname)
             for variant in string_variants:
@@ -211,16 +250,47 @@ def find_address(query: str) -> Union[dict, str]:
             fuzzy_results = conn.root.exposed_lookup_symbol_fuzzy(fuzzy_token)
             if fuzzy_results:
                 best = fuzzy_results[0]
-                return {
-                    "type": "symbol_fuzzy",
-                    "query": best["name"],
-                    "original": original_query,
-                    "address": hex(int(best["address"])),
-                    "all_matches": [
-                        {"name": r["name"], "address": hex(int(r["address"]))}
-                        for r in fuzzy_results
-                    ],
-                }
+                best_addr = best["address"]
+                is_func = False
+                func_start = best_addr
+                try:
+                    boundaries = conn.root.exposed_get_function_boundaries(best_addr)
+                    if boundaries and boundaries[0] != 0:
+                        is_func = True
+                        func_start = boundaries[0]
+                except Exception:
+                    pass
+                
+                seg_name = ""
+                try:
+                    seg_name = conn.root.exposed_get_segment_name(best_addr)
+                except Exception:
+                    pass
+
+                if is_func and seg_name != "__stubs":
+                    return {
+                        "type": "symbol_fuzzy",
+                        "query": best["name"],
+                        "original": original_query,
+                        "address": hex(int(func_start)),
+                        "segment": seg_name,
+                        "all_matches": [
+                            {"name": r["name"], "address": hex(int(r["address"]))}
+                            for r in fuzzy_results
+                        ],
+                    }
+                else:
+                    return {
+                        "type": "data_symbol_fuzzy",
+                        "query": best["name"],
+                        "original": original_query,
+                        "address": hex(int(best_addr)),
+                        "segment": seg_name,
+                        "all_matches": [
+                            {"name": r["name"], "address": hex(int(r["address"]))}
+                            for r in fuzzy_results
+                        ],
+                    }
 
 
 

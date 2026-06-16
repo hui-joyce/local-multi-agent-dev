@@ -192,16 +192,17 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
     *   **`rename_local_variable` & `set_comment`**: Document the binary as you decipher variables.
     *   **`save_ida_database`**: Persist the `.i64` file after annotating.
 
-    **STAGE 2: LIMITED DECOMPILATION (TOOL BUDGET LIMITS)**
+    **STAGE 2: LIMITED DECOMPILATION & DB ANNOTATION (TOOL BUDGET LIMITS)**
     - Max 20 xref lookups
     - Max 20 decompiled functions
     Focus only on the most critical cross-references that map to high-signal indicators.
+    *Recursive Decompilation:* Perform further/recursive decompilation when a called/calling function is critical to understanding the implementation of a feature.
+    *Database Annotation (MANDATORY for Tier 1 & Tier 2 features):* For each binary of the feature opened, you MUST utilize the `set_comment` tool to document data flow, call traces, and important entry points. Rename variables with `rename_local_variable` when you decipher them, and call `save_ida_database` to persist annotations.
 
     **STAGE 3: REPORTING & CORRELATION**
     Synthesize findings into these sections:
     *   `## What this feature does`: High-level summary based on evidence.
-    *   `## How is it implemented`: Detailed code logic if decompiled. You MUST include decompiled pseudocode snippets, call chain context, and data flow tracing.
-
+    *   `## How is it implemented`: Detailed code logic if decompiled. You MUST include detailed and accurate decompiled pseudocode snippets, rewritten with the variable names and structure you renamed/discovered (`rename_local_variable` and symbolication) to ensure high readability. Document the call chains and data flow tracing thoroughly.
     *   `## How to trigger this feature`: Infer trigger conditions.
     *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements).
     *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, `confidence`, `decompile`, and `reason`.
@@ -242,7 +243,9 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
         - If you have **function addresses** from `get_xrefs_to`, call `decompile_function` on the most promising ones (up to the limit).
         - If you see a function taking an untrusted pointer, trace it using `trace_variable_source`.
         - If you see an `objc_msgSend` block you want to resolve, use `resolve_objc_dispatch`.
-        - If you understand a variable or function block, use `rename_local_variable` and `set_comment` to annotate the binary, followed by `save_ida_database`.
+        - For Tier 1 and Tier 2 features, you MUST use the `set_comment` tool for each binary of the feature opened to trace data flow, call traces, and important entry points.
+        - Use the `rename_local_variable` tool to give meaningful names to variables as you decipher them.
+        - Always run `save_ida_database` after renaming variables or setting comments to persist your work.
 
         Output ONLY `<tool_call>` blocks if you need more evidence and haven't hit your budget.
         

@@ -443,10 +443,10 @@ class IDAToolExecutor(BaseToolExecutor):
         if isinstance(output, dict):
             # Tell the agent exactly what it found so it can use the correct follow-up tool
             result_str = json.dumps(output, indent=2)
-            if output["type"] == "symbol":
+            if output["type"] in ("symbol", "symbol_fuzzy"):
                 result_str += "\n\nNOTE: This is a CODE symbol. You MUST use `decompile_function` on this address."
-            elif output["type"] == "string_data":
-                result_str += "\n\nNOTE: This is a string DATA address. You MUST use `get_xrefs_to` on these addresses to find the code referencing it."
+            elif output["type"] in ("string_data", "data_symbol", "data_symbol_fuzzy"):
+                result_str += "\n\nNOTE: This is a DATA or selector address. You MUST use `get_xrefs_to` on these addresses to find the code referencing it."
             return ToolResult(tool_name="find_address", success=True, output=result_str)
             
         return ToolResult(tool_name="find_address", success=False, output="", error=f"Unexpected response: {output}")

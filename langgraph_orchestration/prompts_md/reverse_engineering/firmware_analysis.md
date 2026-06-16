@@ -2,7 +2,7 @@
 name: reverse_engineering_firmware_analysis
 description: Compares Apple firmware versions and extracts evidence for feature-level binary changes.
 expertise: ipsw workflows, dyld_shared_cache analysis, kernelcache diffing, private framework triage
-tools: ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff, read_file, read_many_files, read_disassembly, lookup_funcs, xrefs_to
+tools: ipsw_cli, ipsw_download, ipsw_extract, ipsw_diff, read_file, read_many_files, find_address, get_xrefs_to, decompile_function
 ---
 
 # OBJECTIVE

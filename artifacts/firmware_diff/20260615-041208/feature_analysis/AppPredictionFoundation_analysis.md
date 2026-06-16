@@ -1,31 +1,61 @@
 ## What this feature does
-The feature is a notification mechanism related to "biome" (likely a typo or internal naming for "biome" in the context of AppPredictionFoundation). It involves a notification key `__kATXBiomeNotificationPurgeCompleteKey` and a corresponding notification string `biomeNotificationPurgeComplete_174515357`. The feature appears to be triggered when a "purge complete" event occurs, possibly related to a background task or process that purges some data or state associated with "biome".
+The `AppPredictionFoundation` framework has been updated to introduce a new notification mechanism related to "biome" (likely a typo or internal codename for a specific service) and a "purge complete" state. The new symbol `__kATXBiomeNotificationPurgeCompleteKey` and the corresponding string `biomeNotificationPurgeComplete_174515357` suggest the addition of a notification key used to signal when a "biome" related data purge operation has finished. The UUID change indicates a new bundle identity, while the symbol and string count increases confirm the addition of this new functionality.
 
 ## How is it implemented
-The implementation involves:
-1. A notification key `__kATXBiomeNotificationPurgeCompleteKey` (address: `0x2792cf9a8`).
-2. A notification string `biomeNotificationPurgeComplete_174515357` (address: `0x22b144051`).
+The implementation details are currently unavailable because the `get_xrefs_to` calls for the newly added data addresses (`0x2792cf9a8` and `0x22b144051`) returned empty results. This means no existing code in the binary is directly referencing these new symbols or strings at the time of the diff analysis.
 
-The notification key is a code symbol, but the decompilation at this address failed, suggesting it might be a constant or a small function. The string data address `0x22b144051` has no cross-references, meaning no code is directly referencing this string. This suggests the string might be used indirectly or in a different context.
+**Inferred Implementation Logic:**
+1.  **New Data Symbols:**
+    *   `__kATXBiomeNotificationPurgeCompleteKey` (Address: `0x2792cf9a8`): A global constant key, likely a `NSString` or `CFString` key used in a dictionary or notification center.
+    *   `biomeNotificationPurgeComplete_174515357` (Address: `0x22b144051`): A string literal containing a timestamp or identifier suffix. The underscore and numeric suffix often imply a localized or versioned string key.
+
+2.  **Missing Callers:**
+    *   Since `get_xrefs_to` returned empty arrays for both addresses, the code that *uses* these keys/strings is either:
+        *   Not yet compiled into this specific binary (the feature is being added but the usage site is in a different binary not present in this diff).
+        *   The feature is purely additive to the framework's internal state (e.g., initializing a new dictionary entry) without external callers in this snapshot.
+    *   The `Functions: 991` count is identical to the previous version (implied by the lack of function count change in the diff, though the diff shows `Symbols` and `CStrings` increasing). Wait, the diff shows `Functions: 991` for the new version, but the previous version isn't explicitly listed with a function count in the provided snippet. However, the symbol count increased by 1 (`3712` -> `3713`) and CStrings by 2 (`1804` -> `1806`). This suggests the new symbols are likely global constants or static data, not new functions.
+
+3.  **Framework Context:**
+    *   `AppPredictionFoundation` is a private framework. The "biome" terminology is unusual and might be an internal codename for a specific prediction model, a background task, or a specific user segment (e.g., "Biome" as a user group).
+    *   The "Purge Complete" notification suggests a cleanup operation. The framework might be purging cached prediction data or temporary files associated with the "biome" service.
+
+**Decompiled Pseudocode (Inferred from Symbol Names):**
+Since no code was decompiled, we can only infer the structure from the symbol names.
+```c
+// Inferred structure based on symbol names
+static NSString *const kATXBiomeNotificationPurgeCompleteKey = "biomeNotificationPurgeComplete_174515357";
+
+// Usage (Hypothetical, not in this binary):
+// [NotificationCenter defaultCenter] postNotificationName:kATXBiomeNotificationPurgeCompleteKey object:purgeResult;
+```
+
+**Call Chains:**
+*   None identified in this binary. The new symbols are likely initialized at startup or used by a different binary that depends on `AppPredictionFoundation`.
+
+**Data Flow Trace:**
+*   **Initialization:** The new constant `kATXBiomeNotificationPurgeCompleteKey` is defined in the `__const` section.
+*   **String Definition:** The string `biomeNotificationPurgeComplete_174515357` is defined in the `__cstring` section.
+*   **Linking:** The constant likely points to the string address or contains the string value directly (depending on how the compiler/linker handled the addition).
+*   **Execution:** No execution path for these symbols was found in the decompiled code.
 
 ## How to trigger this feature
-The feature is likely triggered by a "purge complete" event, which could be a background task completion, a user action, or a system event. The exact trigger conditions are not clear from the current evidence, but it's likely related to the completion of a purge operation.
+*   **Binary Update:** The feature is triggered by the installation of the `26.4.2` firmware update (Build `23E261`), which includes the updated `AppPredictionFoundation` binary.
+*   **Runtime:** The feature likely triggers automatically when the `AppPredictionFoundation` framework is loaded or when a specific background task related to "biome" purging is initiated by the system or another app.
+*   **Notification:** The feature is designed to send a system notification (or a key that other apps listen to) when the purge operation is complete.
 
 ## Evidence
-- **Symbol**: `__kATXBiomeNotificationPurgeCompleteKey` (address: `0x2792cf9a8`)
-- **String**: `biomeNotificationPurgeComplete_174515357` (address: `0x22b144051`)
-- **Diff Changes**:
-  - Added symbol: `__kATXBiomeNotificationPurgeCompleteKey`
-  - Added string: `biomeNotificationPurgeComplete_174515357`
-  - UUID change: `3A728CE2-1258-34D1-9CA5-A24EF18D17B0` -> `2D5B33EB-E469-31E9-A0C9-376A458A0107`
-  - Function count: `991` -> `991` (no change)
-  - Symbol count: `3712` -> `3713` (added 1 symbol)
-  - CStrings count: `1804` -> `1806` (added 2 strings)
+*   **New Symbol:** `__kATXBiomeNotificationPurgeCompleteKey` (Address: `0x2792cf9a8`). Type: `data_symbol`.
+*   **New String:** `biomeNotificationPurgeComplete_174515357` (Address: `0x22b144051`). Type: `string_data`.
+*   **No Callers:** `get_xrefs_to` for both addresses returned empty results, indicating no code in this binary references them directly.
+*   **Symbol Count:** Increased by 1 (`3712` -> `3713`).
+*   **String Count:** Increased by 2 (`1804` -> `1806`).
+*   **UUID Change:** Indicates a new bundle identity.
+*   **Framework:** `AppPredictionFoundation` (Private Framework).
 
 ## AI Prioritisation Scoring System
 
-- **symbol_and_string_addition**
+- **Symbol Analysis**
   - **Tier**: TIER_2
-  - **Category**: notification
-  - **Reasoning**: Added notification key and string suggest a new notification feature, but decompilation failed and no code references the string, indicating limited functionality or indirect usage.
+  - **Category**: Notification System
+  - **Reasoning**: The diff introduces new notification keys and strings related to a 'biome' purge operation. While direct callers were not found in this binary, the addition of specific notification infrastructure suggests a new feature for managing background tasks or data cleanup. The lack of callers in this specific binary suggests the usage might be in a dependent binary or triggered by framework initialization, warranting a TIER_2 classification for further investigation into the calling framework or system services.
 
