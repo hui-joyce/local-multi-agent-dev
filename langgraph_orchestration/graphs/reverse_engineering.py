@@ -336,7 +336,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 if next_line.startswith(("#### ", "### ", "## ")):
                     break
 
-                # Extract exact binary path from blockquote: >  `/path/to/binary`
+                # extract exact binary path from blockquote: >  `/path/to/binary`
                 if not binary_path:
                     bp_match = re.search(r">\s*`([^`]+)`", lines[peek])
                     if bp_match:
@@ -369,7 +369,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             targets.append(target_entry)
             idx = peek
 
-        # Triage filter: drop LOW_SIGNAL components before they reach the queue
+        # triage filter
+        # drop LOW_SIGNAL components before they reach the queue
         high_signal_targets = []
         for t in targets:
             signal = _triage_evidence(t.get("evidence", ""))
@@ -381,7 +382,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return high_signal_targets
 
     def _triage_evidence(evidence: str) -> str:
-        """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'."""
+        """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'"""
         import re as _re
 
         # High-signal: explicit added/removed lines in Symbols or CStrings sections
@@ -556,7 +557,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         matches = _glob.glob(pattern, recursive=True)
         if matches:
             return matches[0]
-        # broader fallback: any subdirectory whose name starts with the build ID
+        # fallback: any subdirectory whose name starts with the build ID
         build_id = stem.split("_")[0] if "_" in stem else stem
         pattern2 = os.path.join(extracted_root, f"*{build_id}*", "**", "dyld_shared_cache_arm64e")
         matches2 = _glob.glob(pattern2, recursive=True)
@@ -733,7 +734,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             os.makedirs(output_dir, exist_ok=True)
             target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
 
-            # Strategy 2a: DSC dylib extraction from .ipsw_extracted/ (FASTEST & NO DMG MOUNT)
+            # Strategy 2a: DSC dylib extraction from .ipsw_extracted/ 
             if feature_binary_path:
                 dsc_path = None
                 if new_ipsw:
@@ -770,7 +771,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             state.record_analysis_note(f"Copied binary from existing mount: {mount_dir}")
                             break
 
-            # Strategy 2c: Direct file extraction from IPSW archive (FALLBACK for daemons/apps)
+            # Strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps)
             if not extracted_binary and new_ipsw:
                 pattern = f".*{re.escape(target_basename)}$"
                 try:
@@ -1015,7 +1016,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
     def route_after_feature_select(state: AgentState) -> str:
-        """All items in the queue are already HIGH_SIGNAL (filtered at build time)."""
+        """All items in the queue are already HIGH_SIGNAL (filtered at build time)"""
         if state.feature_analysis_current:
             return "prepare_decompiler"
         return "done"
