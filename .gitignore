@@ -51,3 +51,10 @@ checksums.txt.sha1
 # Others
 .DS_Store
 *.dmg
+*.aea
+*.i64
+*.id0
+*.id1
+*.id2
+*.nam
+*.til

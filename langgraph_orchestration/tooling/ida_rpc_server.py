@@ -237,7 +237,8 @@ class DecompilerService(rpyc.Service):
     def exposed_set_comment(self, address: int, comment: str) -> bool:
         """Sets a repeatable comment at a specific address in the disassembly"""
         def _do():
-            idc.set_comment(address, comment, 1)
+            import idc
+            idc.set_cmt(address, comment, 1)
             return True
         try:
             return _run_on_main_thread(_do)
@@ -379,8 +380,8 @@ class DecompilerService(rpyc.Service):
     def exposed_save_ida_database(self, out_path: str = ""):
         """Saves the current IDA Pro database"""
         def _do():
-            import ida_pro
-            ida_pro.save_database(out_path if out_path else None, 0)
+            import ida_loader
+            ida_loader.save_database(out_path if out_path else None, 0)
             return True
         try:
             return _run_on_main_thread(_do)

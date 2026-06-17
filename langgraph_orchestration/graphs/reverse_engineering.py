@@ -626,31 +626,30 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         service = FirmwareDiffService(workspace_root=state.workspace_root)
         result = service.run(request)
 
-        # use the raw framework-diff README.md 
+        # using structured report.json as the diff report to llm
+        report_json_path = result.artifacts.report_json
+        diff_report_text = read_text(report_json_path) if report_json_path and os.path.isfile(report_json_path) else ""
+
         framework_diff_path = result.artifacts.framework_diff
         if framework_diff_path and os.path.isfile(framework_diff_path):
-            diff_report_text = read_text(framework_diff_path)
             diff_report_path = framework_diff_path
         else:
-            # Fallback: walk raw_diff_dir for README.md
             diff_report_path = ""
-            diff_report_text = ""
             raw_dir = result.artifacts.raw_diff_dir
             if raw_dir and os.path.isdir(raw_dir):
                 for root, _, files in os.walk(raw_dir):
                     if "README.md" in files:
                         diff_report_path = os.path.join(root, "README.md")
-                        diff_report_text = read_text(diff_report_path)
                         break
             if not diff_report_path:
                 diff_report_path = result.artifacts.report_markdown
-                diff_report_text = read_text(diff_report_path)
 
         state = StateManager.add_intermediate_output(state, "firmware_diff_report", diff_report_text)
         state.intermediate_outputs["firmware_diff_report_path"] = diff_report_path
         if result.artifacts.raw_diff_dir:
             state.intermediate_outputs["firmware_raw_diff_dir"] = result.artifacts.raw_diff_dir
         return state
+
 
     def feature_analysis_select_node(state: AgentState) -> AgentState:
         # Initialize queue on first call
@@ -815,9 +814,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
     def cleanup_decompiler_node(state: AgentState) -> AgentState:
-        from langgraph_orchestration.tooling.decompiler_tools import stop_ida_server
-        result = stop_ida_server.invoke({})
-        state.record_analysis_note(f"Decompiler cleanup: {result}")
+        from langgraph_orchestration.tooling.decompiler_tools import save_ida_database, stop_ida_server
+        # Always persist the database before shutdown so the .i64 is written
+        save_result = save_ida_database.invoke({})
+        state.record_analysis_note(f"Decompiler save: {save_result}")
+        stop_result = stop_ida_server.invoke({})
+        state.record_analysis_note(f"Decompiler cleanup: {stop_result}")
         return state
 
     def unified_feature_analysis_node(state: AgentState) -> AgentState:
@@ -891,11 +893,15 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     f"Output ONLY `<tool_call>` blocks in this order. Do NOT write the report yet."
                 )
             elif has_stage2_results:
-                # Stage 2 done 
+                # Stage 2 allow annotations and iterative decompilation
                 prompt += (
-                    "\n**CRITICAL STAGE 3 INSTRUCTION**: You have completed decompilation. "
-                    "You MUST now write the final detailed report with full data-flow tracing. "
-                    "Start EXACTLY with `## What this feature does`. Include decompiled pseudocode and caller chains in `## How is it implemented`. "
+                    "\n**CRITICAL STAGE 2 INSTRUCTION**: You have obtained decompilation results. "
+                    "Before writing the final report, you MUST use `rename_local_variable` and `set_comment` to annotate the code. "
+                    "When you decipher variables or understand the data flow, document them. "
+                    "Run `save_ida_database` to persist your annotations. "
+                    "If you need to trace more code, use `get_xrefs_to` or `decompile_function`. "
+                    "If you have fully analyzed and annotated the feature, transition to STAGE 3 and write the final report. "
+                    "To write the report, start EXACTLY with `## What this feature does`. Include decompiled pseudocode and caller chains in `## How is it implemented`. "
                     "End with `---AI_PRIORITISATION_SCORE---` and the JSON score."
                 )
             else:

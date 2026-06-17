@@ -50,7 +50,7 @@ Use these tools to understand the codebase:
 - `ipsw_cli` - Execute explicit ipsw CLI subcommands when firmware artifacts are needed
 - `ipsw_download` - Download a specific IPSW by device/version
 - `ipsw_extract` - Extract artifact (e.g., dyld/kernel) from an IPSW
-- `ipsw_diff` - Compare dyld_shared_cache artifacts across versions
+- `ipsw_diff` - Compare entire IPSW firmware versions to capture all changes (Mach-O executables, Dylibs, Entitlements)
 - `find_address` - Find the memory address for a specific symbol, string, or Objective-C method selector from the diff.
 - `get_xrefs_to` - Find all locations in code that reference a specific memory address
 - `decompile_function` - Get C-like pseudo-code for a function at a specific memory address

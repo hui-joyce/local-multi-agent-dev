@@ -299,6 +299,7 @@ def find_address(query: str) -> Union[dict, str]:
                 f"as symbol, string, or fuzzy name match."
             )
 
+
         except ConnectionRefusedError:
             return "error: Connection to decompiler refused. Is IDA Pro running?"
         except TimeoutError:
@@ -353,8 +354,11 @@ def start_ida_server_for_binary(binary_path: str) -> str:
     subprocess.run(["pkill", "-9", "-f", "idat"], capture_output=True)
     subprocess.run(["pkill", "-9", "-f", "ida64"], capture_output=True)
     
-    # Clean up any corrupted IDA databases from previous aborted runs
-    for ext in [".i64", ".id0", ".id1", ".id2", ".nam", ".til"]:
+    # Clean up only the unpacked working files (.id0/.id1/.id2/.nam/.til) left
+    # by a previous aborted run. Preserve any existing .i64 so annotations are
+    # reloaded by IDA on the next open (drop -c to let IDA reuse it).
+    has_saved_db = os.path.exists(binary_path + ".i64")
+    for ext in [".id0", ".id1", ".id2", ".nam", ".til"]:
         try:
             db_file = binary_path + ext
             if os.path.exists(db_file):
@@ -372,15 +376,18 @@ def start_ida_server_for_binary(binary_path: str) -> str:
     else:
         return "# ERROR: Port 18861 is still in use after attempting to kill old IDA instances."
 
-    # Launch IDA in the background
+    # Launch IDA in the background.
+    # If a saved .i64 exists, omit -c so IDA reloads it (preserving annotations).
+    # If no .i64 exists, keep -c so IDA creates a fresh database.
     command = [
         IDA_EXECUTABLE_PATH,
         "-A",
-        "-c",
         "-L/tmp/ida.log",
         f"-S{IDA_RPC_SERVER_SCRIPT}",
         binary_path,
     ]
+    if not has_saved_db:
+        command.insert(2, "-c")  # fresh DB only when no saved .i64 exists
     try:
         log_file = open("/tmp/ida_rpc_server.log", "w")
         subprocess.Popen(command, stdout=log_file, stderr=log_file, stdin=subprocess.DEVNULL, env=os.environ.copy())

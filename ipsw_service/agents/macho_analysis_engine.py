@@ -60,7 +60,10 @@ class MachoAnalysisEngine:
             result = self.runner.run_shell(command, timeout=timeout)
             count = 0
             if result.stdout:
-                count = len([line for line in result.stdout.splitlines() if line.strip()])
+                try:
+                    count = int(result.stdout.strip())
+                except ValueError:
+                    count = len([line for line in result.stdout.splitlines() if line.strip()])
             return {
                 "success": result.success,
                 "count": count,
@@ -91,19 +94,19 @@ class MachoAnalysisEngine:
         if cache_path and (is_system_binary or not binary_path or not os.path.exists(binary_path) or os.path.getsize(binary_path) == 0):
             dyld_cmd = (
                 f"{shlex.quote(self.runner.executable)} dyld macho {shlex.quote(cache_path)} "
-                f"{shlex.quote(dyld_target)} --strings{arch_arg}"
+                f"{shlex.quote(dyld_target)} --strings | wc -l"
             )
             return _run(dyld_cmd) 
 
         if binary_path and os.path.exists(binary_path) and os.path.getsize(binary_path) > 0:
-            direct_cmd = f"{shlex.quote(self.runner.executable)} macho info --strings{arch_arg} {shlex.quote(binary_path)}"
+            direct_cmd = f"{shlex.quote(self.runner.executable)} macho info --strings{arch_arg} {shlex.quote(binary_path)} | wc -l"
             direct = _run(direct_cmd) # <-- PASS RAW COMMAND
             if direct["count"] > 0 or not cache_path:
                 return direct
             
             cached_cmd = (
                 f"{shlex.quote(self.runner.executable)} dyld macho {shlex.quote(cache_path)} "
-                f"{shlex.quote(dyld_target)} --strings{arch_arg}"
+                f"{shlex.quote(dyld_target)} --strings | wc -l"
             )
             cached = _run(cached_cmd) # <-- PASS RAW COMMAND
             return cached if cached["count"] > direct["count"] else direct
