@@ -336,7 +336,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 if next_line.startswith(("#### ", "### ", "## ")):
                     break
 
-                # Extract exact binary path from blockquote: >  `/path/to/binary`
+                # extract exact binary path from blockquote: >  `/path/to/binary`
                 if not binary_path:
                     bp_match = re.search(r">\s*`([^`]+)`", lines[peek])
                     if bp_match:
@@ -369,7 +369,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             targets.append(target_entry)
             idx = peek
 
-        # triage filter, drop LOW_SIGNAL components before they reach the queue 
+        # triage filter
+        # drop LOW_SIGNAL components before they reach the queue
         high_signal_targets = []
         for t in targets:
             signal = _triage_evidence(t.get("evidence", ""))
@@ -381,7 +382,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return high_signal_targets
 
     def _triage_evidence(evidence: str) -> str:
-        """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'."""
+        """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'"""
         import re as _re
 
         # High-signal: explicit added/removed lines in Symbols or CStrings sections
@@ -407,10 +408,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         return "HIGH_SIGNAL"
 
         # treat function count changes as high-signal
-        func_change = _re.search(
-            r'Functions\s*:\s*(\d+)\s*->\s*(\d+)|Functions:\s*(\d+)',
-            evidence
-        )
         func_lines = _re.findall(r'^[+-]\s*Functions\s*:', evidence, _re.MULTILINE)
         if func_lines:
             return "HIGH_SIGNAL"
@@ -560,7 +557,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         matches = _glob.glob(pattern, recursive=True)
         if matches:
             return matches[0]
-        # broader fallback: any subdirectory whose name starts with the build ID
+        # fallback: any subdirectory whose name starts with the build ID
         build_id = stem.split("_")[0] if "_" in stem else stem
         pattern2 = os.path.join(extracted_root, f"*{build_id}*", "**", "dyld_shared_cache_arm64e")
         matches2 = _glob.glob(pattern2, recursive=True)
@@ -600,8 +597,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             except Exception:
                 pass
 
-        # if the extractor state didn't record DSC/kernel paths (e.g.
-        # stderr path regex missed them), scan .ipsw_extracted/ directly
+        # Fallback: Scan .ipsw_extracted/ directly if extractor state missed DSC/kernel paths
         workspace_root = state.workspace_root
         for ipsw_path in (old_ipsw, new_ipsw):
             if not dyld_map.get(ipsw_path):
@@ -626,7 +622,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         service = FirmwareDiffService(workspace_root=state.workspace_root)
         result = service.run(request)
 
-        # using structured report.json as the diff report to llm
+        # Use structured report.json as the diff report for the LLM
         report_json_path = result.artifacts.report_json
         diff_report_text = read_text(report_json_path) if report_json_path and os.path.isfile(report_json_path) else ""
 
@@ -728,7 +724,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         extracted_binary = candidate
                         break
 
-        # if not found pre-extracted, try extracting from IPSW or DSC
+        # Fallback: Extract from IPSW or DSC if not pre-extracted
         if not extracted_binary:
 
             import glob
@@ -738,7 +734,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             os.makedirs(output_dir, exist_ok=True)
             target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
 
-            # Strategy 2a: DSC dylib extraction from .ipsw_extracted/ (FASTEST & NO DMG MOUNT)
+            # Strategy 2a: DSC dylib extraction from .ipsw_extracted/ 
             if feature_binary_path:
                 dsc_path = None
                 if new_ipsw:
@@ -756,7 +752,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         if "not found in cache" in stderr:
                             state.record_analysis_note("Component not found in DSC (proceeding to filesystem extraction fallback).")
                         else:
-                            # Keep it concise
                             error_line = [line for line in stderr.split('\n') if '⨯' in line or 'Error' in line]
                             short_err = error_line[0] if error_line else stderr[:100]
                             state.record_analysis_note(f"DSC extract failed ({os.path.basename(dsc_path)}): {short_err}")
@@ -776,7 +771,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             state.record_analysis_note(f"Copied binary from existing mount: {mount_dir}")
                             break
 
-            # Strategy 2c: Direct file extraction from IPSW archive (FALLBACK for daemons/apps)
+            # Strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps)
             if not extracted_binary and new_ipsw:
                 pattern = f".*{re.escape(target_basename)}$"
                 try:
@@ -850,7 +845,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             prompt += "\n\n=== RECENT TOOL EXECUTION CONTEXT ===\n" + "\n\n".join(context_blocks) + "\n=====================================\n"
 
             if hard_at_limit:
-                # Budget fully exhausted 
+                # Tool budget fully exhausted
                 prompt += (
                     "\n**CRITICAL FINAL INSTRUCTION**: You have reached the absolute tool call limit. "
                     "You MUST NOT output any more `<tool_call>` blocks. "
@@ -860,7 +855,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 # Collect addresses from Stage 1 tool results to guide the model
                 symbol_addrs = []
                 string_addrs = []
-                import json
                 for r in state.tool_results:
                     if r.tool_name == "find_address" and r.success and r.output.strip():
                         # Extract the JSON part before the NOTE: string
@@ -893,7 +887,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     f"Output ONLY `<tool_call>` blocks in this order. Do NOT write the report yet."
                 )
             elif has_stage2_results:
-                # Stage 2 allow annotations and iterative decompilation
+                # Stage 2: Allow annotations and iterative decompilation
                 prompt += (
                     "\n**CRITICAL STAGE 2 INSTRUCTION**: You have obtained decompilation results. "
                     "Before writing the final report, you MUST use `rename_local_variable` and `set_comment` to annotate the code. "
@@ -905,7 +899,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "End with `---AI_PRIORITISATION_SCORE---` and the JSON score."
                 )
             else:
-                # Intermediate state 
+                # Intermediate state: continue gathering evidence
                 prompt += (
                     "\n**INSTRUCTION**: Evaluate the tool results. If you need more data, output ONLY `<tool_call>` blocks. "
                     "Do NOT write the final report until Stage 2 decompilation is complete."
@@ -925,7 +919,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
               f"stage1={has_stage1_results} stage2={has_stage2_results} hard_at_limit={hard_at_limit}")
         print(f"\n\n[DEBUG PROMPT]\n{prompt}\n[END DEBUG PROMPT]\n\n")
 
-        from langgraph_orchestration.inference.inference_engine import GenerationConfig
         engine = _get_feature_engine()
         chat_prompt = engine.build_prompt(user_input=prompt, system_prompt="")
         output = engine.generate(
@@ -934,7 +927,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             stream=False,
         )
 
-        # if at limit and model still tries a tool call, force a report
+        # If at limit and model still tries a tool call, force a report
         if hard_at_limit:
             from langgraph_orchestration.tooling.parser import parse_agent_output
             parsed = parse_agent_output(output)
@@ -968,9 +961,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         print(f"\n\n[DEBUG RAW OUTPUT]\n{raw_output}\n[END DEBUG RAW OUTPUT]\n\n")
         parts = raw_output.split("---AI_PRIORITISATION_SCORE---")
         
-        from langgraph_orchestration.core.state_utils import StateManager
         markdown_report = StateManager.sanitize_output(parts[0].strip())
-        import re
         # Extract the core report starting from the primary header
         match = re.search(r'(## What this feature does[\s\S]*)', markdown_report, re.IGNORECASE)
         if match:
@@ -985,7 +976,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         markdown_report = markdown_report.strip()
         score_json = parts[1].strip() if len(parts) > 1 else ""
         if score_json:
-            import re
             json_match = re.search(r'\{.*\}', score_json, re.DOTALL)
             if json_match:
                 try:
@@ -1026,7 +1016,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
     def route_after_feature_select(state: AgentState) -> str:
-        """All items in the queue are already HIGH_SIGNAL (filtered at build time)."""
+        """All items in the queue are already HIGH_SIGNAL (filtered at build time)"""
         if state.feature_analysis_current:
             return "prepare_decompiler"
         return "done"

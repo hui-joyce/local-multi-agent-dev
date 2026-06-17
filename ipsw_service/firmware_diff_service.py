@@ -21,15 +21,15 @@ from ipsw_service.agents.macho_analysis_engine import MachoAnalysisEngine
 from ipsw_service.reporting import render_report
 from ipsw_service.utils import ensure_dir, list_files, read_text, write_json, write_text
 
-# Define noise filters for non-analyzable binaries
+# define noise filters for non-analyzable binaries
 IGNORE_PATTERNS = [
-    r"\.metallib$",                       # Metal compiled shaders
-    r"\.g18p(?:_a0)?$",                   # Apple Silicon ISP microcode
-    r"\.appex/",                          # UI Extensions (Widgets, watch faces)
-    r"/VideoProcessors/",                 # Video processing bundles
-    r"/NanoTimeKit/FaceBundles/",         # Watch faces
-    r"/Applications/Kaleidoscope",        # Specific noisy apps
-    r"CoreImage\.framework.*_bin"         # Precompiled CoreImage archives
+    r"\.metallib$",                       # metal compiled shaders
+    r"\.g18p(?:_a0)?$",                   # apple Silicon ISP microcode
+    r"\.appex/",                          # uI Extensions (Widgets, watch faces)
+    r"/VideoProcessors/",                 # video processing bundles
+    r"/NanoTimeKit/FaceBundles/",
+    r"/Applications/Kaleidoscope",        # specific noisy apps
+    r"CoreImage\.framework.*_bin"         # precompiled CoreImage archives
 ]
 
 _METADATA_ONLY_PATTERNS = (
@@ -197,7 +197,7 @@ class FirmwareDiffService:
             gaps.append("dyld_shared_cache paths missing; dyld diff skipped")
 
 
-        # Compute explicit cstring count across candidate binaries.
+        # compute explicit cstring count across candidate binaries.
         macho_engine = MachoAnalysisEngine(self.runner)
         cstring_count = 0
         try:
@@ -361,20 +361,20 @@ class FirmwareDiffService:
         return notes
 
     def _build_report_payload(self, diff_data: dict[str, list[str]], cstring_count: int) -> dict[str, object]:
-        # Gather all specialized paths so we can subtract them
+        # gather all specialized paths so we can subtract them
         specialized_paths = set(_dedupe_stripped([
             *diff_data.get("framework_changes", []),
             *diff_data.get("kext_changes", []),
             *diff_data.get("launchd_changes", []),
         ]))
 
-        # Gather raw userland binaries
+        # gather raw userland binaries
         raw_standard = _dedupe_stripped([
             *diff_data.get("added_binaries", []),
             *diff_data.get("modified_binaries", []),
         ])
 
-        # Filter out the duplicates 
+        # filter out the duplicates 
         standard_binaries = [bin for bin in raw_standard if bin not in specialized_paths]
 
         base_firmware_changes = _dedupe_stripped([
@@ -570,7 +570,6 @@ class FirmwareDiffService:
     def _build_cstring_summary(self, diff_report_text: str) -> dict[str, dict[str, list[str]]]:
         cstring_entries = extract_cstring_diffs(diff_report_text)
 
-        # build per-item buckets
         cstring_summary: dict[str, dict[str, list[str]]] = {}
         for entry in cstring_entries:
             if ":" in entry:
@@ -600,7 +599,6 @@ class FirmwareDiffService:
                 buckets["added"] = [s for s in buckets["added"] if s not in modified]
                 buckets["removed"] = [s for s in buckets["removed"] if s not in modified]
 
-        # aggregate totals
         total_added = sum(len(b["added"]) for b in cstring_summary.values())
         total_removed = sum(len(b["removed"]) for b in cstring_summary.values())
         total_modified = sum(len(b["modified"]) for b in cstring_summary.values())
