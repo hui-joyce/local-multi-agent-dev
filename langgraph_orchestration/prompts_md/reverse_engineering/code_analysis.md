@@ -2,7 +2,7 @@
 name: reverse_engineering_code_analysis
 description: Interprets assembly/decompiled code to explain logic, control flow, and behaviour.
 expertise: control flow analysis, data flow analysis, behavior reconstruction
-tools: read_file, read_many_files, read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, basic_blocks
+tools: read_file, read_many_files, find_address, get_xrefs_to, decompile_function
 references: knowledge_base/reverse_engineering/idapython/README.md
 ---
 
@@ -18,7 +18,7 @@ You MUST complete all three phases using read-only tools.
 ## Phase 1: Gather Evidence
 
 **If you need to understand the target code:**
-- Use read_decompilation, read_disassembly, xrefs_to, xrefs_from, lookup_funcs, basic_blocks
+- Use find_address, get_xrefs_to, decompile_function
 - Inspect: target routines, call relationships, control flow structure, data movement, execution paths
 - After gathering sufficient evidence, emit `[CONTEXT_COMPLETE]` to proceed
 

@@ -120,34 +120,45 @@ def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
     return json_path, md_path
 
 def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFactory) -> dict[str, str]:
-    """Trigger feature analysis on the generated diff report"""
+    """Trigger feature analysis using the structured report.json payload"""
     diff_report_path = Path(diff_report_path)
-    if not diff_report_path.exists():
-        print(f"Warning: Diff report not found at {diff_report_path}, skipping feature analysis.")
+
+    report_json_path: Path | None = None
+    search_dir = diff_report_path.parent
+    for _ in range(3):
+        candidate = search_dir / "report.json"
+        if candidate.exists():
+            report_json_path = candidate
+            break
+        search_dir = search_dir.parent
+
+    if report_json_path is None:
+        print(f"Warning: report.json not found near {diff_report_path}, skipping feature analysis.")
         return {}
 
-    report_text = diff_report_path.read_text(encoding="utf-8")
+    report_text = report_json_path.read_text(encoding="utf-8")
 
     state = AgentState(user_input="Run feature analysis on generated diff report.")
     state.intermediate_outputs["firmware_diff_report_path"] = str(diff_report_path)
     state.intermediate_outputs["firmware_diff_report"] = report_text
-    
-    print(f"\nTriggering feature analysis on: {diff_report_path}")
+
+    print(f"\nTriggering feature analysis on: {report_json_path}")
     start = time.perf_counter()
-    
+
     re_graph = build_reverse_engineering_graph(factory=factory)
     raw_result = re_graph.invoke(state.model_dump())
-    
+
     elapsed = time.perf_counter() - start
     final_state = AgentState(**raw_result)
     reports = final_state.feature_analysis_reports
-    
+
     print(f"Feature analysis complete in {round(elapsed, 3)}s")
     print(f"Generated {len(reports)} feature analysis reports:")
     for name, path in reports.items():
         print(f"  - {name}: {path}")
-    
+
     return reports
+
 
 def main() -> None:
     load_dotenv()

@@ -55,6 +55,11 @@ class DecompilerService(rpyc.Service):
     def exposed_decompile_function(self, address: int) -> str:
         """Decompiles the function at the given address and returns it as a string"""
         def _do():
+            import idc
+            seg = idc.get_segm_name(address)
+            if seg == "__stubs":
+                return f"# ERROR: Address 0x{address:x} is inside the '__stubs' segment (dynamic linker stub). Decompiling stubs is not supported. Please use get_xrefs_to on this stub address to locate callers."
+
             f = ida_funcs.get_func(address)
             if not f:
                 return f"# ERROR: No function found at address 0x{address:x}"
@@ -67,22 +72,148 @@ class DecompilerService(rpyc.Service):
         except Exception as e:
             return f"# ERROR: {e}"
 
-    def exposed_get_xrefs_to(self, address: int) -> list:
-        """Finds code cross-references to a given address"""
+    def exposed_execute_script(self, code: str):
         def _do():
+            local_env = {}
+            exec(code, globals(), local_env)
+            return local_env.get("res")
+        return _run_on_main_thread(_do)
+
+    def exposed_get_xrefs_to(self, address: int) -> list:
+        """Finds code cross-references to a given address, transitively following data references
+        if they lead to data structures (like CFStrings or selector references) instead of functions."""
+        def _do():
+            import ida_funcs
+            import idautils
+            import ida_segment
+            import idc
+            
             xrefs = []
-            for xref in idautils.XrefsTo(address):
-                func = ida_funcs.get_func(xref.frm)
-                xrefs.append({
-                    "from_address": int(xref.frm),
-                    "function_start": int(func.start_ea if func else 0),
-                    "type": str(idautils.XrefTypeName(xref.type))
-                })
-            return xrefs
+            visited = set()
+            
+            def collect_xrefs(current_addr, depth=0):
+                if depth > 3:
+                    return
+                if current_addr in visited:
+                    return
+                visited.add(current_addr)
+                
+                local_xrefs = list(idautils.XrefsTo(current_addr))
+                for xref in local_xrefs:
+                    frm = int(xref.frm)
+                    func = ida_funcs.get_func(frm)
+                    
+                    if func:
+                        xrefs.append({
+                            "from_address": frm,
+                            "function_start": int(func.start_ea),
+                            "type": str(idautils.XrefTypeName(xref.type)),
+                            "via_address": int(current_addr) if current_addr != address else 0
+                        })
+                    else:
+                        if depth == 0:
+                            xrefs.append({
+                                "from_address": frm,
+                                "function_start": 0,
+                                "type": str(idautils.XrefTypeName(xref.type)),
+                                "via_address": 0
+                            })
+                        
+                        seg = ida_segment.getseg(frm)
+                        if seg:
+                            collect_xrefs(frm, depth + 1)
+            
+            collect_xrefs(address)
+            
+            # If no actual code references were found, try manual pointer scanning
+            if not any(x["function_start"] != 0 for x in xrefs):
+                for s_ea in idautils.Segments():
+                    s_name = idc.get_segm_name(s_ea).lower()
+                    if any(k in s_name for k in ["selrefs", "cfstring", "objc", "const", "data", "got"]):
+                        start = s_ea
+                        end = idc.get_segm_end(start)
+                        struct_offset = 16 if "cfstring" in s_name else 0
+                        
+                        for ptr_addr in range(start, end - 7, 8):
+                            val = idc.get_qword(ptr_addr)
+                            if (val & 0x00007fffffffffff) == address:
+                                ref_target = ptr_addr - struct_offset
+                                collect_xrefs(ref_target, depth=1)
+            
+            # Deduplicate by (from_address, function_start)
+            seen = set()
+            dedup_xrefs = []
+            for x in xrefs:
+                key = (x["from_address"], x["function_start"])
+                if key not in seen:
+                    seen.add(key)
+                    dedup_xrefs.append(x)
+            return dedup_xrefs
         try:
             return _run_on_main_thread(_do)
         except Exception as e:
             return [{"error": f"Exception: {str(e)}"}]
+
+    def exposed_list_segments(self) -> list:
+        """Lists the names and boundaries of all segments in the database"""
+        def _do():
+            import idautils
+            import idc
+            segs = []
+            for s_ea in idautils.Segments():
+                segs.append({
+                    "name": str(idc.get_segm_name(s_ea)),
+                    "start": int(s_ea),
+                    "end": int(idc.get_segm_end(s_ea))
+                })
+            return segs
+        try:
+            return _run_on_main_thread(_do)
+        except Exception as e:
+            return [{"error": str(e)}]
+
+    def exposed_scan_pointers(self, target_addr: int) -> list:
+        """Scans pointer-containing segments for absolute or relative references to target_addr"""
+        def _do():
+            import idc
+            import idautils
+            import ida_segment
+            
+            matches = []
+            for s_ea in idautils.Segments():
+                name = idc.get_segm_name(s_ea).lower()
+                if any(k in name for k in ["selrefs", "cfstring", "objc", "const", "data", "got"]):
+                    start = s_ea
+                    end = idc.get_segm_end(start)
+                    
+                    # Absolute pointers
+                    for addr in range(start, end - 7, 8):
+                        if idc.get_qword(addr) == target_addr:
+                            matches.append({
+                                "address": int(addr),
+                                "segment": str(idc.get_segm_name(s_ea)),
+                                "type": "absolute"
+                            })
+                            
+                    # Relative pointers
+                    for addr in range(start, end - 3, 4):
+                        val32 = idc.get_wide_dword(addr)
+                        if val32 & 0x80000000:
+                            offset = val32 - 0x100000000
+                        else:
+                            offset = val32
+                        if addr + offset == target_addr:
+                            matches.append({
+                                "address": int(addr),
+                                "segment": str(idc.get_segm_name(s_ea)),
+                                "type": "relative_32"
+                            })
+            return matches
+        try:
+            return _run_on_main_thread(_do)
+        except Exception as e:
+            print(f"Error in scan_pointers: {e}")
+            return []
 
     def exposed_rename_local_variable(self, func_address: int, old_name: str, new_name: str) -> bool:
         """Renames a local variable within a function's decompilation"""
@@ -106,7 +237,8 @@ class DecompilerService(rpyc.Service):
     def exposed_set_comment(self, address: int, comment: str) -> bool:
         """Sets a repeatable comment at a specific address in the disassembly"""
         def _do():
-            idc.set_comment(address, comment, 1)
+            import idc
+            idc.set_cmt(address, comment, 1)
             return True
         try:
             return _run_on_main_thread(_do)
@@ -248,8 +380,8 @@ class DecompilerService(rpyc.Service):
     def exposed_save_ida_database(self, out_path: str = ""):
         """Saves the current IDA Pro database"""
         def _do():
-            import ida_pro
-            ida_pro.save_database(out_path if out_path else None, 0)
+            import ida_loader
+            ida_loader.save_database(out_path if out_path else None, 0)
             return True
         try:
             return _run_on_main_thread(_do)

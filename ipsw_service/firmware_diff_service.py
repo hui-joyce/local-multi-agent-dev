@@ -164,6 +164,39 @@ class FirmwareDiffService:
         filtered_modified = self._filter_modified_binaries(modified_raw, diff_report_root)
         diff_data["modified_binaries"] = filtered_modified
 
+        dyld_diff_path = None
+        dyld_change_list: list[str] = []
+        if request.old_dyld and request.new_dyld:
+            dyld_args = build_dyld_diff_args(request.old_dyld, request.new_dyld)
+            dyld_result = self.runner.run(dyld_args)
+            dyld_diff_path = os.path.join(artifacts_dir, "dyld_diff.txt")
+            if dyld_result.success:
+                dyld_change_list = parse_dyld_diff_output(dyld_result.stdout)
+                
+                filtered_dyld_change_list = self._filter_modified_binaries(dyld_change_list, diff_report_root)
+                diff_data["framework_changes"] = list(dict.fromkeys(
+                    diff_data.get("framework_changes", []) + filtered_dyld_change_list
+                ))
+                diff_data["modified_binaries"] = list(dict.fromkeys(
+                    diff_data.get("modified_binaries", []) + filtered_dyld_change_list
+                ))
+                
+            write_text(
+                dyld_diff_path,
+                self._format_tool_output(
+                    "dyld_diff",
+                    dyld_result.command,
+                    dyld_result.stdout,
+                    dyld_result.stderr,
+                    parsed_items=dyld_change_list if dyld_result.success else None,
+                ),
+            )
+            if not dyld_result.success:
+                gaps.append(f"dyld diff failed: {dyld_result.stderr or 'unknown error'}")
+        else:
+            gaps.append("dyld_shared_cache paths missing; dyld diff skipped")
+
+
         # Compute explicit cstring count across candidate binaries.
         macho_engine = MachoAnalysisEngine(self.runner)
         cstring_count = 0
@@ -234,29 +267,6 @@ class FirmwareDiffService:
                 )
         else:
             gaps.append("kernelcache paths missing; kernel/KEXT/sandbox diffs skipped")
-
-        dyld_diff_path = None
-        dyld_change_list: list[str] = []
-        if request.old_dyld and request.new_dyld:
-            dyld_args = build_dyld_diff_args(request.old_dyld, request.new_dyld)
-            dyld_result = self.runner.run(dyld_args)
-            dyld_diff_path = os.path.join(artifacts_dir, "dyld_diff.txt")
-            if dyld_result.success:
-                dyld_change_list = parse_dyld_diff_output(dyld_result.stdout)
-            write_text(
-                dyld_diff_path,
-                self._format_tool_output(
-                    "dyld_diff",
-                    dyld_result.command,
-                    dyld_result.stdout,
-                    dyld_result.stderr,
-                    parsed_items=dyld_change_list if dyld_result.success else None,
-                ),
-            )
-            if not dyld_result.success:
-                gaps.append(f"dyld diff failed: {dyld_result.stderr or 'unknown error'}")
-        else:
-            gaps.append("dyld_shared_cache paths missing; dyld diff skipped")
 
         diff_data["kext_changes"] = _dedupe_stripped(
             diff_data.get("kext_changes", []) + kext_change_list

@@ -5,18 +5,10 @@ Local-first, LangGraph-based orchestration for two domains: software development
 ## What This Repository Provides
 - Domain routing with optional dual-branch execution
 - Software development workflow: code generation, testing loop, architecture review
-- Reverse engineering workflow: planning, code analysis, vulnerability detection
+- Reverse engineering workflow: firmware diffing, feature analysis, IDA Pro binary decompilation
 - FastAPI service for local use and LangSmith Studio integration
-- MLX-based local inference on Apple Silicon
+- MLX-based local inference on Apple Silicon (Qwen3.5-9B-4bit)
 - Embedded Qdrant retrieval with Qwen embeddings
-
-## Tool Calling
-
-Tool loop flow:
-1. Agent requests a tool action.
-2. Host executes the local tool.
-3. Output is added to state and returned to the agent.
-4. Repeat until completion or iteration limit.
 
 ## Tech Stack
 
@@ -28,6 +20,8 @@ Tool loop flow:
 | State management | Pydantic |
 | Vector database | Qdrant (embedded) |
 | Embeddings | Qwen3 Embeddings |
+| Binary analysis | IDA Pro 9.1 (headless, via RPyC RPC) |
+| Firmware tooling | `ipsw` CLI |
 | API server | FastAPI |
 | Runtime | Python 3.11+ |
 
@@ -42,19 +36,170 @@ Tool loop flow:
 ### LangGraph Flow
 <img src="assets/langgraph.png" alt="LangGraph Flow" width="700"/>
 
-## IPSW Service & Firmware Pipeline
+---
 
-The reverse engineering domain features a dedicated, stage-gated firmware analysis pipeline powered by the `ipsw` CLI and a background IDA Pro RPC server to autonomously inspect Apple firmware updates.
+## IPSW Firmware Analysis Pipeline
 
-**Pipeline Stages:**
-1. **Firmware Resolution & Download**: Resolves device identifiers and build numbers to locate and download target IPSW or OTA artifacts (e.g. full restore images, delta updates).
-2. **Extraction**: Extracts critical firmware components such as the `dyld_shared_cache` and `kernelcache` from the acquired artifacts.
-3. **Diffing**: Performs structural binary diffs between an old and new firmware version to identify modified libraries, private frameworks, and introduced symbols/classes.
-4. **Feature Analysis**: Employs LLM-driven inference to analyze the diff evidence, semantically deciphering the high-level purpose of new features. This stage connects to a headless IDA Pro 9.1 RPYC server (`idat -A`) to actively map strings/symbols to memory addresses (`search_string`, `lookup_symbol`), decompile functions (`decompile_function`), and trace cross-references (`get_xrefs_to`). A stringent output sanitizer guarantees that internal AI tool-call traces never leak into the final researcher-facing markdown reports.
-5. **Methods Parsing & Categorization**: Extracts and groups relevant Objective-C/Swift methods, prioritizing high-signal targets for subsequent binary disassembly (e.g. in IDA Pro).
-6. **Synthesis**: Aggregates the findings, evidence, and extracted data into a comprehensive final report.
+The reverse engineering domain includes a dedicated, stage-gated firmware analysis pipeline powered by the `ipsw` CLI and a headless IDA Pro 9.1 RPC server.
 
-This service allows the system to perform a deep, static-only inspection of firmware updates, shifting complex binary analysis into an automated, repeatable workflow.
+### Pipeline Stages
+
+| Stage | Node | What it does |
+|---|---|---|
+| 1 | `firmware_locator` | Resolves device identifiers and build numbers |
+| 2 | `firmware_downloader` | Downloads IPSW/OTA artifacts |
+| 3 | `ipsw_extractor` | Extracts `dyld_shared_cache` and `kernelcache` |
+| 4 | `firmware_diff_service` | Diffs old vs new firmware; writes structured `report.json` |
+| 5 | `feature_analysis_select` → `prepare_decompiler` → `unified_feature_analysis` | LLM-driven per-component analysis with IDA decompilation |
+| 6 | `cleanup_decompiler` | Saves IDA database (`.i64`) then shuts down IDA |
+| 7 | `feature_analysis_compile` | Writes per-component markdown reports |
+| 8 | `reverse_engineering_synthesize` | Aggregates all findings into a final report |
+
+### Firmware Diff Service (`ipsw_service/`)
+
+`FirmwareDiffService` orchestrates the structural diff and produces a structured JSON payload. Key behaviours:
+
+- **`ipsw diff`** is run for entitlements, launchd, sandbox, kexts, and MachO framework changes.
+- **`ipsw dyld info --dylibs --diff`** is run separately against the two `dyld_shared_cache_arm64e` files to capture all DSC-resident framework changes, ensuring comprehensive coverage across firmware versions (important for newer releases where standard diffs might miss them).
+- DSC results are merged into `framework_changes` before cstring counting.
+- Noise filtering (`IGNORE_PATTERNS`) excludes non-analyzable binaries (e.g. Metal shaders, microcode) from the final diff payload.
+- Binaries whose MachO diff contains only metadata changes (UUID, build version, code signature, `__LINKEDIT`) are filtered out.
+
+**Artifact layout for a run (e.g. `20260617-065805`):**
+```
+artifacts/firmware_diff/<timestamp>/
+├── report.json                        ← structured diff payload (fed to LLM)
+├── report.md                          ← human-readable summary
+├── artifacts/
+│   ├── dyld_diff.txt                  ← raw ipsw dyld diff output + parsed items
+│   ├── kernel_diff.txt
+│   ├── launchd_diff.txt
+│   ├── kext_diff.txt
+│   └── sandbox_diff.txt
+├── diff/<old_vs_new>/
+│   └── README.md                      ← raw ipsw diff markdown (30KB+, not fed to LLM)
+├── entitlements/
+│   └── <old_vs_new>.idiff
+└── feature_analysis/
+    ├── iMessage_analysis.md
+    ├── IMSharedUtilities_analysis.md
+    └── <component>_analysis.md        ← one file per analyzed component
+```
+
+> **Note:** `report.json` (typically ~11KB) is what gets injected into the LLM's context for feature analysis. The raw `README.md` from `ipsw diff` (~30KB+) is intentionally excluded to avoid GPU OOM on local MLX inference.
+
+### `report.json` Schema
+
+```json
+{
+  "summary_metrics": { "total_cstring_changes": 74 },
+  "boundary_changes": {
+    "entitlements": [],
+    "sandbox": [],
+    "launchd": ["..."],
+    "kexts": []
+  },
+  "userland_changes": {
+    "frameworks": ["..."],
+    "standard_binaries": ["..."]
+  },
+  "base_firmware_changes": [],
+  "cstring_context": [
+    "ComponentName: + \"<added_string>\"",
+    "ComponentName: - \"<removed_string>\""
+  ]
+}
+```
+
+### IDA Pro Integration
+
+The feature analysis pipeline connects to IDA Pro 9.1 via a headless RPyC RPC server (`langgraph_orchestration/tooling/ida_rpc_server.py`).
+
+**How it works:**
+1. `prepare_decompiler_node` extracts the target binary from the DSC using `ipsw dyld extract` into `.ipsw_features/`.
+2. IDA is launched headlessly: `idat -A -c -S<rpc_server.py> <binary>`.
+3. The LLM calls IDA tools during feature analysis: `find_address`, `get_xrefs_to`, `decompile_function`, `rename_local_variable`, `set_comment`.
+4. `cleanup_decompiler_node` **always** calls `save_ida_database` before stopping IDA, guaranteeing the `.i64` is written regardless of LLM behaviour.
+
+**IDA database files:**
+```
+.ipsw_features/
+├── IMSharedUtilities          ← extracted Mach-O binary
+├── IMSharedUtilities.i64      ← saved IDA database (written by cleanup_decompiler_node)
+├── AppPredictionClient
+├── AppPredictionClient.i64
+└── ...
+```
+
+> **Important:** If a `.i64` already exists for a binary, `start_ida_server_for_binary` will reload it (preserving prior annotations) instead of creating a fresh database. Only the unpacked working files (`.id0/.id1/.nam/.til`) from aborted runs are cleaned up on restart.
+
+**Required `.env` variables for IDA integration:**
+```
+IDA_PATH=/Applications/IDA Professional 9.1.app/Contents/MacOS/idat
+IDA_RPC_SCRIPT_PATH=/path/to/repo/langgraph_orchestration/tooling/ida_rpc_server.py
+```
+
+IDA listens on `localhost:18861`. The client uses a 360-second RPC timeout (larger than the server-side 300-second main-thread timeout).
+
+### DSC Binary Extraction
+
+The `prepare_decompiler_node` uses the following extraction strategy (in priority order):
+
+1. **Pre-extracted binary** — checks `.ipsw_features/` for an already-extracted Mach-O.
+2. **DSC extraction** — `ipsw dyld extract <dsc_path> <binary_path> -o .ipsw_features/` (fastest, no DMG mount).
+3. **Existing DMG mount** — scans `/private/tmp/*.mount` for binaries left by `ipsw diff`.
+4. **IPSW archive extraction** — `ipsw extract <ipsw> --files --pattern <name>` (fallback for daemons and apps not in the DSC).
+
+### Feature Analysis Targets
+
+The pipeline does not analyze every changed binary. `_build_feature_targets` filters the diff report down to **high-signal components** — those that carry meaningful cstring or symbol evidence. Only these are queued for IDA-assisted decompilation.
+
+Each feature analysis report (`<component>_analysis.md`) follows this structure:
+```
+## What this feature does
+## How is it implemented      ← includes decompiled pseudocode and call chains
+## How to trigger this feature
+## Evidence                   ← addresses, symbols, strings, decompiled excerpts
+## AI Prioritisation Scoring System
+```
+
+---
+
+## Benchmark Harnesses
+
+### `benchmarks/test_ipsw_diff.py` — Full pipeline benchmark
+
+Runs the complete orchestration graph (firmware diff + feature analysis) end to end.
+
+```bash
+source venv/bin/activate
+python3 benchmarks/test_ipsw_diff.py
+```
+
+- Builds an `IpswDiffCase` for a fixed pair of IPSWs.
+- Runs `build_orchestration_graph` → invokes the full pipeline.
+- On completion, calls `trigger_feature_analysis` on the generated `report.json`.
+- Writes benchmark results to `benchmarks/results/test_ipsw_diff/`.
+
+> **Note:** `trigger_feature_analysis` uses `report.json` (not the raw `README.md`) to avoid OOM on local MLX. It searches up to 3 directory levels from the README path to locate `report.json`.
+
+### `benchmarks/test_feature_analysis.py` — Feature analysis only
+
+Runs feature analysis directly against an existing diff report without re-running the firmware diff stage. Useful when the diff artifacts already exist and you want to iterate on the LLM analysis.
+
+```bash
+source venv/bin/activate
+python3 benchmarks/test_feature_analysis.py
+```
+
+- Reads the README.md from a fixed path (edit `REPORT_PATH` at the top of the file).
+- Pre-filters the report to dylib-relevant sections before injecting into state.
+- Streams graph chunks and prints node-by-node progress.
+- Writes results to `benchmarks/results/test_feature_analysis/`.
+
+> **Note:** This benchmark directly seeds `firmware_diff_report` in state, so the graph routes straight to `feature_analysis_select_node`. The firmware diff stage is skipped entirely.
+
+---
 
 ## Quickstart
 
@@ -66,47 +211,35 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 ```
 
+Copy and fill in environment variables:
+```bash
+cp .env.example .env
+# Edit .env — set IDA_PATH, IDA_RPC_SCRIPT_PATH, and optionally LANGSMITH_API_KEY
+```
+
 Run the example script:
 ```bash
 source venv/bin/activate
 python3 examples.py
 ```
 
-API default address: `http://localhost:8000` (`API_HOST` and `API_PORT` are changeable)
+API default address: `http://localhost:8000` (`API_HOST` and `API_PORT` are configurable via `.env`)
+
+---
 
 ## How To Communicate With The Model
 
-1. Gradio chat interface (interactive local UI)
-2. CLI via API (`curl` to FastAPI `POST /invoke`)
-3. Direct Python graph invocation (run inside your own scripts/tests)
+1. CLI via API (`curl` to FastAPI `POST /invoke`)
+2. Direct Python graph invocation
+3. Gradio chat interface (interactive local UI)
 
-### 1) Gradio chat interface
+### 1) CLI via API endpoint
 
-Use this for quick local experimentation with a chat UX.
-
-```bash
-source venv/bin/activate
-python3 app.py
-```
-
-The UI includes:
-- Domain selector (`Software Dev` or `Reverse Engineering`)
-- Optional `Enable RAG Context` toggle
-- Chat interface with starter prompts
-
-Open: `http://127.0.0.1:7860`
-
-### 2) CLI via API endpoint
-
-Use this for scriptable calls, shell workflows, and external tool integration.
-
-First start the API server:
 ```bash
 source venv/bin/activate
 python3 api.py
 ```
 
-Then invoke the model from CLI:
 ```bash
 curl -X POST http://localhost:8000/invoke \
   -H "Content-Type: application/json" \
@@ -123,9 +256,7 @@ Example response shape:
 }
 ```
 
-### 3) Direct Python graph invocation
-
-Use this when you want the orchestration flow embedded directly in Python code.
+### 2) Direct Python graph invocation
 
 ```python
 from langgraph_orchestration.schemas.state import AgentState
@@ -139,6 +270,17 @@ print(result["selected_domain"])
 print(result["agent_chain"])
 print(result["final_output"])
 ```
+
+### 3) Gradio chat interface
+
+```bash
+source venv/bin/activate
+python3 app.py
+```
+
+Open: `http://127.0.0.1:7860`
+
+---
 
 ## API Surface
 - `GET /` health check
@@ -156,75 +298,93 @@ print(result["final_output"])
 - `GET /threads` list threads placeholder
 - `POST /threads/{thread_id}/messages` send a message
 
+---
+
 ## Embedding Models And Retrieval
 
 Embedding Model: [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
 
 | Purpose | Where It Is Active |
 |---|---|
-| General docs (base model) | - Used during ingestion for shared knowledge base<br>- Used at runtime to embed `agents_shared` queries for retrieval |
-| Code retrieval (base model) | - Used during ingestion for `agents_software_dev` code index<br>- Used at runtime to embed `agents_software_dev` queries for semantic code search |
-| Reverse engineering (fine-tuned model) | - Used during ingestion for RE corpus<br>- Used at runtime to embed `agents_reverse_engineering` queries for program-understanding search |
+| General docs (base model) | Used during ingestion for shared knowledge base; used at runtime to embed `agents_shared` queries |
+| Code retrieval (base model) | Used during ingestion for `agents_software_dev`; used at runtime for semantic code search |
+| Reverse engineering (fine-tuned model) | Used during ingestion for RE corpus; used at runtime for `agents_reverse_engineering` queries |
 
 Qdrant storage layout (embedded local DB):
 ```text
 ~/.local/share/qdrant/
-├── agents_software_dev (code retrieval)
+├── agents_software_dev       (code retrieval)
 ├── agents_reverse_engineering (RE)
-└── agents_shared (general docs)
+└── agents_shared             (general docs)
 ```
 
-Ingesting documents & chunking
----------------------------------
-Use the helper script in `scripts/`:
+### Ingesting Documents
 
+Use the helper script in `scripts/`:
 - `scripts/load_documents_to_qdrant.py` — load `.md`, `.markdown`, `.txt`, or `.jsonl` files into a collection.
 
-Chunking behavior (defaults):
+Chunking behaviour (defaults):
 - Markdown-aware chunking: splits on headers and groups content into chunks.
 - Word chunking: used for plain text files.
 - JSONL ingestion: each line is treated as a pre-chunked record with `text` and optional `metadata`.
 
-Example commands:
 ```bash
 python scripts/load_documents_to_qdrant.py --file README.md --domain shared
 python scripts/load_documents_to_qdrant.py --dir ./docs --domain software_dev --chunk-size 512 --overlap 100
 python scripts/load_documents_to_qdrant.py --file chunks.jsonl --domain shared
 ```
 
-What gets stored
+What gets stored:
 - Each chunk is embedded and written to the domain collection (`agents_<domain>`).
 - Default metadata fields: `source_file`, `chunk_index`, `total_chunks`, `file_type`.
 - JSONL chunks can carry custom metadata per line.
-- Insertion is batched (default `batch_size=32`) to balance memory and throughput.
+- Insertion is batched (default `batch_size=32`).
 
-Recommended ingestion policy
-- Use markdown for documentation and notes.
-- Use raw source files for code when you want retrieval on the code itself.
-- Use JSONL only when you already have clean, pre-split chunks or need custom metadata per chunk.
+---
 
 ## Configuration Notes
-- Inference uses MLX/MLX-LM and expects a compatible local model
-- LangSmith tracing is enabled when `LANGSMITH_TRACING=true`
-- API host and port are controlled by `API_HOST` and `API_PORT`
-- If you see `Model type qwen3_5 not supported`, upgrade `mlx-lm` or select a model supported by your current runtime
+
+- Inference uses MLX/MLX-LM and expects a compatible local model on Apple Silicon.
+- LangSmith tracing is enabled when `LANGSMITH_TRACING=true`.
+- API host and port are controlled by `API_HOST` and `API_PORT`.
+- If you see `Model type qwen3_5 not supported`, upgrade `mlx-lm` or select a model supported by your current runtime.
+- The firmware pipeline requires `ipsw` to be installed and on `PATH` (`brew install blacktop/tap/ipsw`).
+- IDA Pro integration requires IDA 9.1+ with Hex-Rays decompiler and a valid license. The RPC server uses `rpyc` — install with `pip install rpyc`.
+- GPU OOM crashes during MLX inference are caused by oversized context payloads. The pipeline is designed to pass `report.json` (~11KB) rather than the raw diff markdown to the LLM.
 
 ## Dev And Benchmarks
-- Compile check: `python3 -m compileall langgraph_orchestration api.py`
-- IPSW Diff benchmark harness: `python3 benchmarks/test_ipsw_diff.py`
-- No-RAG benchmark harness: `python3 benchmarks/test_no_rag.py`
-- LangGraph local dev server with tracing UI:
-  1. Create a LangSmith account and generate an API key.
-  2. Set tracing env vars in `.env` (used by `langgraph.json`):
-     - `LANGSMITH_API_KEY=<your_key>`
-     - `LANGSMITH_TRACING=true`
-     - `LANGSMITH_PROJECT=local-multi-agent-dev` 
-  3. Stop other local API servers first (e.g. `python3 api.py`/other service bound to the same ports).
-  4. Start dev server from repo root: `langgraph dev`
-  5. Open the local LangGraph Studio URL printed in terminal to inspect traces and runs.
+
+```bash
+# Syntax check
+python3 -m compileall langgraph_orchestration api.py
+
+# Full pipeline benchmark (firmware diff + feature analysis)
+python3 benchmarks/test_ipsw_diff.py
+
+# Feature analysis only (requires existing diff artifacts)
+python3 benchmarks/test_feature_analysis.py
+
+# No-RAG benchmark
+python3 benchmarks/test_no_rag.py
+```
+
+LangGraph local dev server with tracing UI:
+1. Create a LangSmith account and generate an API key.
+2. Set tracing env vars in `.env`:
+   - `LANGSMITH_API_KEY=<your_key>`
+   - `LANGSMITH_TRACING=true`
+   - `LANGSMITH_PROJECT=local-multi-agent-dev`
+3. Stop other local API servers first.
+4. Start dev server from repo root: `langgraph dev`
+5. Open the local LangGraph Studio URL printed in terminal.
+
+---
 
 ## References
 - LangGraph: https://langchain-ai.github.io/langgraph/
+- ipsw CLI: https://blacktop.github.io/ipsw/
+- IDA Pro: https://hex-rays.com/ida-pro/
+- RPyC: https://rpyc.readthedocs.io/
 - Pydantic: https://docs.pydantic.dev/
 - Qdrant: https://qdrant.tech/documentation/
 - Qwen3 Embeddings: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B

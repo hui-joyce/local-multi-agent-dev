@@ -16,7 +16,7 @@ from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.schemas.state import AgentState
 
-REPORT_PATH = Path("artifacts/firmware_diff/20260615-041208/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
+REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
 
 @dataclass
 class FeatureAnalysisCase:
