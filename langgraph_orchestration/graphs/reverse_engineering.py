@@ -270,87 +270,68 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         root = workspace_root or os.getcwd()
         return ensure_dir(os.path.join(root, "artifacts", "firmware_diff", "feature_analysis"))
 
-    def _build_feature_targets(report_text: str, limit: int = 6) -> list[dict[str, str]]:
+    def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[str, str]]:
+        try:
+            data = json.loads(report_json_str)
+        except json.JSONDecodeError:
+            return []
+
+        binary_map: dict[str, dict[str, str]] = {}
+        
+        def extract_paths(obj: dict | list | str, source_name: str) -> None:
+            if isinstance(obj, list):
+                for item in obj:
+                    if isinstance(item, str) and item.startswith("/"):
+                        name = os.path.basename(item)
+                        binary_map[name] = {"path": item, "source": source_name}
+            elif isinstance(obj, dict):
+                for k, v in obj.items():
+                    extract_paths(v, k if k not in ["updated", "added", "modified", "dylibs", "frameworks", "standard_binaries"] else source_name)
+
+        extract_paths(data.get("kernel", {}), "kernel")
+        extract_paths(data.get("macho", {}), "macho")
+        extract_paths(data.get("dsc", {}), "dsc")
+        extract_paths(data.get("boundary_changes", {}), "boundary_changes")
+        extract_paths(data.get("userland_changes", {}), "userland_changes")
+
+        evidence_map: dict[str, dict[str, list[str]]] = {}
+        
+        for line in data.get("cstring_context", []):
+            parts = line.split(":", 1)
+            if len(parts) == 2:
+                name = parts[0].strip()
+                if name not in evidence_map:
+                    evidence_map[name] = {"cstrings": [], "symbols": []}
+                evidence_map[name]["cstrings"].append(parts[1].strip())
+                
+        for line in data.get("symbol_context", []):
+            parts = line.split(":", 1)
+            if len(parts) == 2:
+                name = parts[0].strip()
+                if name not in evidence_map:
+                    evidence_map[name] = {"cstrings": [], "symbols": []}
+                evidence_map[name]["symbols"].append(parts[1].strip())
+
         targets: list[dict[str, str]] = []
-        seen: set[str] = set()
-        current_section = ""
-        current_change = ""
-        lines = (report_text or "").splitlines()
-        idx = 0
-
-        while idx < len(lines):
-            line = lines[idx].strip()
-            if line.startswith("## "):
-                current_section = line[3:].strip().lower()
-                current_change = ""
-                idx += 1
-                continue
-
-            if line.startswith("### "):
-                title = line[4:].strip().lower()
-                if any(token in title for token in ("updated", "modified", "changed")):
-                    current_change = "updated"
-                elif any(token in title for token in ("added", "new")):
-                    current_change = "added"
-                else:
-                    current_change = ""
-                idx += 1
-                continue
-
-            if not line.startswith("#### "):
-                idx += 1
-                continue
-
-            heading = line[5:].strip().lower()
-            if any(token in heading for token in ("updated", "modified", "changed")):
-                current_change = "updated"
-                idx += 1
-                continue
-
-            if any(token in heading for token in ("added", "new")):
-                current_change = "added"
-                idx += 1
-                continue
-
-            if current_change not in {"updated", "added"}:
-                idx += 1
-                continue
-
-            name = line[5:].strip()
-            if not name:
-                idx += 1
-                continue
+        for name, ev_dict in evidence_map.items():
+            ev_lines = []
+            if ev_dict["cstrings"]:
+                ev_lines.append("CStrings:")
+                ev_lines.extend(ev_dict["cstrings"])
+            if ev_dict["symbols"]:
+                if ev_lines:
+                    ev_lines.append("")
+                ev_lines.append("Symbols:")
+                ev_lines.extend(ev_dict["symbols"])
                 
-            key = name.lower()
-            if key in seen:
-                idx += 1
-                continue
-
-            seen.add(key)
-            evidence_lines: list[str] = []
-            binary_path = ""
-            peek = idx + 1
-
-            while peek < len(lines):
-                next_line = lines[peek].strip()
-                if next_line.startswith(("#### ", "### ", "## ")):
-                    break
-
-                # extract exact binary path from blockquote: >  `/path/to/binary`
-                if not binary_path:
-                    bp_match = re.search(r">\s*`([^`]+)`", lines[peek])
-                    if bp_match:
-                        binary_path = bp_match.group(1).strip()
-
-                evidence_lines.append(lines[peek])
-                peek += 1
-                
-            evidence = "\n".join(evidence_lines).strip() or name
-            source = current_section or current_change
+            evidence = "\n".join(ev_lines)
+            binary_info = binary_map.get(name, {})
+            source = binary_info.get("source", "component")
+            
             target_entry = {
                 "name": name,
                 "feature_type": _infer_feature_type(name, source),
-                "source": source or "component",
+                "source": source,
                 "evidence": evidence,
                 "allowed_tool_names": [
                     "find_address",
@@ -364,12 +345,11 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "save_ida_database",
                 ]
             }
-            if binary_path:
-                target_entry["binary_path"] = binary_path
+            if binary_info.get("path"):
+                target_entry["binary_path"] = binary_info["path"]
+                
             targets.append(target_entry)
-            idx = peek
 
-        # triage filter
         # drop LOW_SIGNAL components before they reach the queue
         high_signal_targets = []
         for t in targets:
@@ -385,7 +365,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'"""
         import re as _re
 
-        # High-signal: explicit added/removed lines in Symbols or CStrings sections
+        # high-signal: explicit added/removed lines in Symbols or CStrings sections
         symbol_change = _re.search(
             r'^[Ss]ymbols\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
             evidence, _re.MULTILINE
@@ -417,18 +397,17 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             if not stripped:
                 continue
             if stripped.startswith(('+', '-')):
-                # Skip pure UUID/version/section-size lines 
                 if _re.match(
                     r'^[+\-]\s*('                   # prefixed diff line
-                    r'UUID:\s*[0-9A-Fa-f\-]+'       # UUID
+                    r'UUID:\s*[0-9A-Fa-f\-]+'       # uUID
                     r'|\d+\.\d+\.\d+\.\d+\.\d+'     # version string like 1450.500.221.2.9
                     r'|__TEXT\.__'                  # section size (e.g. __TEXT.__const)
-                    r'|__DATA\.__'                  # data section
-                    r'|__LINKEDIT'                  # linkedit segment
-                    r'|__AUTH\.__'                  # auth section
-                    r'|/usr/lib/'                   # system dylibs
+                    r'|__DATA\.__'
+                    r'|__LINKEDIT'
+                    r'|__AUTH\.__'
+                    r'|/usr/lib/'
                     r'|/System/Library/'            # framework/private framework dylib deps
-                    r'|/usr/local/lib/'             # local dylibs
+                    r'|/usr/local/lib/'
                     r')',
                     stripped
                 ):
@@ -436,8 +415,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 return "HIGH_SIGNAL"
 
         return "LOW_SIGNAL"
-
-
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
         lowered_input = (state.user_input or "").lower()
@@ -597,7 +574,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             except Exception:
                 pass
 
-        # Fallback: Scan .ipsw_extracted/ directly if extractor state missed DSC/kernel paths
+        # fallback: Scan .ipsw_extracted/ directly if extractor state missed DSC/kernel paths
         workspace_root = state.workspace_root
         for ipsw_path in (old_ipsw, new_ipsw):
             if not dyld_map.get(ipsw_path):
@@ -622,7 +599,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         service = FirmwareDiffService(workspace_root=state.workspace_root)
         result = service.run(request)
 
-        # Use structured report.json as the diff report for the LLM
+        # use structured report.json as the diff report for the LLM
         report_json_path = result.artifacts.report_json
         diff_report_text = read_text(report_json_path) if report_json_path and os.path.isfile(report_json_path) else ""
 
@@ -648,32 +625,30 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
 
     def feature_analysis_select_node(state: AgentState) -> AgentState:
-        # Initialize queue on first call
         if not state.feature_analysis_queue and not state.feature_analysis_targets:
-            report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
-            report_text = state.intermediate_outputs.get("firmware_diff_report", "")
+            report_json_str = state.intermediate_outputs.get("firmware_diff_report", "")
 
-            if not report_path or not report_text:
+            if not report_json_str:
                 state.feature_analysis_targets = []
                 state.feature_analysis_queue = []
                 state.feature_analysis_current = None
-                state.record_analysis_note("feature_analysis skipped: missing diff report")
+                state.record_analysis_note("feature_analysis skipped: missing diff report JSON")
                 return state
 
-            targets = _build_feature_targets(report_text)
+            targets = _build_feature_targets(report_json_str)
             state.feature_analysis_targets = targets
             state.feature_analysis_queue = list(targets)
             state.record_analysis_note(f"feature_analysis targets: {len(targets)}")
 
-        # Pop next feature from queue, resetting tool state for each new component
+        # pop next feature from queue, resetting tool state for each new component
         if state.feature_analysis_queue:
             state.feature_analysis_current = state.feature_analysis_queue.pop(0)
-            # Reset tool state so each component gets a fresh tool budget
+            # reset tool state so each component gets a fresh tool budget
             state.tool_iteration = 0
             state.tool_requests = []
             state.tool_results = []
             state.agent_chain = []
-            # Clear previous component's analysis output
+            # clear previous component's analysis output
             state.intermediate_outputs.pop("unified_feature_analysis", None)
         else:
             state.feature_analysis_current = None
@@ -710,7 +685,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         if not component_name:
             return state
 
-        # Strategy 1: Use the exact binary path parsed from the diff report
+        # strategy 1: Use the exact binary path parsed from the diff report
         feature_binary_path = feature.get("binary_path", "")
         output_dir = os.path.join(state.workspace_root or os.getcwd(), ".ipsw_features")
         extracted_binary = None
@@ -724,7 +699,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         extracted_binary = candidate
                         break
 
-        # Fallback: Extract from IPSW or DSC if not pre-extracted
+        # fallback: Extract from IPSW or DSC if not pre-extracted
         if not extracted_binary:
 
             import glob
@@ -734,7 +709,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             os.makedirs(output_dir, exist_ok=True)
             target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
 
-            # Strategy 2a: DSC dylib extraction from .ipsw_extracted/ 
+            # strategy 2a: DSC dylib extraction from .ipsw_extracted/ 
             if feature_binary_path:
                 dsc_path = None
                 if new_ipsw:
@@ -758,7 +733,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     
                     extracted_binary = _find_macho_in_dir(output_dir, target_basename)
 
-            # Strategy 2b: Check existing DMG mounts (left by ipsw diff)
+            # strategy 2b: Check existing DMG mounts (left by ipsw diff)
             if not extracted_binary and feature_binary_path:
                 for mount_dir in glob.glob("/private/tmp/*.mount"):
                     if os.path.isdir(mount_dir):
@@ -771,7 +746,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             state.record_analysis_note(f"Copied binary from existing mount: {mount_dir}")
                             break
 
-            # Strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps)
+            # strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps)
             if not extracted_binary and new_ipsw:
                 pattern = f".*{re.escape(target_basename)}$"
                 try:
@@ -810,7 +785,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
     def cleanup_decompiler_node(state: AgentState) -> AgentState:
         from langgraph_orchestration.tooling.decompiler_tools import save_ida_database, stop_ida_server
-        # Always persist the database before shutdown so the .i64 is written
+        # always persist the database before shutdown so the .i64 is written
         save_result = save_ida_database.invoke({})
         state.record_analysis_note(f"Decompiler save: {save_result}")
         stop_result = stop_ida_server.invoke({})
@@ -845,19 +820,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             prompt += "\n\n=== RECENT TOOL EXECUTION CONTEXT ===\n" + "\n\n".join(context_blocks) + "\n=====================================\n"
 
             if hard_at_limit:
-                # Tool budget fully exhausted
+                # tool budget fully exhausted
                 prompt += (
                     "\n**CRITICAL FINAL INSTRUCTION**: You have reached the absolute tool call limit. "
                     "You MUST NOT output any more `<tool_call>` blocks. "
                     "Output the final report NOW starting EXACTLY with `## What this feature does`."
                 )
             elif has_stage1_results and not has_stage2_results:
-                # Collect addresses from Stage 1 tool results to guide the model
+                # collect addresses from Stage 1 tool results to guide the model
                 symbol_addrs = []
                 string_addrs = []
                 for r in state.tool_results:
                     if r.tool_name == "find_address" and r.success and r.output.strip():
-                        # Extract the JSON part before the NOTE: string
+                        # extract the JSON part before the NOTE: string
                         json_part = r.output.split("\n\nNOTE:")[0]
                         try:
                             data = json.loads(json_part)
@@ -887,7 +862,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     f"Output ONLY `<tool_call>` blocks in this order. Do NOT write the report yet."
                 )
             elif has_stage2_results:
-                # Stage 2: Allow annotations and iterative decompilation
+                # stage 2: Allow annotations and iterative decompilation
                 prompt += (
                     "\n**CRITICAL STAGE 2 INSTRUCTION**: You have obtained decompilation results. "
                     "Before writing the final report, you MUST use `rename_local_variable` and `set_comment` to annotate the code. "
@@ -899,7 +874,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "End with `---AI_PRIORITISATION_SCORE---` and the JSON score."
                 )
             else:
-                # Intermediate state: continue gathering evidence
+                # intermediate state: continue gathering evidence
                 prompt += (
                     "\n**INSTRUCTION**: Evaluate the tool results. If you need more data, output ONLY `<tool_call>` blocks. "
                     "Do NOT write the final report until Stage 2 decompilation is complete."
@@ -927,7 +902,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             stream=False,
         )
 
-        # If at limit and model still tries a tool call, force a report
+        # if at limit and model still tries a tool call, force a report
         if hard_at_limit:
             from langgraph_orchestration.tooling.parser import parse_agent_output
             parsed = parse_agent_output(output)
@@ -962,12 +937,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         parts = raw_output.split("---AI_PRIORITISATION_SCORE---")
         
         markdown_report = StateManager.sanitize_output(parts[0].strip())
-        # Extract the core report starting from the primary header
+        # extract the core report starting from the primary header
         match = re.search(r'(## What this feature does[\s\S]*)', markdown_report, re.IGNORECASE)
         if match:
             markdown_report = match.group(1).strip()
             
-        # Strip any hallucinated tool logs that might be embedded anywhere
+        # strip any hallucinated tool logs that might be embedded anywhere
         markdown_report = re.sub(r'## TOOL ACTIVITY[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
         markdown_report = re.sub(r'### Requested Tools[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
         markdown_report = re.sub(r'### Tool Results[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
@@ -1039,7 +1014,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             if "-[" in line or "+[" in line:
                 strict_methods.append(line)
                 
-        # Use strict Obj-C methods if found, otherwise fallback to all valid lines
+        # use strict Obj-C methods if found, otherwise fallback to all valid lines
         final_methods = strict_methods if strict_methods else raw_methods
         chunk_size = 50
         chunks = [final_methods[i:i + chunk_size] for i in range(0, len(final_methods), chunk_size)]

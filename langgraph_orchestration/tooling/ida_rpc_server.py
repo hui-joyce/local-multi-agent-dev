@@ -125,7 +125,7 @@ class DecompilerService(rpyc.Service):
             
             collect_xrefs(address)
             
-            # If no actual code references were found, try manual pointer scanning
+            # if no actual code references were found, try manual pointer scanning
             if not any(x["function_start"] != 0 for x in xrefs):
                 for s_ea in idautils.Segments():
                     s_name = idc.get_segm_name(s_ea).lower()
@@ -140,7 +140,7 @@ class DecompilerService(rpyc.Service):
                                 ref_target = ptr_addr - struct_offset
                                 collect_xrefs(ref_target, depth=1)
             
-            # Deduplicate by (from_address, function_start)
+            # deduplicate by (from_address, function_start)
             seen = set()
             dedup_xrefs = []
             for x in xrefs:
@@ -186,7 +186,6 @@ class DecompilerService(rpyc.Service):
                     start = s_ea
                     end = idc.get_segm_end(start)
                     
-                    # Absolute pointers
                     for addr in range(start, end - 7, 8):
                         if idc.get_qword(addr) == target_addr:
                             matches.append({
@@ -195,7 +194,6 @@ class DecompilerService(rpyc.Service):
                                 "type": "absolute"
                             })
                             
-                    # Relative pointers
                     for addr in range(start, end - 3, 4):
                         val32 = idc.get_wide_dword(addr)
                         if val32 & 0x80000000:
@@ -420,7 +418,7 @@ class DecompilerService(rpyc.Service):
                 cfunc = ida_hexrays.decompile(func_ea)
                 if not cfunc: return "error: could not decompile function"
                 lines = [ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()]
-                # Extract all lines containing the var_name
+                # extract all lines containing the var_name
                 trace_lines = [l for l in lines if var_name in l]
                 if not trace_lines:
                     return f"error: Variable {var_name} not found in {hex(func_ea)}"
@@ -465,7 +463,6 @@ if __name__ == "__main__":
     th.start()
     print("[DecompilerService] Server thread started. Main thread pumping work queue.")
 
-    # main thread loop
     while True:
         try:
             task = _work_queue.get(timeout=0.1)

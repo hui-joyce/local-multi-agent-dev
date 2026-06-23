@@ -18,12 +18,11 @@ def parse_agent_output(agent_output: str) -> ParsedAgentOutput:
             context_complete=False,
         )
 
-    # Check for context completion signal
+    # check for context completion signal
     context_complete = "[CONTEXT_COMPLETE]" in agent_output
 
     tool_call_matches = list(TOOL_CALL_PATTERN.finditer(agent_output))
     
-    # fallback
     if not tool_call_matches:
         json_matches = list(JSON_OBJECT_PATTERN.finditer(agent_output))
         fallback_matches = []

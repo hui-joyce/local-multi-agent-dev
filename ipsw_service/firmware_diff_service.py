@@ -38,6 +38,12 @@ _METADATA_ONLY_PATTERNS = (
     re.compile(r"^LC_CODE_SIGNATURE\b", re.IGNORECASE),
     re.compile(r"^__LINKEDIT\b", re.IGNORECASE),
     re.compile(r"^__TEXT\.__info_plist\b", re.IGNORECASE),
+    re.compile(r"^sha256:\s*", re.IGNORECASE),
+    re.compile(r"^sha1:\s*", re.IGNORECASE),
+    # Mach-O version strings are purely compile-time metadata (e.g. "386.231.1.0.0")
+    re.compile(r"^\d+(?:\.\d+){2,}$"),
+    # Aggregate counts change on every recompile; only symbol/CString *names* matter
+    re.compile(r"^(Functions|Symbols|CStrings):\s+\d+", re.IGNORECASE),
 )
 
 _METAL_HINTS = (".metallib", ".g18p")
@@ -115,21 +121,30 @@ class FirmwareDiffService:
         gaps: list[str] = []
         low_memory = os.getenv("IPSW_DIFF_LOW_MEMORY") == "1"
 
+        import tempfile
+        temp_diff_dir_obj = tempfile.TemporaryDirectory()
+        temp_diff_dir = temp_diff_dir_obj.name
+
         diff_result = self.framework_diff_engine.diff_firmware(
             request.old_ipsw,
             request.new_ipsw,
-            diff_dir,
+            temp_diff_dir,
             include_fw=request.include_fw_components,
             include_launchd=request.include_launchd,
             include_strs=request.include_strs,
             markdown=True,
             low_memory=low_memory,
+            clean=request.clean_cache,
         )
         if not diff_result.get("success"):
             gaps.append(f"ipsw diff failed: {diff_result.get('stderr') or 'unknown error'}")
 
-        diff_report_path = diff_result.get("markdown_report")
-        diff_report_text = read_text(diff_report_path) if diff_report_path else ""
+        diff_report_path = diff_result.get("markdown_report") or None
+        diff_report_text = ""
+        if diff_report_path and os.path.exists(diff_report_path):
+            actual_diff_dir = os.path.dirname(diff_report_path)
+            diff_report_text = self._consolidate_readme(actual_diff_dir, diff_report_path)
+
         diff_data = parse_diff_markdown(diff_report_text) if diff_report_text else {
             "added_binaries": [],
             "modified_binaries": [],
@@ -144,14 +159,14 @@ class FirmwareDiffService:
             "iboot_modified": [],
             "cstring_changes": [],
         }
-        diff_report_root = os.path.dirname(diff_report_path) if diff_report_path else diff_dir
+        diff_report_root = temp_diff_dir
         
         if diff_report_text:
             diff_data["cstring_changes"] = extract_cstring_diffs(diff_report_text)
         macho_note = None
         if diff_report_path:
-            macho_dir = os.path.join(diff_report_root, "MACHOS")
-            if not os.path.isdir(macho_dir):
+            # ipsw diff now inlines MachO diffs directly into the README.md, so the MACHOS dir is no longer generated
+            if diff_report_text and "## MachO" not in diff_report_text and "## Mach-O" not in diff_report_text:
                 macho_note = (
                     "MachO diff artifacts missing; filesystem diff likely failed or was skipped."
                 )
@@ -197,7 +212,7 @@ class FirmwareDiffService:
             gaps.append("dyld_shared_cache paths missing; dyld diff skipped")
 
 
-        # compute explicit cstring count across candidate binaries.
+        # compute explicit cstring count across candidate binaries
         macho_engine = MachoAnalysisEngine(self.runner)
         cstring_count = 0
         try:
@@ -329,9 +344,40 @@ class FirmwareDiffService:
         )
 
         report_payload = self._build_report_payload(diff_data, cstring_count)
-        report_text = render_report(report_payload, notes=notes, gaps=gaps)
-        write_text(report_markdown_path, report_text)
+        
+        # Generate the custom notes/gaps report in report.md
+        md_content = ["# Firmware Diff Analysis Report\n"]
+        if gaps:
+            md_content.append("## Gaps & Warnings\n")
+            for g in gaps:
+                md_content.append(f"- {g}")
+            md_content.append("\n")
+            
+        if notes:
+            md_content.append("## Analysis Notes\n")
+            for n in notes:
+                md_content.append(f"- {n}")
+            md_content.append("\n")
+            
+        if security_findings:
+            md_content.append("## Security Findings\n")
+            for f in security_findings:
+                md_content.append(f"- **{f.title}**: {f.impact}")
+            md_content.append("\n")
+            
+        if not gaps and not notes and not security_findings:
+            md_content.append("No notable gaps, notes, or security findings were generated during this run.\n")
+
+        write_text(report_markdown_path, "\n".join(md_content))
+        
+        # Save the inlined README report
+        readme_output_path = os.path.join(diff_dir, "README.md")
+        write_text(readme_output_path, diff_report_text)
+        
         write_json(report_json_path, report_payload)
+
+        # Cleanup the temp directory
+        temp_diff_dir_obj.cleanup()
 
         return result
 
@@ -537,12 +583,437 @@ class FirmwareDiffService:
                 changed_lines.append(content)
 
         if not changed_lines:
-            return False
+            return True
 
         return all(self._is_metadata_line(line) for line in changed_lines)
 
     def _is_metadata_line(self, content: str) -> bool:
         return any(pattern.search(content) for pattern in _METADATA_ONLY_PATTERNS)
+
+    def _macho_diff_text_is_metadata_only(self, diff_text: str) -> bool:
+        changed_lines: list[str] = []
+        for line in diff_text.splitlines():
+            if not line:
+                continue
+            if not (line.startswith("+") or line.startswith("-")):
+                continue
+            if line.startswith("+++") or line.startswith("---"):
+                continue
+            content = line[1:].strip()
+            if content:
+                changed_lines.append(content)
+
+        if not changed_lines:
+            return True
+
+        return all(self._is_metadata_line(line) for line in changed_lines)
+
+    def _consolidate_readme(self, diff_dir: str, readme_path: str) -> str:
+        if not os.path.exists(readme_path):
+            return ""
+
+        import re
+
+        # ---------------------------------------------------------------------------
+        # _emit_inline_entry: shared helper that filters and emits one already-parsed
+        # inline diff entry (either from a sidecar file OR from an inline block in
+        # the raw ipsw README).
+        #
+        # Returns a list of output lines to append, or [] if the entry should be
+        # skipped (metadata-only, noisy binary, or no real code changes).
+        #
+        # strict=True  (default, used everywhere): require at least one non-metadata
+        #   +/- line, i.e. an actual section-size change, symbol name, CString, etc.
+        #   Pure recompile bumps (version string + UUID only) are excluded.
+        # strict=False (fallback): keep entries that have any +/- line at all.
+        #   Not currently used but retained for forward-compatibility.
+        # ---------------------------------------------------------------------------
+        def _emit_inline_entry(
+            bin_name: str,
+            original_path: str,
+            inner_lines: list[str],
+            strict: bool = True,
+        ) -> list[str]:
+            if self._should_ignore_binary(original_path) or _is_noisy_binary(original_path):
+                return []
+
+            # ---------------------------------------------------------------
+            # Pre-process: strip sha256/sha1 hash suffixes from section lines
+            # (e.g. "__TEXT.__text: 0xe0f8 sha256:abc…" → "__TEXT.__text: 0xe0f8")
+            # ---------------------------------------------------------------
+            cleaned_lines: list[str] = []
+            for d_line in inner_lines:
+                stripped = d_line.strip()
+                if stripped.startswith("-sha") or stripped.startswith("+sha") or stripped in ("sha256:", "sha1:"):
+                    continue
+                if " sha256:" in d_line:
+                    d_line = d_line.split(" sha256:")[0]
+                elif " sha1:" in d_line:
+                    d_line = d_line.split(" sha1:")[0]
+                cleaned_lines.append(d_line)
+
+            # ---------------------------------------------------------------
+            # Collapse identical pairs using run-based grouping.
+            #
+            # ipsw formats changed blocks as ALL minus lines first, then ALL
+            # plus lines (not interleaved adjacent pairs), so we collect
+            # contiguous minus-runs and the immediately following plus-run,
+            # then pair them by position.  When both sides have the same
+            # content after sha-stripping (same section size, different hash)
+            # the pair collapses to a context line — no real change.
+            # ---------------------------------------------------------------
+            consolidated_lines: list[str] = []
+            ci = 0
+            while ci < len(cleaned_lines):
+                c_line = cleaned_lines[ci]
+                if c_line.startswith("-") and not c_line.startswith("---"):
+                    minus_run: list[str] = []
+                    while ci < len(cleaned_lines) and cleaned_lines[ci].startswith("-") and not cleaned_lines[ci].startswith("---"):
+                        minus_run.append(cleaned_lines[ci])
+                        ci += 1
+                    plus_run: list[str] = []
+                    while ci < len(cleaned_lines) and cleaned_lines[ci].startswith("+") and not cleaned_lines[ci].startswith("+++"):
+                        plus_run.append(cleaned_lines[ci])
+                        ci += 1
+                    max_len = max(len(minus_run), len(plus_run))
+                    for j in range(max_len):
+                        if j < len(minus_run) and j < len(plus_run):
+                            m_content = minus_run[j][1:]
+                            p_content = plus_run[j][1:]
+                            if m_content == p_content:
+                                consolidated_lines.append(" " + m_content)
+                            else:
+                                consolidated_lines.append(minus_run[j])
+                                consolidated_lines.append(plus_run[j])
+                        elif j < len(minus_run):
+                            consolidated_lines.append(minus_run[j])
+                        else:
+                            consolidated_lines.append(plus_run[j])
+                else:
+                    consolidated_lines.append(c_line)
+                    ci += 1
+
+            has_real_diff = False
+            has_any_diff = False
+            for dl in consolidated_lines:
+                if not (dl.startswith("+") or dl.startswith("-")):
+                    continue
+                if dl.startswith("+++") or dl.startswith("---"):
+                    continue
+                content = dl[1:].strip()
+                if not content:
+                    continue
+                has_any_diff = True
+                if not self._is_metadata_line(content):
+                    has_real_diff = True
+                    if strict:
+                        break  # found a real code change — keep early
+
+            if strict:
+                if not has_real_diff:
+                    return []
+            else:
+                if not has_any_diff:
+                    return []
+
+            out: list[str] = []
+            out.append(f"#### {bin_name}")
+            out.append("")
+            out.append(f">  `{original_path}`")
+            out.append("")
+            out.append("```diff")
+            for d_line in consolidated_lines:
+                out.append(d_line)
+            out.append("```")
+            out.append("")
+            return out
+
+        # ---------------------------------------------------------------------------
+        # parse_lines: recursively processes the raw ipsw README lines.
+        #
+        # Handles three cases:
+        #  1. Index links  – e.g. "- [View N files](DYLIBS/foo.md)" → recurse
+        #  2. Sidecar links – e.g. "- [/path/to/bin](DYLIBS/bin.md)" → inline
+        #  3. Inline entries – ipsw has already inlined the diff blocks directly
+        #     into the README (no sidecar files).  Detected by the pattern:
+        #       #### BinaryName
+        #       > `/full/path`
+        #       ```diff
+        #       …
+        #       ```
+        #     These are accumulated and filtered the same as sidecar entries.
+        # ---------------------------------------------------------------------------
+        def parse_lines(lines: list[str], current_prefix: str = "", in_dsc: bool = False) -> list[str]:
+            out: list[str] = []
+
+            # Strict filtering is applied in both MachO and DSC sections.
+            # An entry must have at least one real (non-metadata) +/- line to be
+            # included.  Start as True; updated by ## section headings.
+            in_dsc_section: bool = in_dsc if in_dsc else True
+
+            # State machine for inline entries
+            inline_name: str = ""
+            inline_path: str = ""
+            inline_inner: list[str] = []
+            inline_in_block = False
+            inline_found_block = False
+            # Whether we are currently accumulating an inline entry
+            # (detected when we see "#### Name" followed by "> `/path`")
+            pending_inline = False
+
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                # -----------------------------------------------------------------
+                # Strict filtering applies everywhere (both ## MachO filesystem
+                # and ## DSC dylibs): only include entries where at least one +/-
+                # line is NOT pure metadata (version string, UUID, aggregate
+                # count).  Entries whose only changes are a recompile bump are
+                # not meaningful.
+                # ---------------------------------------------------------------------------
+                # (in_dsc_section is kept for forward-compatibility if we ever
+                # need to distinguish the two sections again.)
+                # -----------------------------------------------------------------
+                if line.startswith("## "):
+                    lowered_h2 = line[3:].strip().lower()
+                    if "dsc" in lowered_h2:
+                        in_dsc_section = True
+                    elif "macho" in lowered_h2 or "mach-o" in lowered_h2:
+                        in_dsc_section = True  # strict everywhere
+
+                # -----------------------------------------------------------------
+                # Skip raw HTML structural tags from ipsw output
+                # -----------------------------------------------------------------
+                if line.strip() in ("<details>", "</details>") or line.strip().startswith("<summary>"):
+                    i += 1
+                    continue
+
+                # -----------------------------------------------------------------
+                # If we're inside an inline diff block, collect content lines
+                # -----------------------------------------------------------------
+                if inline_in_block:
+                    if line.strip().startswith("```"):
+                        # End of the diff fence → flush the accumulated entry
+                        inline_in_block = False
+                        inline_found_block = True
+                        result_lines = _emit_inline_entry(inline_name, inline_path, inline_inner, strict=in_dsc_section)
+                        out.extend(result_lines)
+                        # Reset state
+                        inline_name = ""
+                        inline_path = ""
+                        inline_inner = []
+                        inline_found_block = False
+                        pending_inline = False
+                    else:
+                        inline_inner.append(line)
+                    i += 1
+                    continue
+
+                # -----------------------------------------------------------------
+                # Detect the start of an inline diff block after ">  `/path`"
+                # -----------------------------------------------------------------
+                if pending_inline and line.strip().startswith("```diff"):
+                    inline_in_block = True
+                    i += 1
+                    continue
+
+                # Detect ">  `/path/to/binary`" line — part of an inline entry
+                path_match = re.match(r">\s+`([^`]+)`", line)
+                if path_match and inline_name:
+                    inline_path = path_match.group(1)
+                    pending_inline = True
+                    i += 1
+                    continue
+
+                if inline_name and not line.strip():
+                    i += 1
+                    continue
+
+                if pending_inline and line.strip() and not line.strip().startswith("```"):
+                    # buffered name/path didn't lead to a diff block — pass through
+                    out.append(f"#### {inline_name}")
+                    if inline_path:
+                        out.append(f">  `{inline_path}`")
+                    pending_inline = False
+                    inline_name = ""
+                    inline_path = ""
+
+                # Silently swallow empty lines while waiting for a pending diff fence
+                if pending_inline and not line.strip():
+                    i += 1
+                    continue
+
+                # Detect "#### BinaryName" — potential start of an inline entry
+                h4_match = re.match(r"####\s+(.+)", line)
+                if h4_match:
+                    h4_title = h4_match.group(1).strip()
+                    is_section_header = (
+                        "⬆️" in h4_title
+                        or "🆕" in h4_title
+                        or "Removed" in h4_title
+                        or "Updated" in h4_title
+                        or "Added" in h4_title
+                    )
+                    if not is_section_header:
+                        # if the next non-empty line is "> `/path`"
+                        # this is the start of an inline entry
+                        j = i + 1
+                        while j < len(lines) and not lines[j].strip():
+                            j += 1
+                        if j < len(lines) and re.match(r">\s+`[^`]+`", lines[j]):
+                            # Flush any un-flushed pending
+                            inline_name = h4_title
+                            inline_path = ""
+                            inline_inner = []
+                            inline_in_block = False
+                            inline_found_block = False
+                            pending_inline = False
+                            i += 1
+                            continue
+
+                # suppress stray raw ipsw section banners 
+                raw_dylibs_banner = re.match(
+                    r"##\s+Dylibs\s*[—–-]\s*(Updated|Added|Removed)\s*\(\d+\)", line
+                )
+                if raw_dylibs_banner:
+                    i += 1
+                    continue
+
+                # index links  e.g. "- [View N files](DYLIBS/foo.md)"
+                index_match = re.match(
+                    r"-\s+\[View \d+ .*?files\]\((DYLIBS/.*\.md|MACHOS/.*\.md)\)", line
+                )
+                if index_match:
+                    index_rel_path = index_match.group(1)
+                    index_path = os.path.join(diff_dir, index_rel_path)
+                    if os.path.exists(index_path):
+                        index_lines = read_text(index_path).splitlines()
+                        new_prefix = os.path.dirname(index_rel_path)
+                        out.extend(parse_lines(index_lines, current_prefix=new_prefix, in_dsc=in_dsc_section))
+                    i += 1
+                    continue
+
+                # sidecar links  e.g. "- [/path/to/bin](DYLIBS/bin.md)"
+                link_match = re.match(r"-\s+\[(.*?)\]\((.*?\.md)\)", line)
+                if link_match:
+                    bin_name = os.path.basename(link_match.group(1))
+                    sidecar_raw = link_match.group(2)
+
+                    if not (sidecar_raw.startswith("MACHOS/") or sidecar_raw.startswith("DYLIBS/")):
+                        sidecar_rel = os.path.join(current_prefix, sidecar_raw)
+                    else:
+                        sidecar_rel = sidecar_raw
+
+                    sidecar_path = os.path.join(diff_dir, sidecar_rel)
+                    original_path = link_match.group(1)
+
+                    if os.path.exists(sidecar_path):
+                        diff_text = read_text(sidecar_path)
+
+                        inner: list[str] = []
+                        in_b = False
+                        found_b = False
+                        for d_line in diff_text.splitlines():
+                            if d_line.strip().startswith("```"):
+                                if in_b:
+                                    in_b = False
+                                else:
+                                    in_b = True
+                                    found_b = True
+                                continue
+                            if in_b:
+                                inner.append(d_line)
+
+                        if not found_b:
+                            for d_line in diff_text.splitlines():
+                                if d_line.startswith("## ") or d_line.startswith("> "):
+                                    continue
+                                inner.append(d_line)
+
+                        result_lines = _emit_inline_entry(bin_name, original_path, inner, strict=in_dsc_section)
+                        out.extend(result_lines)
+                    i += 1
+                    continue
+
+                out.append(line)
+                i += 1
+
+            return out
+
+        lines = read_text(readme_path).splitlines()
+        consolidated = parse_lines(lines)
+
+        final_result: list[str] = []
+        section_lines: list[str] = []
+        current_header = ""
+
+        def finalize_section(header: str, s_lines: list[str]) -> None:
+            if "Removed" in header:
+                return
+
+            count = sum(1 for sl in s_lines if sl.startswith(">  `"))
+            if count > 0:
+                # preserve the original heading level from the raw ipsw README.
+                # MachO filesystem uses ### and DSC dylibs use #### 
+                new_header = re.sub(r"\(\d+\)", f"({count})", header)
+                final_result.append(new_header)
+                final_result.append("")
+                final_result.append("<details>")
+                if "Added" in header:
+                    final_result.append("  <summary><i>View Added</i></summary>")
+                else:
+                    final_result.append("  <summary><i>View Updated</i></summary>")
+                final_result.append("")
+                final_result.extend(s_lines)
+                final_result.append("</details>")
+                final_result.append("")
+
+        for line in consolidated:
+            is_header = False
+            if (
+                (line.startswith("## ") or line.startswith("### ") or line.startswith("#### "))
+                and "Removed" in line
+            ):
+                is_header = True
+            elif (
+                line.startswith("### ⬆️ Updated (")
+                or line.startswith("### 🆕 Added (")
+                or line.startswith("#### ⬆️ Updated (")
+                or line.startswith("#### 🆕 Added (")
+            ):
+                is_header = True
+
+            if is_header:
+                if current_header:
+                    finalize_section(current_header, section_lines)
+                current_header = line
+                section_lines = []
+            else:
+                if current_header:
+                    if line.startswith("- `/"):
+                        continue
+                    # top-level headings that appear after the section
+                    # entries (e.g. ### iBoot, ## DSC) are structural  
+                    # close the current section and flow to final_result
+                    if line.startswith("## ") or line.startswith("### "):
+                        finalize_section(current_header, section_lines)
+                        current_header = ""
+                        section_lines = []
+                        final_result.append(line)
+                        continue
+                    section_lines.append(line)
+                else:
+                    if line.startswith("- `/"):
+                        continue
+                    final_result.append(line)
+
+        if current_header:
+            finalize_section(current_header, section_lines)
+
+        result = "\n".join(final_result)
+        result = result.replace("## Inputs\n", "## IPSWs\n")
+        return result
 
     def _timestamped_output_dir(self) -> str:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")

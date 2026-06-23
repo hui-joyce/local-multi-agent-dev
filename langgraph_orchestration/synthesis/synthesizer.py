@@ -16,15 +16,15 @@ class Synthesizer:
     def _extract_key_findings(self, text: str, domain: str) -> list[str]:
         findings = []
         
-        # Extract numbered lists
+        # extract numbered lists
         numbered = re.findall(r'^\d+\.\s+(.+?)$', text, re.MULTILINE)
         findings.extend(numbered[:5])
         
-        # Extract bold/emphasized items
+        # extract bold/emphasized items
         emphasized = re.findall(r'\*\*(.+?)\*\*', text)
         findings.extend(emphasized[:3])
         
-        # Extract headers with content
+        # extract headers with content
         headers = re.findall(r'#{1,3}\s+(.+?)(?:\n|$)', text)
         findings.extend(headers[:3])
         
@@ -37,14 +37,13 @@ class Synthesizer:
             return []
         
         try:
-            # Try to parse JSON
             data = json.loads(locator_output)
             if isinstance(data, dict) and "targets" in data:
                 return data.get("targets", [])
         except (json.JSONDecodeError, ValueError):
             pass
         
-        # Fallback: extract from text
+        # fallback: extract from text
         targets = []
         for match in re.finditer(r'version["\s:]+([0-9.]+)["\s,]*build["\s:]+([A-Z0-9]+)', locator_output):
             targets.append({
@@ -67,13 +66,12 @@ class Synthesizer:
     def _extract_reverse_engineering_summary(self) -> str:
         sections = []
         
-        # Workflow stage summary
+        # workflow stage summary
         targets = self._extract_ipsw_targets()
         artifacts = self._count_extracted_artifacts()
         
         sections.append("## Reverse Engineering Workflow Summary\n")
         
-        # Target processing
         if targets:
             sections.append("### Targets Processed")
             for target in targets:
@@ -82,7 +80,6 @@ class Synthesizer:
                 device = target.get("device", "iPhone")
                 sections.append(f"- {device} Version {version} (Build {build})")
         
-        # Artifacts extracted
         if artifacts["dyld"] > 0 or artifacts["kernel"] > 0:
             sections.append("\n### Artifacts Extracted")
             if artifacts["dyld"] > 0:
@@ -90,7 +87,7 @@ class Synthesizer:
             if artifacts["kernel"] > 0:
                 sections.append(f"- kernelcache: {artifacts['kernel']} files")
         
-        # Tool execution status
+        # tool execution status
         downloader_output = self.state.intermediate_outputs.get("firmware_downloader", "")
         if "Confirmed local artifacts" in downloader_output:
             count_match = re.search(r'Confirmed local artifacts:\s+(\d+)', downloader_output)
@@ -113,7 +110,7 @@ class Synthesizer:
         if analysis_findings:
             sections.append("\n### Key Findings")
             for finding in analysis_findings[:5]:
-                if len(finding) > 10:  # Skip very short findings
+                if len(finding) > 10:
                     sections.append(f"- {finding}")
         
         return "\n".join(sections)
@@ -173,30 +170,26 @@ class Synthesizer:
         
         sections = ["\n## Execution Summary\n"]
         
-        # Domain routing
         domains_executed = self.state.execution_domains
         if domains_executed:
             section_str = ", ".join(d.replace("_", " ").title() for d in domains_executed)
             sections.append(f"**Domains:** {section_str}")
         
-        # Tools used
         tool_count = len(set(r.tool_name for r in self.state.tool_results if r.success))
         if tool_count > 0:
             sections.append(f"**Tools Executed:** {tool_count}")
         
-        # Tool activity details
+        # tool activity details
         if self.state.tool_results:
             success_count = sum(1 for r in self.state.tool_results if r.success)
             fail_count = len(self.state.tool_results) - success_count
             sections.append(f"**Tool Results:** {success_count} successful, {fail_count} failed")
         
-        # Agent iterations
         if self.state.dev_iteration > 0:
             sections.append(f"**Code Generation Iterations:** {self.state.dev_iteration}")
         if self.state.dev_test_passed:
             sections.append("**Latest Test Status:** PASS ✓")
         
-        # Analysis notes
         if self.state.analysis_notes:
             sections.append(f"\n### Analysis Notes")
             for note in self.state.analysis_notes[-3:]:
@@ -211,7 +204,7 @@ class Synthesizer:
         
         sections = ["\n## Tool Activity Summary\n"]
         
-        # Group by tool name
+        # group by tool name
         tool_groups = {}
         for result in self.state.tool_results:
             if result.tool_name not in tool_groups:
@@ -227,7 +220,7 @@ class Synthesizer:
             status_str = f"[{success_count} OK, {fail_count} ERR]" if fail_count > 0 else f"[{success_count} OK]"
             sections.append(f"### {tool_name} {status_str}")
             
-            # Include brief output from most recent result
+            # include brief output from most recent result
             if data["results"]:
                 recent = data["results"][-1]
                 output = recent.output or recent.error or "No output"
@@ -239,7 +232,7 @@ class Synthesizer:
     def _build_recommendations(self) -> str:
         sections = []
         
-        # Check for failures
+        # check for failures
         failures = [r for r in self.state.tool_results if not r.success]
         if failures:
             sections.append("\n## Recommendations\n")
@@ -248,7 +241,7 @@ class Synthesizer:
                 sections.append(f"- {failure.tool_name}: {failure.error}")
             sections.append("\nReview the tool activity section for details and retry as needed.")
         
-        # Check for incomplete workflows
+        # check for incomplete workflows
         has_synthesis = any("synthesize" in step.lower() for step in self.state.agent_chain)
         if not has_synthesis:
             sections.append("\n**Note:** Workflow did not complete full synthesis. Check tool results above.")
@@ -262,11 +255,9 @@ class Synthesizer:
 
         sections = []
         
-        # Header
         sections.append("# Orchestration Analysis Result\n")
         sections.append(f"**User Request:** {self.state.user_input}\n")
         
-        # Build domain-specific sections
         dev_output = self.state.branch_outputs.get("software_dev")
         re_output = self.state.branch_outputs.get("reverse_engineering")
         
@@ -280,23 +271,21 @@ class Synthesizer:
         if dev_output:
             sections.append(self._build_domain_section("software_dev", dev_output))
         
-        # Cross-domain synthesis if applicable
+        # cross-domain synthesis if applicable
         cross_domain = self._build_cross_domain_synthesis()
         if cross_domain:
             sections.append(cross_domain)
         
-        # Execution summary
         exec_summary = self._build_execution_summary()
         if exec_summary:
             sections.append(exec_summary)
         
-        # Tool activity (show if there are failures/relevant details)
+        # tool activity (show if there are failures/relevant details)
         if any(not r.success for r in self.state.tool_results):
             tool_summary = self._build_tool_activity_summary()
             if tool_summary:
                 sections.append(tool_summary)
         
-        # Recommendations
         recommendations = self._build_recommendations()
         if recommendations:
             sections.append(recommendations)

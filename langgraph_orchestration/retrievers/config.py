@@ -242,7 +242,7 @@ class RAGConfigManager:
         
         manager = cls()
         
-        # Prevent re-initialization if already exists
+        # prevent re-initialization if already exists
         if manager._retriever is not None:
             return
         

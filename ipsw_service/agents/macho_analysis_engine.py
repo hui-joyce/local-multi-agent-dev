@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Optional
 import os
-import re
 import shlex
 from ipsw_service.cli import IpswCliRunner
 

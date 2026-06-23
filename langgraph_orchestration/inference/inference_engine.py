@@ -23,7 +23,7 @@ class GenerationConfig:
 @dataclass
 class GenerationMetrics:
     """Metrics captured during text generation"""
-    ttft_seconds: float  # Time to first token
+    ttft_seconds: float  # time to first token
     prompt_tokens: int
     generated_tokens: int
     prompt_generation_speed_tok_s: float  # tokens/second for prompt building
@@ -270,7 +270,6 @@ class GeminiInferenceEngine:
             with urllib.request.urlopen(req) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 
-                # Check if there is text in the response
                 if "candidates" in result and len(result["candidates"]) > 0:
                     candidate = result["candidates"][0]
                     if "content" in candidate and "parts" in candidate["content"]:
@@ -297,7 +296,7 @@ class GeminiInferenceEngine:
         metrics = GenerationMetrics(
             ttft_seconds=0.0,
             prompt_tokens=0,
-            generated_tokens=len(text.split()), # approximate
+            generated_tokens=len(text.split()),
             prompt_generation_speed_tok_s=0.0,
             generation_speed_tok_s=0.0,
             total_generation_seconds=round(total_time, 3),

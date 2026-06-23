@@ -44,7 +44,6 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     # disable for no rag test
     # retriever = QdrantRetriever()
     
-    # Create graph
     graph = StateGraph(AgentState)
 
     def _extract_json_block(raw_output: str) -> str:
@@ -124,7 +123,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
             return prompt
         return f"{prompt}\n\n{observation}"
     
-    # Define node functions
+    # define node functions
     def code_generation_node(state: AgentState) -> AgentState:
         state.dev_iteration += 1
         prompt = build_code_generation_prompt(
@@ -227,7 +226,6 @@ Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.
         state.agent_chain.append("software_dev_synthesize")
         return state
     
-    # Add nodes
     graph.add_node("retrieve_dev_context", retrieve_dev_context_node)
     graph.add_node("code_generation", code_generation_node)
     graph.add_node("code_generation_tools", tool_executor_node)
@@ -237,7 +235,6 @@ Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.
     graph.add_node("architectural_review_tools", tool_executor_node)
     graph.add_node("synthesize", synthesize_output)
     
-    # Add edges
     graph.add_conditional_edges(
         "retrieve_dev_context",
         route_after_retrieve,

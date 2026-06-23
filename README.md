@@ -57,13 +57,13 @@ The reverse engineering domain includes a dedicated, stage-gated firmware analys
 
 ### Firmware Diff Service (`ipsw_service/`)
 
-`FirmwareDiffService` orchestrates the structural diff and produces a structured JSON payload. Key behaviours:
+`FirmwareDiffService` generates a structured diff JSON and orchestrates all analysis steps:
 
-- **`ipsw diff`** is run for entitlements, launchd, sandbox, kexts, and MachO framework changes.
-- **`ipsw dyld info --dylibs --diff`** is run separately against the two `dyld_shared_cache_arm64e` files to capture all DSC-resident framework changes, ensuring comprehensive coverage across firmware versions (important for newer releases where standard diffs might miss them).
-- DSC results are merged into `framework_changes` before cstring counting.
-- Noise filtering (`IGNORE_PATTERNS`) excludes non-analyzable binaries (e.g. Metal shaders, microcode) from the final diff payload.
-- Binaries whose MachO diff contains only metadata changes (UUID, build version, code signature, `__LINKEDIT`) are filtered out.
+- Runs `ipsw diff` to detect changes in Mach-O binaries, entitlements, launchd plists, sandbox profiles, and kernel extensions.
+- Runs `ipsw dyld info --dylibs --diff` on `dyld_shared_cache_arm64e` pairs to capture DSC framework changes not covered by standard diffs.
+- Classifies results by origin: filesystem binaries → `macho`, shared cache binaries → `dsc`.
+- Applies `IGNORE_PATTERNS` to exclude non-analyzable artifacts (e.g. Metal shaders, microcode).
+- Suppresses metadata-only diffs (e.g. UUID, `LC_*`, `__LINKEDIT`) to reduce noise.
 
 **Artifact layout for a run (e.g. `20260617-065805`):**
 ```
@@ -93,17 +93,24 @@ artifacts/firmware_diff/<timestamp>/
 ```json
 {
   "summary_metrics": { "total_cstring_changes": 74 },
+  "kernel": {
+    "kexts": ["..."],
+    "firmware": ["..."]
+  },
+  "macho": {
+    "updated": ["..."]
+  },
+  "dsc": {
+    "dylibs": {
+      "updated": ["..."]
+    }
+  },
+  "feature_flags": [],
   "boundary_changes": {
     "entitlements": [],
     "sandbox": [],
-    "launchd": ["..."],
-    "kexts": []
+    "launchd": ["..."]
   },
-  "userland_changes": {
-    "frameworks": ["..."],
-    "standard_binaries": ["..."]
-  },
-  "base_firmware_changes": [],
   "cstring_context": [
     "ComponentName: + \"<added_string>\"",
     "ComponentName: - \"<removed_string>\""

@@ -21,7 +21,7 @@ PRIVILEGED_PATH_HINTS = [
     "/System/Library/PrivateFrameworks",
 ]
 
-# Keywords that indicate an IPC/XPC surface within a sandbox policy line
+# keywords that indicate an IPC/XPC surface within a sandbox policy line
 _IPC_KEYWORDS = ("mach-lookup", "xpc")
 
 class ChangeClassifier:
@@ -47,8 +47,8 @@ class ChangeClassifier:
 
         findings: list[Finding] = []
         findings.extend(self._classify_entitlements(diff_data.get("entitlement_changes", [])))
-        # Sandbox classifier sub-tags IPC lines instead of emitting a separate
-        # IPC finding for each, avoiding double-counting.
+        # sandbox classifier sub-tags IPC lines instead of emitting a separate
+        # iPC finding for each, avoiding double-counting.
         findings.extend(self._classify_sandbox(diff_data.get("sandbox_changes", [])))
         findings.extend(self._classify_privileged_binaries(diff_data.get("added_binaries", [])))
         findings.extend(self._classify_launchd(diff_data.get("launchd_changes", [])))

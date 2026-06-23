@@ -441,7 +441,7 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="find_address", success=False, output="", error=output)
             
         if isinstance(output, dict):
-            # Tell the agent exactly what it found so it can use the correct follow-up tool
+            # tell the agent exactly what it found so it can use the correct follow-up tool
             result_str = json.dumps(output, indent=2)
             if output["type"] in ("symbol", "symbol_fuzzy"):
                 result_str += "\n\nNOTE: This is a CODE symbol. You MUST use `decompile_function` on this address."

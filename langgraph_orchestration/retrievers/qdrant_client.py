@@ -48,17 +48,14 @@ class QdrantRetriever(BaseRetriever):
         self._collection_vector_sizes: dict[str, int] = {}
         self.enable_fallback = enable_fallback
         
-        # Initialize Qdrant client
         self._init_qdrant_client()
         
-        # Domain collections
         self.domain_collections = {
             "software_dev": f"{self.DEFAULT_COLLECTION_PREFIX}software_dev",
             "reverse_engineering": f"{self.DEFAULT_COLLECTION_PREFIX}reverse_engineering",
             "shared": f"{self.DEFAULT_COLLECTION_PREFIX}shared",
         }
         
-        # Initialize collections
         for domain in self.domain_collections:
             self._ensure_collection(domain)
         
@@ -141,17 +138,16 @@ class QdrantRetriever(BaseRetriever):
     def _ensure_collection(self, domain: str) -> None:
         collection_name = self._get_collection_name(domain)
         
-        # Get vector size without loading the model
         vector_size = self.MODEL_VECTOR_SIZES.get(self.embedding_model)
         
         if vector_size is None:
-            # Only load model if we don't know the vector size
+            # only load model if we don't know the vector size
             vector_size = self.embedding_dim
         
         try:
             collection_info = self.client.get_collection(collection_name)
         except Exception:
-            # Collection doesn't exist, create it
+            # collection doesn't exist, create it
             from qdrant_client.models import VectorParams, Distance
             
             try:
@@ -275,7 +271,7 @@ class QdrantRetriever(BaseRetriever):
             except Exception as e:
                 logger.debug(f"Scroll failed for {collection_name}: {e}")
         
-        # Simple keyword matching
+        # simple keyword matching
         scored = []
         for doc in all_docs:
             doc_terms = set(doc.lower().split())
@@ -310,12 +306,10 @@ class QdrantRetriever(BaseRetriever):
             self._ensure_collection(domain)
             target_size = self._collection_vector_sizes.get(domain, len(embeddings[0]) if embeddings else 0)
             
-            # Prepare points for insertion
             points = []
             for i, (doc, embedding) in enumerate(zip(documents, embeddings)):
                 point_id = self._generate_point_id(collection_name, doc)
                 
-                # Prepare metadata
                 point_metadata = {
                     "text": doc,
                     "metadata": {
@@ -338,7 +332,7 @@ class QdrantRetriever(BaseRetriever):
                     )
                 )
             
-            # Upsert points (update if exists, insert if not)
+            # upsert points (update if exists, insert if not)
             self.client.upsert(
                 collection_name=collection_name,
                 points=points,
@@ -390,9 +384,8 @@ class QdrantRetriever(BaseRetriever):
     
     def _generate_point_id(self, collection_name: str, text: str) -> int:
         import hashlib
-        # Use hash of text to create consistent IDs
         hash_value = int(
             hashlib.md5(f"{collection_name}:{text}".encode()).hexdigest(),
             16,
-        ) % (2**31)  # Keep within 32-bit range
+        ) % (2**31)
         return hash_value
