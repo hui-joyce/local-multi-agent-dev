@@ -22,7 +22,7 @@ class MLXAgentFactory:
         self.inference_engine: Optional[MLXInferenceEngine] = None
         self._model_loaded = False
 
-    def ensure_loaded(self) -> GeminiInferenceEngine:
+    def ensure_loaded(self) -> MLXInferenceEngine:
         """Ensure model is loaded and return a valid inference engine."""
         if not self._model_loaded or self.inference_engine is None:
             self.load_model()
@@ -43,6 +43,9 @@ class MLXAgentFactory:
             model=model,
             tokenizer=tokenizer,
         )
+        
+        self._model_loaded = True
+        print("✓ MLX model loaded and ready")
         
         if self.inference_engine is None:
             raise RuntimeError("Model load completed but inference engine is None")

@@ -91,8 +91,8 @@ _Illustrative example only. Use the same structure with the tool and arguments t
 After [CONTEXT_COMPLETE], use these tools:
 - `create_file` - Create new file with full content
 - `edit_file` - Modify existing file
-- `rename_local_variable` - Rename a variable inside a decompiled function (Reverse Engineering)
-- `set_comment` - Add a comment to a specific assembly address (Reverse Engineering)
+- `rename_local_variable` - Rename a variable inside a decompiled function (Args: `func_address`, `old_name`, `new_name`)
+- `set_comment` - Add a comment to a specific assembly address (Args: `address`, `comment`)
 
 **Example - Create File**:
 _Illustrative example only. Use the same structure with the tool and arguments that fit the task._

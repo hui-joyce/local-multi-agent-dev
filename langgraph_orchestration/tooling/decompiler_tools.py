@@ -23,6 +23,16 @@ def _connect() -> rpyc.Connection:
     """Open a fresh rpyc connection with a consistent timeout"""
     return rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": RPC_TIMEOUT})
 
+def _get_connection_error_msg() -> str:
+    import subprocess
+    try:
+        result = subprocess.run(["pgrep", "-f", "ida64|idat"], capture_output=True, text=True)
+        if result.stdout.strip():
+            return f"error: Connection to decompiler refused. IDA Pro is running but not responding on port {DECOMPILER_PORT}."
+    except Exception:
+        pass
+    return "error: Connection to decompiler refused. IDA Pro is NOT running."
+
 @tool
 def decompile_function(address: Union[int, str]) -> str:
     """Decompiles the function at the given address"""
@@ -36,7 +46,7 @@ def decompile_function(address: Union[int, str]) -> str:
             result = conn.root.exposed_decompile_function(address)
             return result
         except ConnectionRefusedError:
-            return f"# ERROR: Connection refused. Is IDA Pro RPC server running on port {DECOMPILER_PORT}?"
+            return _get_connection_error_msg()
         except TimeoutError:
             return "# ERROR: Decompiler request timed out."
         except EOFError as e:
@@ -71,7 +81,7 @@ def get_xrefs_to(address: Union[int, str]) -> list[dict]:
                 return [{str(k): (int(v) if isinstance(v, int) else str(v)) for k, v in dict(x).items()} for x in xrefs]
             return []
         except ConnectionRefusedError:
-            return [{"error": f"Connection refused on port {DECOMPILER_PORT}."}]
+            return [{"error": _get_connection_error_msg()}]
         except TimeoutError:
             return [{"error": "Decompiler request timed out."}]
         except EOFError as e:
@@ -163,6 +173,8 @@ def find_address(query: str) -> Union[dict, str]:
             base, "_" + base,
             snake, "_" + snake,
             camel, "_" + camel,
+            "_OBJC_CLASS_$_" + base,
+            "_OBJC_METACLASS_$_" + base,
         ]))
         string_variants = list(dict.fromkeys([base, snake, camel]))
 
@@ -298,7 +310,7 @@ def find_address(query: str) -> Union[dict, str]:
 
 
         except ConnectionRefusedError:
-            return "error: Connection to decompiler refused. Is IDA Pro running?"
+            return _get_connection_error_msg()
         except TimeoutError:
             return "error: Decompiler request timed out"
         except EOFError as e:
@@ -417,7 +429,7 @@ def stop_ida_server() -> str:
         
     # kill lingering idat processes 
     try:
-        subprocess.run(["pkill", "-9", "idat"], capture_output=True)
+        subprocess.run(["pkill", "-9", "-f", "idat"], capture_output=True)
     except Exception:
         pass
 
@@ -445,7 +457,7 @@ def save_ida_database() -> str:
         conn.close()
         return "Successfully saved IDA database." if success else "Failed to save IDA database."
     except ConnectionRefusedError:
-        return "Connection refused."
+        return _get_connection_error_msg()
     except TimeoutError:
         return "Error: Request timed out."
     except Exception as e:
@@ -473,7 +485,7 @@ def resolve_objc_dispatch(func_ea: int, call_ea: int) -> str:
         conn.close()
         return result
     except ConnectionRefusedError:
-        return "Connection refused."
+        return _get_connection_error_msg()
     except TimeoutError:
         return "Error: Request timed out."
     except Exception as e:
@@ -489,7 +501,7 @@ def trace_variable_source(func_ea: int, var_name: str) -> str:
         conn.close()
         return result
     except ConnectionRefusedError:
-        return "Connection refused."
+        return _get_connection_error_msg()
     except TimeoutError:
         return "Error: Request timed out."
     except Exception as e:

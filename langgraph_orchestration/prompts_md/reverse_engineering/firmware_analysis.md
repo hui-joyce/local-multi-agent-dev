@@ -69,10 +69,10 @@ Additional extraction workflows as needed:
 
 Canonical examples from IPSW skill references:
 ```bash
-ipsw extract --dyld --dyld-arch arm64e <ipsw_file>
-ipsw extract --kernel <ipsw_file>
-ipsw extract --files --pattern '.*Info\.plist$' <ipsw_file>
-ipsw extract --sep <ipsw_file>
+ipsw extract --dyld --dyld-arch arm64e <ipsw_file> --output .ipsw_extracted/
+ipsw extract --kernel <ipsw_file> --output .ipsw_extracted/
+ipsw extract --files --pattern '.*Info\.plist$' <ipsw_file> --output .ipsw_extracted/
+ipsw extract --sep <ipsw_file> --output .ipsw_extracted/
 ```
 
 Expected evidence before continuing:

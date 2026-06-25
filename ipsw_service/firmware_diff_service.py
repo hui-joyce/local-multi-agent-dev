@@ -12,6 +12,7 @@ from ipsw_service.cli import IpswCliRunner, build_dyld_diff_args
 from ipsw_service.models import FirmwareDiffArtifacts, FirmwareDiffRequest, FirmwareDiffResult, FirmwareDiffSummary
 from ipsw_service.parsing import (
     extract_cstring_diffs,
+    extract_symbol_diffs,
     parse_diff_markdown,
     parse_dyld_diff_output,
     parse_simple_list_output,
@@ -112,9 +113,18 @@ class FirmwareDiffService:
         return "\n".join(lines).strip() + "\n"
 
     def run(self, request: FirmwareDiffRequest) -> FirmwareDiffResult:
+        def _extract_version(path: str) -> str:
+            import os
+            base = os.path.basename(path)
+            parts = base.split('_')
+            if len(parts) >= 3:
+                return f"{parts[1]}_{parts[2]}".replace('.', '_')
+            return base.replace('.ipsw', '')
+
         output_dir = request.output_dir or self._timestamped_output_dir()
         ensure_dir(output_dir)
-        diff_dir = ensure_dir(os.path.join(output_dir, "diff"))
+        old_vs_new = f"{_extract_version(request.old_ipsw)}_vs_{_extract_version(request.new_ipsw)}"
+        diff_dir = ensure_dir(os.path.join(output_dir, "diff", old_vs_new))
         ent_dir = ensure_dir(os.path.join(output_dir, "entitlements"))
         artifacts_dir = ensure_dir(os.path.join(output_dir, "artifacts"))
 
@@ -158,11 +168,13 @@ class FirmwareDiffService:
             "iboot_added": [],
             "iboot_modified": [],
             "cstring_changes": [],
+            "symbol_changes": [],
         }
         diff_report_root = temp_diff_dir
         
         if diff_report_text:
             diff_data["cstring_changes"] = extract_cstring_diffs(diff_report_text)
+            diff_data["symbol_changes"] = extract_symbol_diffs(diff_report_text)
         macho_note = None
         if diff_report_path:
             # ipsw diff now inlines MachO diffs directly into the README.md, so the MACHOS dir is no longer generated
@@ -307,7 +319,6 @@ class FirmwareDiffService:
             high_risk_changes=len(security_findings),
         )
 
-        report_markdown_path = os.path.join(output_dir, "report.md")
         report_json_path = os.path.join(output_dir, "report.json")
 
         kernel_diff_path = os.path.join(artifacts_dir, "kernel_diff.txt")
@@ -321,16 +332,18 @@ class FirmwareDiffService:
             self._format_component_diff("launchd_diff", diff_data.get("launchd_changes", [])),
         )
 
+        # Save the inlined README report
+        readme_output_path = os.path.join(diff_dir, "README.md")
+
         artifacts = FirmwareDiffArtifacts(
             output_dir=output_dir,
-            report_markdown=report_markdown_path,
             report_json=report_json_path,
             entitlement_diff=ent_diff_path,
             sandbox_diff=sandbox_diff_path,
             kext_diff=kext_diff_path,
             dyld_diff=dyld_diff_path,
             kernel_diff=kernel_diff_path,
-            framework_diff=diff_report_path,
+            framework_diff=readme_output_path,
             launchd_diff=launchd_diff_path,
             raw_diff_dir=diff_dir,
         )
@@ -343,10 +356,12 @@ class FirmwareDiffService:
             notes=notes,
         )
 
-        report_payload = self._build_report_payload(diff_data, cstring_count)
+        gaps = list(dict.fromkeys(gaps))
+        notes = list(dict.fromkeys([n for n in notes if n not in gaps]))
+
+        report_payload = self._build_report_payload(diff_data, cstring_count, gaps, notes, security_findings)
         
-        # Generate the custom notes/gaps report in report.md
-        md_content = ["# Firmware Diff Analysis Report\n"]
+        md_content = []
         if gaps:
             md_content.append("## Gaps & Warnings\n")
             for g in gaps:
@@ -365,13 +380,10 @@ class FirmwareDiffService:
                 md_content.append(f"- **{f.title}**: {f.impact}")
             md_content.append("\n")
             
-        if not gaps and not notes and not security_findings:
-            md_content.append("No notable gaps, notes, or security findings were generated during this run.\n")
-
-        write_text(report_markdown_path, "\n".join(md_content))
+        if md_content:
+            diff_report_text += "\n\n" + "\n".join(md_content)
         
         # Save the inlined README report
-        readme_output_path = os.path.join(diff_dir, "README.md")
         write_text(readme_output_path, diff_report_text)
         
         write_json(report_json_path, report_payload)
@@ -406,7 +418,14 @@ class FirmwareDiffService:
                     break
         return notes
 
-    def _build_report_payload(self, diff_data: dict[str, list[str]], cstring_count: int) -> dict[str, object]:
+    def _build_report_payload(
+        self, 
+        diff_data: dict[str, list[str]], 
+        cstring_count: int,
+        gaps: list[str],
+        notes: list[str],
+        security_findings: list[Finding]
+    ) -> dict[str, object]:
         # gather all specialized paths so we can subtract them
         specialized_paths = set(_dedupe_stripped([
             *diff_data.get("framework_changes", []),
@@ -430,6 +449,10 @@ class FirmwareDiffService:
             *diff_data.get("iboot_modified", []),
         ])
 
+        analysis_notes = {"notes": notes}
+        if gaps != notes:
+            analysis_notes["gaps"] = gaps
+
         return {
             "summary_metrics": {
                 "total_cstring_changes": cstring_count 
@@ -446,6 +469,8 @@ class FirmwareDiffService:
             },
             "base_firmware_changes": base_firmware_changes,
             "cstring_context": diff_data.get("cstring_changes", []),
+            "symbol_context": diff_data.get("symbol_changes", []),
+            "analysis_notes": analysis_notes
         }
 
     def _filter_modified_binaries(self, items: list[str], diff_dir: str) -> list[str]:

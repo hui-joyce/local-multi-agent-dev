@@ -69,7 +69,6 @@ The reverse engineering domain includes a dedicated, stage-gated firmware analys
 ```
 artifacts/firmware_diff/<timestamp>/
 ├── report.json                        ← structured diff payload (fed to LLM)
-├── report.md                          ← human-readable summary
 ├── artifacts/
 │   ├── dyld_diff.txt                  ← raw ipsw dyld diff output + parsed items
 │   ├── kernel_diff.txt

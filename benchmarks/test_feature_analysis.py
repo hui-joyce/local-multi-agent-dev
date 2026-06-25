@@ -12,12 +12,13 @@ sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
 
-from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
+from langgraph_orchestration.agents.gemini_factory import GeminiAgentFactory
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.schemas.state import AgentState
 
-REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
-
+# REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
+REPORT_PATH = Path("artifacts/firmware_diff/20260625-143808/report.json")
+MD_REPORT_PATH = Path("artifacts/firmware_diff/20260625-143808/diff/18_2_22C152_vs_18_2_1_22C161/README.md")
 @dataclass
 class FeatureAnalysisCase:
     case_id: str
@@ -37,33 +38,25 @@ class FeatureAnalysisResult:
 
 def build_feature_case() -> FeatureAnalysisCase:    
     return FeatureAnalysisCase(
-        case_id="RE-FEATURE-ANALYSIS-26-4-1",
-        description="Feature analysis on 26.4.1 vs 26.4.2 diff report.",
+        case_id="RE-FEATURE-ANALYSIS-18-2-1",
+        description="Feature analysis on 18.2 vs 18.2.1 diff report.",
         report_path=REPORT_PATH,
         user_input=(
             "Run feature analysis on diff report: "
-            "26.4.1 (23E254) vs 26.4.2 (23E261)."
+            "18.2 (22C152) vs 18.2.1 (22C161)."
         ),
     )
 
 def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
     report_text = case.report_path.read_text(encoding="utf-8")
     
-    parts = report_text.split("\n#### ")
-    if len(parts) > 1:
-        # parts[0] is the header/intro
-        header = parts[0]
-        dylib_parts = [p for p in parts[1:] if ".framework/" in p or ".dylib" in p or "Updated" in p or "Added" in p or "Modified" in p]
-        
-        if dylib_parts:
-            report_text = header + "\n#### " + "\n#### ".join(dylib_parts)
     state = AgentState(user_input=case.user_input)
-    state.intermediate_outputs["firmware_diff_report_path"] = str(case.report_path)
+    state.intermediate_outputs["firmware_diff_report_path"] = str(MD_REPORT_PATH)
     state.intermediate_outputs["firmware_diff_report"] = report_text
 
     start = time.perf_counter()
     raw_result = None
-    for chunk in graph.stream(state.model_dump()):
+    for chunk in graph.stream(state.model_dump(), config={"recursion_limit": 1000}):
         print("\n--- GRAPH CHUNK ---")
         for node_name, node_state in chunk.items():
             print(f"Node: {node_name}")
@@ -130,7 +123,7 @@ def main() -> None:
     if not case.report_path.exists():
         raise FileNotFoundError(f"Missing diff report: {case.report_path}")
 
-    factory = MLXAgentFactory(model_name="qwen-3.5-9b")
+    factory = GeminiAgentFactory(model_name="gemini-3.1-flash-lite")
     factory.ensure_loaded()
     graph = build_reverse_engineering_graph(factory=factory)
     result = run_case(graph, case)

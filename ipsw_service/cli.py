@@ -240,6 +240,12 @@ def build_download_args(
     include_kernel: bool = False,
     include_dyld: bool = False,
 ) -> list[str]:
+    # ensure version and build are properly separated if a concatenated string is passed
+    if version and not build and "_" in str(version):
+        parts = str(version).split("_", 1)
+        version = parts[0]
+        build = parts[1]
+
     args = ["download", "ipsw", "--device", str(device)]
     if build:
         args.extend(["--build", str(build)])

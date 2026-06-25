@@ -27,6 +27,7 @@ _REVERSE_ENGINEERING_ALLOWED_TOOLS = [
     "get_xrefs_to",
     "rename_local_variable",
     "set_comment",
+    "save_ida_database",
 ]
 
 def get_allowed_tools(domain: str) -> list[str]:

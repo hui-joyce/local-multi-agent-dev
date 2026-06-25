@@ -220,7 +220,7 @@ class QdrantRetriever(BaseRetriever):
                         score_threshold=score_threshold,
                     )
                     
-                    for hit in search_result:
+                    for hit in search_result.points:
                         all_results.append({
                             "text": hit.payload.get("text", ""),
                             "score": hit.score,

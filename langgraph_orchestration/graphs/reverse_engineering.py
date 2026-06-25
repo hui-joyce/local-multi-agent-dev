@@ -15,6 +15,7 @@ from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.prompts.shared import get_allowed_tools
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.schemas.state import AgentState
+from langgraph_orchestration.triage.rules import triage_evidence_explained
 from langgraph_orchestration.tooling.executor import get_tool_executor, tool_executor_node, should_continue_tool_loop
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
@@ -79,14 +80,14 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return targets
 
         device_match = re.search(r"\b(iPhone\d+,\d+|iPad\d+,\d+|Watch\d+,\d+|AppleTV\d+,\d+)\b", user_input)
-        versions = re.findall(r"\b\d+\.\d+(?:\.\d+)?\b", user_input)
-        if device_match and versions:
-            for version in versions[:2]:
-                key = (device_match.group(1), version, "")
+        versions_and_builds = re.findall(r"(?<![\w\.])(\d+\.\d+(?:\.\d+)?)(?:_([A-Za-z0-9]+))?(?![\w\.])", user_input)
+        if device_match and versions_and_builds:
+            for version, build in versions_and_builds[:2]:
+                key = (device_match.group(1), version, build)
                 if key in seen:
                     continue
                 seen.add(key)
-                targets.append({"device": device_match.group(1), "version": version, "build": ""})
+                targets.append({"device": device_match.group(1), "version": version, "build": build})
 
         state.intermediate_outputs["parsed_firmware_targets"] = json.dumps(targets)
         return targets
@@ -350,71 +351,19 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 
             targets.append(target_entry)
 
-        # drop LOW_SIGNAL components before they reach the queue
+        # drop LOW_SIGNAL components before they reach the queue (triage rule engine, langgraph_orchestration.triage) 
         high_signal_targets = []
         for t in targets:
-            signal = _triage_evidence(t.get("evidence", ""))
-            t["_triage_signal"] = signal
-            if signal == "HIGH_SIGNAL":
+            result = triage_evidence_explained(t.get("evidence", ""))
+            t["_triage_signal"] = result.signal
+            t["_triage_reason"] = result.reason
+            if result.evidence_line:
+                t["_triage_evidence_line"] = result.evidence_line
+            if result.is_high_signal:
                 high_signal_targets.append(t)
             else:
-                print(f"[TRIAGE] Skipping {t.get('name', '?')} — LOW_SIGNAL (metadata-only changes)")
+                print(f"[TRIAGE] Skipping {t.get('name', '?')} — LOW_SIGNAL ({result.reason})")
         return high_signal_targets
-
-    def _triage_evidence(evidence: str) -> str:
-        """Returns 'HIGH_SIGNAL' if evidence contains semantic changes, else 'LOW_SIGNAL'"""
-        import re as _re
-
-        # high-signal: explicit added/removed lines in Symbols or CStrings sections
-        symbol_change = _re.search(
-            r'^[Ss]ymbols\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
-            evidence, _re.MULTILINE
-        )
-        cstring_change = _re.search(
-            r'^[Cc][Ss]trings\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
-            evidence, _re.MULTILINE
-        )
-        entitlement_change = _re.search(
-            r'^[Ee]ntitlements\s*:\s*\n([\s\S]*?)(?=^[A-Z]|\Z)',
-            evidence, _re.MULTILINE
-        )
-
-        for block_match in [symbol_change, cstring_change, entitlement_change]:
-            if block_match:
-                block = block_match.group(0)
-                for line in block.splitlines():
-                    stripped = line.strip()
-                    if stripped.startswith('+') or stripped.startswith('-'):
-                        return "HIGH_SIGNAL"
-
-        # treat function count changes as high-signal
-        func_lines = _re.findall(r'^[+-]\s*Functions\s*:', evidence, _re.MULTILINE)
-        if func_lines:
-            return "HIGH_SIGNAL"
-
-        for line in evidence.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith(('+', '-')):
-                if _re.match(
-                    r'^[+\-]\s*('                   # prefixed diff line
-                    r'UUID:\s*[0-9A-Fa-f\-]+'       # uUID
-                    r'|\d+\.\d+\.\d+\.\d+\.\d+'     # version string like 1450.500.221.2.9
-                    r'|__TEXT\.__'                  # section size (e.g. __TEXT.__const)
-                    r'|__DATA\.__'
-                    r'|__LINKEDIT'
-                    r'|__AUTH\.__'
-                    r'|/usr/lib/'
-                    r'|/System/Library/'            # framework/private framework dylib deps
-                    r'|/usr/local/lib/'
-                    r')',
-                    stripped
-                ):
-                    continue
-                return "HIGH_SIGNAL"
-
-        return "LOW_SIGNAL"
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
         lowered_input = (state.user_input or "").lower()
@@ -531,13 +480,13 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         stem = os.path.basename(ipsw_path).replace(".ipsw", "")
         extracted_root = os.path.join(workspace_root or os.getcwd(), ".ipsw_extracted")
         pattern = os.path.join(extracted_root, stem, "**", "dyld_shared_cache_arm64e")
-        matches = _glob.glob(pattern, recursive=True)
+        matches = sorted(_glob.glob(pattern, recursive=True))
         if matches:
             return matches[0]
         # fallback: any subdirectory whose name starts with the build ID
         build_id = stem.split("_")[0] if "_" in stem else stem
         pattern2 = os.path.join(extracted_root, f"*{build_id}*", "**", "dyld_shared_cache_arm64e")
-        matches2 = _glob.glob(pattern2, recursive=True)
+        matches2 = sorted(_glob.glob(pattern2, recursive=True))
         return matches2[0] if matches2 else None
 
     def _find_kernelcache_for_ipsw(ipsw_path: str, workspace_root: str | None) -> str | None:
@@ -546,7 +495,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         stem = os.path.basename(ipsw_path).replace(".ipsw", "")
         extracted_root = os.path.join(workspace_root or os.getcwd(), ".ipsw_extracted")
         pattern = os.path.join(extracted_root, stem, "**", "kernelcache*")
-        matches = [p for p in _glob.glob(pattern, recursive=True) if "release" in os.path.basename(p)]
+        matches = sorted(p for p in _glob.glob(pattern, recursive=True) if "release" in os.path.basename(p))
         if matches:
             return matches[0]
         return None
@@ -614,9 +563,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     if "README.md" in files:
                         diff_report_path = os.path.join(root, "README.md")
                         break
-            if not diff_report_path:
-                diff_report_path = result.artifacts.report_markdown
-
         state = StateManager.add_intermediate_output(state, "firmware_diff_report", diff_report_text)
         state.intermediate_outputs["firmware_diff_report_path"] = diff_report_path
         if result.artifacts.raw_diff_dir:
@@ -624,21 +570,147 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
 
+    def _diff_report_has_evidence(report_json_str: str) -> bool:
+        """True when the report JSON carries the per-component evidence that feature
+        targets are built from. A diff that was skipped emits a status stub with no evidence 
+        and must not be treated as a usable report"""
+        if not report_json_str:
+            return False
+        try:
+            data = json.loads(report_json_str)
+        except (json.JSONDecodeError, ValueError):
+            return False
+        if not isinstance(data, dict):
+            return False
+        return bool(data.get("cstring_context") or data.get("symbol_context"))
+
+    def _find_report_json_on_disk(state: AgentState) -> str:
+        """Recover the structured report.json from disk when the in-graph payload is
+        missing/empty/a skip-stub"""
+        search_dirs: list[str] = []
+        report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
+        if report_path:
+            directory = os.path.dirname(report_path)
+            for _ in range(4):  # README is a few levels below the diff output root
+                search_dirs.append(directory)
+                parent = os.path.dirname(directory)
+                if parent == directory:
+                    break
+                directory = parent
+        raw_dir = state.intermediate_outputs.get("firmware_raw_diff_dir", "")
+        if raw_dir:
+            search_dirs.extend([raw_dir, os.path.dirname(raw_dir)])
+
+        seen: set[str] = set()
+        for directory in search_dirs:
+            if not directory or directory in seen:
+                continue
+            seen.add(directory)
+            candidate = os.path.join(directory, "report.json")
+            if os.path.isfile(candidate):
+                try:
+                    text = read_text(candidate)
+                except Exception:
+                    continue
+                if _diff_report_has_evidence(text):
+                    return text
+        return ""
+
+    def _resolve_diff_report_json(state: AgentState) -> str:
+        """Single resilient source for the diff report JSON used by feature analysis"""
+        inline = state.intermediate_outputs.get("firmware_diff_report", "")
+        if _diff_report_has_evidence(inline):
+            return inline
+        recovered = _find_report_json_on_disk(state)
+        if recovered:
+            state.intermediate_outputs["firmware_diff_report"] = recovered
+            state.record_analysis_note(
+                "feature_analysis: in-graph diff report was empty/stub; recovered report.json from disk."
+            )
+            return recovered
+        return inline
+
+    def _extract_readme_diff_for_component(component_name: str, readme_text: str, max_lines: int = 200) -> str:
+        """Return the diff block for component_name from the README, capped at max_lines"""
+        if not readme_text or not component_name:
+            return ""
+        lines = readme_text.splitlines()
+        in_section = False
+        in_code_block = False
+        result: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped == f"#### {component_name}" or stripped.startswith(f"#### {component_name} "):
+                in_section = True
+                continue
+            if in_section:
+                if stripped.startswith("#### ") or stripped.startswith("### ") or stripped.startswith("## "):
+                    break
+                if stripped == "```diff":
+                    in_code_block = True
+                    result.append(line)
+                    continue
+                if in_code_block and stripped == "```":
+                    result.append(line)
+                    break
+                if in_code_block or stripped.startswith(">"):
+                    result.append(line)
+                    if len(result) >= max_lines:
+                        result.append("... (truncated)")
+                        break
+        return "\n".join(result)
+
+    def _find_readme_for_state(state: AgentState) -> str:
+        """Return README text from the diff artifact directory, or '' if not found"""
+        report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
+        if report_path and report_path.endswith("README.md") and os.path.isfile(report_path):
+            try:
+                return read_text(report_path)
+            except Exception:
+                pass
+        # else derive from raw_diff_dir
+        raw_dir = state.intermediate_outputs.get("firmware_raw_diff_dir", "")
+        if raw_dir and os.path.isdir(raw_dir):
+            for root, _dirs, files in os.walk(raw_dir):
+                if "README.md" in files:
+                    try:
+                        return read_text(os.path.join(root, "README.md"))
+                    except Exception:
+                        pass
+        return ""
+
     def feature_analysis_select_node(state: AgentState) -> AgentState:
         if not state.feature_analysis_queue and not state.feature_analysis_targets:
-            report_json_str = state.intermediate_outputs.get("firmware_diff_report", "")
+            report_json_str = _resolve_diff_report_json(state)
 
-            if not report_json_str:
+            if not _diff_report_has_evidence(report_json_str):
                 state.feature_analysis_targets = []
                 state.feature_analysis_queue = []
                 state.feature_analysis_current = None
-                state.record_analysis_note("feature_analysis skipped: missing diff report JSON")
+                state.record_analysis_note(
+                    "feature_analysis skipped: no diff report with component evidence "
+                    "(checked in-graph payload and on-disk report.json)."
+                )
                 return state
 
             targets = _build_feature_targets(report_json_str)
+
+            readme_text = _find_readme_for_state(state)
+            if readme_text:
+                for t in targets:
+                    readme_diff = _extract_readme_diff_for_component(t["name"], readme_text)
+                    if readme_diff:
+                        t["evidence"] = t["evidence"] + "\n\nBinary diff (from README):\n" + readme_diff
+
             state.feature_analysis_targets = targets
             state.feature_analysis_queue = list(targets)
-            state.record_analysis_note(f"feature_analysis targets: {len(targets)}")
+            if targets:
+                state.record_analysis_note(f"feature_analysis targets: {len(targets)} HIGH_SIGNAL component(s).")
+            else:
+                state.record_analysis_note(
+                    "feature_analysis: diff report parsed but all components were LOW_SIGNAL "
+                    "(metadata/timestamp churn only)."
+                )
 
         # pop next feature from queue, resetting tool state for each new component
         if state.feature_analysis_queue:
@@ -673,48 +745,49 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         import subprocess
 
         def _find_macho_in_dir(directory: str, target_name: str) -> str | None:
-            for root, _, files in os.walk(directory):
-                for file in files:
+            # Deterministic selection: os.walk yields directory entries in an
+            # arbitrary, filesystem-dependent order. When several cached binaries
+            # share a basename (e.g. different firmware versions), an unsorted walk
+            # can bind a different file on each run. Collect all matches and pick the
+            # lexicographically-smallest path so the choice is reproducible.
+            matches: list[str] = []
+            for root, dirs, files in os.walk(directory):
+                dirs.sort()
+                for file in sorted(files):
                     if file == target_name:
                         candidate = os.path.join(root, file)
                         if _is_macho_binary(candidate):
-                            return candidate
-            return None
+                            matches.append(candidate)
+            return sorted(matches)[0] if matches else None
 
         component_name = feature.get("name")
         if not component_name:
             return state
 
-        # strategy 1: Use the exact binary path parsed from the diff report
         feature_binary_path = feature.get("binary_path", "")
         output_dir = os.path.join(state.workspace_root or os.getcwd(), ".ipsw_features")
+        os.makedirs(output_dir, exist_ok=True)
+        target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
         extracted_binary = None
 
-        if feature_binary_path:
-            clean_path = feature_binary_path.lstrip("/")
-            if os.path.isdir(output_dir):
-                for entry in os.listdir(output_dir):
-                    candidate = os.path.join(output_dir, entry, clean_path)
-                    if os.path.isfile(candidate) and _is_macho_binary(candidate):
-                        extracted_binary = candidate
-                        break
+        # Strategy 1: recursive scan of .ipsw_features/ to avoid re-extracting on every component
+        if os.path.isdir(output_dir):
+            extracted_binary = _find_macho_in_dir(output_dir, target_basename)
+            if extracted_binary:
+                state.record_analysis_note(f"Re-using cached binary from .ipsw_features/: {extracted_binary}")
 
-        # fallback: Extract from IPSW or DSC if not pre-extracted
+        # Strategy 2: extract from DSC / IPSW if not already cached
         if not extracted_binary:
-
             import glob
             local_ipsws = _collect_confirmed_local_artifacts(state)
             _, new_ipsw = _select_diff_pair(state, local_ipsws)
 
-            os.makedirs(output_dir, exist_ok=True)
-            target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
-
-            # strategy 2a: DSC dylib extraction from .ipsw_extracted/ 
+            # Strategy 2a: DSC dylib extraction (only if DSC already in .ipsw_extracted/)
             if feature_binary_path:
                 dsc_path = None
                 if new_ipsw:
                     dsc_path = _find_dsc_for_ipsw(new_ipsw, state.workspace_root)
-                
+
                 if dsc_path:
                     try:
                         subprocess.run(
@@ -730,12 +803,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             error_line = [line for line in stderr.split('\n') if '⨯' in line or 'Error' in line]
                             short_err = error_line[0] if error_line else stderr[:100]
                             state.record_analysis_note(f"DSC extract failed ({os.path.basename(dsc_path)}): {short_err}")
-                    
+
                     extracted_binary = _find_macho_in_dir(output_dir, target_basename)
 
-            # strategy 2b: Check existing DMG mounts (left by ipsw diff)
+            # Strategy 2b: Check existing DMG mounts (left by ipsw diff)
             if not extracted_binary and feature_binary_path:
-                for mount_dir in glob.glob("/private/tmp/*.mount"):
+                for mount_dir in sorted(glob.glob("/private/tmp/*.mount")):
                     if os.path.isdir(mount_dir):
                         mounted_file = os.path.join(mount_dir, feature_binary_path.lstrip("/"))
                         if os.path.isfile(mounted_file):
@@ -746,8 +819,18 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             state.record_analysis_note(f"Copied binary from existing mount: {mount_dir}")
                             break
 
-            # strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps)
-            if not extracted_binary and new_ipsw:
+            # Strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps only).
+            # DSC-resident binaries (frameworks, private frameworks) live inside dyld_shared_cache and
+            # cannot be extracted with --files; attempting it triggers a plist parse error. Skip them here.
+            _dsc_path_prefixes = (
+                "/System/Library/Frameworks/",
+                "/System/Library/PrivateFrameworks/",
+                "/usr/lib/",
+            )
+            _is_dsc_binary = feature_binary_path and any(
+                feature_binary_path.startswith(p) for p in _dsc_path_prefixes
+            )
+            if not extracted_binary and new_ipsw and not _is_dsc_binary:
                 pattern = f".*{re.escape(target_basename)}$"
                 try:
                     subprocess.run(
@@ -768,6 +851,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
                 if not extracted_binary:
                     extracted_binary = _find_macho_in_dir(output_dir, target_basename)
+            elif _is_dsc_binary and not extracted_binary:
+                state.record_analysis_note(
+                    f"{component_name} is DSC-resident; Strategy 2c (--files) skipped. Extraction requires DSC to be present in .ipsw_extracted/."
+                )
 
             if not extracted_binary and not feature_binary_path:
                 state.record_analysis_note(
@@ -776,10 +863,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 )
 
         if extracted_binary:
+            feature["decompiler_available"] = True
             state.record_analysis_note(f"Decompiler target: {extracted_binary}")
             result = start_ida_server_for_binary.invoke({"binary_path": extracted_binary})
             state.record_analysis_note(f"Decompiler prepare: {result}")
         else:
+            feature["decompiler_available"] = False
             state.record_analysis_note(f"Could not locate Mach-O binary for {component_name}. Decompiler unavailable for this component.")
         return state
 
@@ -798,19 +887,23 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return state
         from langgraph_orchestration.prompts.reverse_engineering import build_unified_feature_analysis_prompt
 
+        ida_available = feature.get("decompiler_available", True)
         stage1_tools = {"find_address"}
         stage2_tools = {"get_xrefs_to", "decompile_function"}
         used_tool_names = {r.tool_name for r in state.tool_results}
         has_stage1_results = bool(used_tool_names & stage1_tools)
         has_stage2_results = bool(used_tool_names & stage2_tools)
         hard_at_limit = state.tool_iteration >= state.max_tool_iterations
+        # Stage 1 (find_address) is always allowed, doesn't require IDA
+        # Stage 2 (decompile_function, get_xrefs_to) requires IDA to be loaded
+        ida_at_limit = hard_at_limit or not ida_available
 
         prompt = build_unified_feature_analysis_prompt(
             user_input=state.user_input,
             component_evidence=feature.get("evidence", ""),
             component_name=feature.get("name", "Unknown Component"),
             has_tool_results=bool(state.tool_results),
-            at_limit=hard_at_limit,
+            at_limit=ida_at_limit,
         )
         context_blocks = []
         if state.tool_results:
@@ -842,6 +935,9 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             elif data.get("type") == "string_data":
                                 addrs = data.get("addresses", [])
                                 string_addrs.append(", ".join(addrs))
+                            elif data.get("type") == "data_symbol":
+                                # e.g. an ObjC class pointer _OBJC_CLASS_$_CDPDUnlockListener
+                                string_addrs.append(data.get("address"))
                         except Exception:
                             pass
                 addr_block = ""
@@ -880,16 +976,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "Do NOT write the final report until Stage 2 decompilation is complete."
                 )
 
-            prompt += (
-                "\n\nIf generating the report, use this EXACT format:\n"
-                "## What this feature does\n[High-level summary]\n"
-                "## How is it implemented\n[Include decompiled pseudocode, call chains, and data-flow trace]\n"
-                "## How to trigger this feature\n[Conditions that invoke this code path]\n"
-                "## Evidence\n[Addresses, symbols, strings, decompiled function excerpts]\n"
-                "---AI_PRIORITISATION_SCORE---\n"
-                '{"method": "...", "category": "...", "tier": "...", "confidence": "...", "decompile": true, "reason": "..."}'
-            )
-
         print(f"\n\n[DEBUG STATE] tool_iteration={state.tool_iteration}/{state.max_tool_iterations} "
               f"stage1={has_stage1_results} stage2={has_stage2_results} hard_at_limit={hard_at_limit}")
         print(f"\n\n[DEBUG PROMPT]\n{prompt}\n[END DEBUG PROMPT]\n\n")
@@ -898,26 +984,54 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         chat_prompt = engine.build_prompt(user_input=prompt, system_prompt="")
         output = engine.generate(
             chat_prompt,
-            config=GenerationConfig(max_tokens=3000, temperature=0.2),
+            config=GenerationConfig(max_tokens=3000, temperature=0.0),
             stream=False,
         )
 
-        # if at limit and model still tries a tool call, force a report
-        if hard_at_limit:
-            from langgraph_orchestration.tooling.parser import parse_agent_output
+        # parse and handle limit logic/broken output
+        from langgraph_orchestration.tooling.parser import parse_agent_output
+        parsed = parse_agent_output(output)
+        
+        is_forcing_report = hard_at_limit or not ida_available
+        output_has_report = "## What this feature does" in output
+        output_has_tools = parsed.has_tool_calls() or "<tool_call>" in output
+        needs_retry = False
+        error_msg = ""
+
+        if is_forcing_report:
+            # Must write a final report — no tool calls allowed, and report header is mandatory
+            if output_has_tools or not output_has_report:
+                needs_retry = True
+                error_msg = (
+                    "**SYSTEM ERROR**: You MUST write the final markdown report NOW using the evidence provided. "
+                    "Tool calls are NOT accepted in this state. "
+                    "Start your response EXACTLY with `## What this feature does`."
+                )
+        elif not output_has_tools and not output_has_report:
+            # Model produced neither tool calls nor a report — force it to call tools
+            needs_retry = True
+            error_msg = (
+                "**SYSTEM ERROR**: Your response did not contain any `<tool_call>` blocks. "
+                "You MUST call `find_address` on the key symbols and strings from the diff before writing the report. "
+                "Output ONLY `<tool_call>` blocks now. Do NOT write a report in this turn."
+            )
+        elif not parsed.has_tool_calls() and "<tool_call>" in output:
+            needs_retry = True
+            error_msg = (
+                "**SYSTEM ERROR**: Your `<tool_call>` block was incomplete or contained invalid JSON. "
+                "Ensure you include the closing `</tool_call>` tag and valid JSON. "
+                "If you were trying to output a final report, DO NOT include `<tool_call>` blocks at all."
+            )
+            
+        if needs_retry:
+            prompt += f"\n\n{output}\n\n{error_msg}"
+            chat_prompt_retry = engine.build_prompt(user_input=prompt, system_prompt="")
+            output = engine.generate(
+                chat_prompt_retry,
+                config=GenerationConfig(max_tokens=3000, temperature=0.0),
+                stream=False,
+            )
             parsed = parse_agent_output(output)
-            if parsed.has_tool_calls():
-                prompt += (
-                    f"\n\n{output}\n\n"
-                    "**SYSTEM ERROR**: Tool calls are disabled. You are OUT OF TURNS. "
-                    "Write the final markdown report NOW using the evidence already gathered."
-                )
-                chat_prompt_retry = engine.build_prompt(user_input=prompt, system_prompt="")
-                output = engine.generate(
-                    chat_prompt_retry,
-                    config=GenerationConfig(max_tokens=3000, temperature=0.2),
-                    stream=False,
-                )
 
         output = _sanitize_model_output(output)
         return StateManager.add_intermediate_output(state, "unified_feature_analysis", output)
@@ -943,23 +1057,71 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             markdown_report = match.group(1).strip()
             
         # strip any hallucinated tool logs that might be embedded anywhere
-        markdown_report = re.sub(r'## TOOL ACTIVITY[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
-        markdown_report = re.sub(r'### Requested Tools[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
-        markdown_report = re.sub(r'### Tool Results[\s\S]*?(?=## What this feature does|## How is it implemented|## How to trigger this feature|---AI_PRIORITISATION_SCORE---|$)', '', markdown_report, flags=re.IGNORECASE)
-        markdown_report = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', markdown_report, flags=re.IGNORECASE)
+        _anchor = r'## What this feature does|## How is it implemented|## How to trigger this feature|## Vulnerability Assessment|## Evidence|---AI_PRIORITISATION_SCORE---|$'
+        markdown_report = re.sub(r'## TOOL ACTIVITY[\s\S]*?(?=' + _anchor + ')', '', markdown_report, flags=re.IGNORECASE)
+        markdown_report = re.sub(r'### Requested Tools[\s\S]*?(?=' + _anchor + ')', '', markdown_report, flags=re.IGNORECASE)
+        markdown_report = re.sub(r'### Tool Results[\s\S]*?(?=' + _anchor + ')', '', markdown_report, flags=re.IGNORECASE)
+        markdown_report = re.sub(r'<tool_call>[\s\S]*?(?:</tool_call>|(?=' + _anchor + '))', '', markdown_report, flags=re.IGNORECASE)
         
         markdown_report = markdown_report.strip()
+        
+        # If the report is completely empty after stripping (e.g. model only hallucinated an unclosed tool call)
+        if not markdown_report:
+            markdown_report = (
+                "## What this feature does\n(Model failed to generate report content)\n\n"
+                "## How is it implemented\n(No data)\n\n"
+                "## How to trigger this feature\n(No data)\n\n"
+                "## Vulnerability Assessment\n(No data)\n\n"
+                "## Evidence\n(No data)"
+            )
+            
         score_json = parts[1].strip() if len(parts) > 1 else ""
+        should_save = True
+
+        # prepend auditable provenance header so every report explains why it exists
+        triage_reason = feature.get("_triage_reason", "passed HIGH_SIGNAL triage")
+        triage_line = feature.get("_triage_evidence_line", "")
+        analysis_mode = "decompiled" if feature.get("decompiler_available", False) else "evidence_only"
+        provenance = (
+            "## Triage Provenance\n"
+            f"- **Inclusion**: HIGH_SIGNAL (deterministic rule engine)\n"
+            f"- **Reason**: {triage_reason}\n"
+        )
+        if triage_line:
+            provenance += f"- **Deciding evidence**: `{triage_line}`\n"
+        provenance += f"- **Analysis mode**: {analysis_mode}\n\n"
+        markdown_report = provenance + markdown_report
+
         if score_json:
             json_match = re.search(r'\{.*\}', score_json, re.DOTALL)
             if json_match:
                 try:
                     parsed_score = json.loads(json_match.group(0))
                     state.categorized_methods.append(parsed_score)
-                    
+
+                    tier = parsed_score.get("tier", "Unknown Tier")
+                    # normalise any free-form tier value 
+                    _tier_aliases = {
+                        # numeric / shorthand
+                        "1": "TIER_1", "tier1": "TIER_1", "tier 1": "TIER_1",
+                        "2": "TIER_2", "tier2": "TIER_2", "tier 2": "TIER_2",
+                        "3": "TIER_3", "tier3": "TIER_3", "tier 3": "TIER_3",
+                        # descriptive words
+                        "high": "TIER_1", "critical": "TIER_1", "high interest": "TIER_1",
+                        "medium": "TIER_2", "medium interest": "TIER_2",
+                        "low": "TIER_3", "low interest": "TIER_3", "noise": "TIER_3",
+                    }
+                    if isinstance(tier, str) and tier.lower() in _tier_aliases:
+                        tier = _tier_aliases[tier.lower()]
+                        parsed_score["tier"] = tier
+
+                    if isinstance(tier, str) and tier.upper() in ("TIER_3", "TIER3"):
+                        state.record_analysis_note(
+                            f"{feature.get('name', 'component')} scored {tier} after full analysis — saved with advisory tier."
+                        )
+
                     markdown_report += "\n\n## AI Prioritisation Scoring System\n\n"
                     method = parsed_score.get("method", "Unknown Method")
-                    tier = parsed_score.get("tier", "Unknown Tier")
                     category = parsed_score.get("category", "Unknown Category")
                     reason = parsed_score.get("reason", "No reason provided")
                     markdown_report += f"- **{method}**\n  - **Tier**: {tier}\n  - **Category**: {category}\n  - **Reasoning**: {reason}\n\n"
@@ -968,19 +1130,21 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     markdown_report += "\n\n## AI Prioritisation Scoring System\n\n*(Failed to parse JSON score)*\n"
         else:
             markdown_report += "\n\n## AI Prioritisation Scoring System\n\nNo actionable methods or prioritisation targets identified for this component.\n\n"
-        report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
 
-        output_dir = _resolve_feature_output_dir(report_path, state.workspace_root)
+        report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
         slug = _slugify_feature(feature.get("name", "feature"))
-        output_path = os.path.join(output_dir, f"{slug}_analysis.md")
-        write_text(output_path, markdown_report)
-        
-        state.feature_analysis_reports[feature.get("name", slug)] = output_path
-        state.intermediate_outputs["feature_analysis_reports"] = json.dumps(
-            state.feature_analysis_reports,
-            ensure_ascii=True,
-            indent=2,
-        )
+
+        if should_save:
+            output_dir = _resolve_feature_output_dir(report_path, state.workspace_root)
+            output_path = os.path.join(output_dir, f"{slug}_analysis.md")
+            write_text(output_path, markdown_report)
+            
+            state.feature_analysis_reports[feature.get("name", slug)] = output_path
+            state.intermediate_outputs["feature_analysis_reports"] = json.dumps(
+                state.feature_analysis_reports,
+                ensure_ascii=True,
+                indent=2,
+            )
         
         state.feature_analysis_current = None
         state.tool_requests.clear()
@@ -1038,7 +1202,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             
             output = engine.generate(
                 prompt,
-                config=GenerationConfig(max_tokens=2048, temperature=0.1),
+                config=GenerationConfig(max_tokens=2048, temperature=0.0),
                 stream=False,
             )
             

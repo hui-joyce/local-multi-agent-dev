@@ -338,6 +338,32 @@ class VSCodeToolExecutor(BaseToolExecutor):
             )
 
 
+_TOOL_ERROR_SENTINELS = (
+    "error:",
+    "# error",
+    "failed to",
+    "failed.",
+    "error saving",
+    "request timed out",
+    "not running",
+    "connection to decompiler refused",
+)
+
+
+def _looks_like_error(text: Any) -> bool:
+    """True when a decompiler tool returned an error string instead of real output.
+
+    Several IDA RPC tools signal failure in-band by returning a human-readable
+    error string while the Python call itself 'succeeds'. Without this check those
+    errors were surfaced to the model as valid evidence (success=True), inviting
+    hallucinated conclusions. This normalizes them back to failures.
+    """
+    if not isinstance(text, str):
+        return False
+    lowered = text.strip().lower()
+    return any(lowered.startswith(s) or s in lowered[:60] for s in _TOOL_ERROR_SENTINELS)
+
+
 class IDAToolExecutor(BaseToolExecutor):
     """Tool executor for RE workflows"""
 
@@ -504,16 +530,20 @@ class IDAToolExecutor(BaseToolExecutor):
 
     def _remote_save_ida_database(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import save_ida_database
-        output = save_ida_database.invoke({})
-        return ToolResult(tool_name="save_ida_database", success=True, output=str(output))
+        output = str(save_ida_database.invoke({}))
+        if _looks_like_error(output) or "failed to save" in output.lower():
+            return ToolResult(tool_name="save_ida_database", success=False, output="", error=output)
+        return ToolResult(tool_name="save_ida_database", success=True, output=output)
 
     def _remote_get_entitlements(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import get_entitlements
         binary_path = req.arguments.get("binary_path")
         if not binary_path:
             return ToolResult(tool_name="get_entitlements", success=False, output="", error="Missing binary_path argument")
-        output = get_entitlements.invoke({"binary_path": binary_path})
-        return ToolResult(tool_name="get_entitlements", success=True, output=str(output))
+        output = str(get_entitlements.invoke({"binary_path": binary_path}))
+        if _looks_like_error(output):
+            return ToolResult(tool_name="get_entitlements", success=False, output="", error=output)
+        return ToolResult(tool_name="get_entitlements", success=True, output=output)
 
     def _remote_resolve_objc_dispatch(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import resolve_objc_dispatch
@@ -521,8 +551,10 @@ class IDAToolExecutor(BaseToolExecutor):
         call_ea = req.arguments.get("call_ea")
         if func_ea is None or call_ea is None:
             return ToolResult(tool_name="resolve_objc_dispatch", success=False, output="", error="Missing func_ea or call_ea")
-        output = resolve_objc_dispatch.invoke({"func_ea": int(func_ea), "call_ea": int(call_ea)})
-        return ToolResult(tool_name="resolve_objc_dispatch", success=True, output=str(output))
+        output = str(resolve_objc_dispatch.invoke({"func_ea": int(func_ea), "call_ea": int(call_ea)}))
+        if _looks_like_error(output):
+            return ToolResult(tool_name="resolve_objc_dispatch", success=False, output="", error=output)
+        return ToolResult(tool_name="resolve_objc_dispatch", success=True, output=output)
 
     def _remote_trace_variable_source(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import trace_variable_source
@@ -530,8 +562,10 @@ class IDAToolExecutor(BaseToolExecutor):
         var_name = req.arguments.get("var_name")
         if func_ea is None or not var_name:
             return ToolResult(tool_name="trace_variable_source", success=False, output="", error="Missing func_ea or var_name")
-        output = trace_variable_source.invoke({"func_ea": int(func_ea), "var_name": var_name})
-        return ToolResult(tool_name="trace_variable_source", success=True, output=str(output))
+        output = str(trace_variable_source.invoke({"func_ea": int(func_ea), "var_name": var_name}))
+        if _looks_like_error(output):
+            return ToolResult(tool_name="trace_variable_source", success=False, output="", error=output)
+        return ToolResult(tool_name="trace_variable_source", success=True, output=output)
 
     def _parse_address(self, address: Any) -> int:
         if isinstance(address, int):
@@ -645,10 +679,12 @@ class IDAToolExecutor(BaseToolExecutor):
         elif not dyld and not kernel and not normalized_extra and artifact:
             flag = str(artifact)
             normalized_extra = [flag if flag.startswith("--") else f"--{flag}"]
+        if not output_dir:
+            output_dir = os.path.join(self.workspace_root, ".ipsw_extracted")
 
         args = build_extract_args(
             ipsw_path=str(ipsw_path),
-            output_dir=str(output_dir) if output_dir else None,
+            output_dir=str(output_dir),
             dyld=dyld,
             kernel=kernel,
             dyld_arch=str(dyld_arch),
@@ -671,6 +707,26 @@ class IDAToolExecutor(BaseToolExecutor):
         json_output = bool(req.arguments.get("json", False))
         timeout = int(req.arguments.get("timeout", 180))
 
+        # Auto-resolve: if the model omitted explicit paths (sent only a target label),
+        # scan .ipsw_downloads/ for two IPSWs and pick old=first, new=last by mtime.
+        if not old_dsc and not new_dsc and not old_ipsw and not new_ipsw:
+            import glob as _glob
+            downloads_dir = os.path.join(self.workspace_root, ".ipsw_downloads")
+            candidates = sorted(
+                _glob.glob(os.path.join(downloads_dir, "*.ipsw")),
+                key=os.path.getmtime,
+            )
+            if len(candidates) >= 2:
+                old_ipsw, new_ipsw = candidates[0], candidates[-1]
+            # also accept pre-extracted DSC pairs from .ipsw_extracted/
+            if not old_ipsw:
+                dsc_candidates = sorted(
+                    _glob.glob(os.path.join(self.workspace_root, ".ipsw_extracted", "**", "dyld_shared_cache_arm64e"), recursive=True),
+                    key=os.path.getmtime,
+                )
+                if len(dsc_candidates) >= 2:
+                    old_dsc, new_dsc = dsc_candidates[0], dsc_candidates[-1]
+
         if old_dsc and new_dsc:
             args = build_dyld_diff_args(str(old_dsc), str(new_dsc), json_output=json_output)
         elif old_ipsw and new_ipsw:
@@ -691,7 +747,10 @@ class IDAToolExecutor(BaseToolExecutor):
                 tool_name="ipsw_diff",
                 success=False,
                 output="",
-                error="ipsw_diff requires old/new IPSW paths or old_dsc/new_dsc arguments",
+                error=(
+                    "ipsw_diff requires old/new IPSW paths or old_dsc/new_dsc arguments. "
+                    f"No IPSWs found in {os.path.join(self.workspace_root, '.ipsw_downloads')}."
+                ),
             )
 
         base = self._run_ipsw(args, timeout=timeout)
@@ -702,6 +761,7 @@ class IDAToolExecutor(BaseToolExecutor):
             error=base.error,
             metadata=base.metadata,
         )
+
 
 def get_tool_executor(
     domain: str,
@@ -770,7 +830,7 @@ def tool_executor_node(state: AgentState) -> AgentState:
             type="tool_request",
             tool_name=tool_call.tool_name,
             arguments=tool_call.arguments,
-            target=tool_call.target,
+            target=str(tool_call.target) if tool_call.target is not None else None,
             reason=tool_call.reason or "",
             needs_confirmation=tool_call.needs_confirmation,
             expected_outcome=tool_call.expected_outcome,

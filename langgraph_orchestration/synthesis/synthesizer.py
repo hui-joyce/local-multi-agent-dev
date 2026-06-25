@@ -280,8 +280,8 @@ class Synthesizer:
         if exec_summary:
             sections.append(exec_summary)
         
-        # tool activity (show if there are failures/relevant details)
-        if any(not r.success for r in self.state.tool_results):
+        # tool activity
+        if self.state.tool_results:
             tool_summary = self._build_tool_activity_summary()
             if tool_summary:
                 sections.append(tool_summary)

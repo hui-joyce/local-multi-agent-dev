@@ -38,7 +38,6 @@ class MLXModelLoader:
         self.tokenizer = None
 
     def _assert_runtime_compatible(self) -> None:
-        """Fail fast when the active interpreter cannot load the configured model type."""
         try:
             import mlx_lm
         except ImportError as e:
@@ -63,7 +62,7 @@ class MLXModelLoader:
             )
     
     def load(self) -> tuple:
-        """Load model and tokenizer using mlx-lm with strict runtime checks.="""
+        """Load model and tokenizer using mlx-lm with strict runtime checks"""
         self._assert_runtime_compatible()
 
         try:
@@ -95,9 +94,14 @@ class MLXModelLoader:
                 if self.model is None or self.tokenizer is None:
                     raise RuntimeError("Model or tokenizer returned None")
 
+                import mlx.core as mx
+                mx.set_cache_limit(2 * 1024 * 1024 * 1024)
+                mx.clear_cache()
+
                 print(f"  ✓ Model loaded successfully")
                 print(f"  Quantization: {self.model_config.get('quantization', 'none')}")
                 return self.model, self.tokenizer
+
             except Exception as e:
                 last_error = e
                 if attempt < 3:

@@ -61,7 +61,7 @@ def run_ipsw_diff_case(graph: Any, case: IpswDiffCase) -> tuple[IpswDiffResult, 
     state = AgentState(user_input=case.user_input)
 
     start = time.perf_counter()
-    raw_result = graph.invoke(state.model_dump())
+    raw_result = graph.invoke(state.model_dump(), config={"recursion_limit": 1000})
     elapsed = time.perf_counter() - start
 
     final_state = AgentState(**raw_result)
@@ -148,7 +148,7 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFact
     start = time.perf_counter()
 
     re_graph = build_reverse_engineering_graph(factory=factory)
-    raw_result = re_graph.invoke(state.model_dump())
+    raw_result = re_graph.invoke(state.model_dump(), config={"recursion_limit": 1000})
 
     elapsed = time.perf_counter() - start
     final_state = AgentState(**raw_result)
@@ -165,8 +165,7 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFact
 def main() -> None:
     load_dotenv()
 
-    factory = MLXAgentFactory()
-    factory.ensure_loaded() 
+    factory = MLXAgentFactory() 
     graph = build_orchestration_graph(factory=factory)
 
     case = build_ipsw_diff_case()

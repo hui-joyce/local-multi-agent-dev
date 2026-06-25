@@ -50,7 +50,6 @@ class ChangeClassifier:
         # sandbox classifier sub-tags IPC lines instead of emitting a separate
         # iPC finding for each, avoiding double-counting.
         findings.extend(self._classify_sandbox(diff_data.get("sandbox_changes", [])))
-        findings.extend(self._classify_privileged_binaries(diff_data.get("added_binaries", [])))
         findings.extend(self._classify_launchd(diff_data.get("launchd_changes", [])))
 
         return counts, findings
@@ -97,22 +96,6 @@ class ChangeClassifier:
                         mitigation="Review sandbox op diff and validate protections for affected services.",
                         confidence=0.6,
                         evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
-                    )
-                )
-        return findings
-
-    def _classify_privileged_binaries(self, binaries: Iterable[str]) -> list[Finding]:
-        findings: list[Finding] = []
-        for binary in binaries:
-            if any(hint in binary for hint in self.privileged_path_hints):
-                findings.append(
-                    Finding(
-                        title="New privileged binary added",
-                        change_type="binary_added",
-                        impact="New executable in privileged path may expand attack surface.",
-                        mitigation="Perform static analysis and entitlement review on the new binary.",
-                        confidence=0.6,
-                        evidence=[EvidenceItem(source="firmware_diff", summary=binary)],
                     )
                 )
         return findings

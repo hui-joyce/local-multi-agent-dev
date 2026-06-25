@@ -38,7 +38,6 @@ class Finding:
 @dataclass
 class FirmwareDiffArtifacts:
     output_dir: str
-    report_markdown: str
     report_json: str
     entitlement_diff: Optional[str] = None
     sandbox_diff: Optional[str] = None

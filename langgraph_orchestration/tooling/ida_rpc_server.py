@@ -429,10 +429,13 @@ class DecompilerService(rpyc.Service):
 
     def exposed_shutdown(self):
         """Remotely shuts down the IDA Pro instance"""
-        import ida_pro
         print("[DecompilerService] Received shutdown signal. Exiting IDA.")
-        ida_pro.qexit(0)
-
+        def _exit_task():
+            import ida_pro
+            ida_pro.qexit(0)
+            import os
+            os._exit(0)
+        _work_queue.put(_exit_task)
 
 def start_server(port):
     print(f"[DecompilerService] Starting RPC server on port {port}...")
