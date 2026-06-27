@@ -1,0 +1,6 @@
+[kernel_diff]
+item_count: 3
+items:
+com.apple.driver.AppleAOPAudio
+com.apple.driver.AppleHIDTransportSPI
+com.apple.driver.IOPAudioVoiceTriggerDevice

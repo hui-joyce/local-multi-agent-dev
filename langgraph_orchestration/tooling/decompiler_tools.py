@@ -334,13 +334,58 @@ def find_address(query: str) -> Union[dict, str]:
 @tool
 def rename_local_variable(func_address: int, old_name: str, new_name: str) -> bool:
     """Renames a local variable within a function's decompilation"""
-    try:
-        conn = _connect()
-        result = conn.root.exposed_rename_local_variable(func_address, old_name, new_name)
-        conn.close()
-        return result
-    except Exception:
-        return False
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            result = conn.root.exposed_rename_local_variable(func_address, old_name, new_name)
+            return result
+        except ConnectionRefusedError:
+            return False
+        except EOFError as e:
+            last_error = e
+            wait = 2 * (attempt + 1)
+            print(f"[rename_local_variable] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception:
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return False
+
+@tool
+def get_local_variables(func_address: int) -> str:
+    """Returns the local variable names available in a function's decompilation"""
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            names = conn.root.exposed_get_local_variables(func_address)
+            if names:
+                return "Available variables: " + ", ".join(str(n) for n in names)
+            return "No local variables found (function may not be decompilable)."
+        except ConnectionRefusedError:
+            return _get_connection_error_msg()
+        except EOFError as e:
+            last_error = e
+            wait = 2 * (attempt + 1)
+            print(f"[get_local_variables] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception as e:
+            return f"error: {e}"
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return f"error: stream closed after 3 attempts: {last_error}"
 
 
 @tool
@@ -364,8 +409,9 @@ def start_ida_server_for_binary(binary_path: str) -> str:
     subprocess.run(["pkill", "-9", "-f", "ida64"], capture_output=True)
     
     # clean up only the unpacked working files (.id0/.id1/.id2/.nam/.til) left
-    # by a previous aborted run. Preserve any existing .i64 so annotations are
-    # reloaded by IDA on the next open (drop -c to let IDA reuse it).
+    # by a previous aborted run
+    # preserve any existing .i64 so annotations are
+    # reloaded by IDA on the next open (drop -c to let IDA reuse it)
     has_saved_db = os.path.exists(binary_path + ".i64")
     for ext in [".id0", ".id1", ".id2", ".nam", ".til"]:
         try:
@@ -385,9 +431,9 @@ def start_ida_server_for_binary(binary_path: str) -> str:
     else:
         return "# ERROR: Port 18861 is still in use after attempting to kill old IDA instances."
 
-    # launch IDA in the background.
-    # if a saved .i64 exists, omit -c so IDA reloads it (preserving annotations).
-    # if no .i64 exists, keep -c so IDA creates a fresh database.
+    # launch IDA in the background
+    # if a saved .i64 exists, omit -c so IDA reloads it (preserving annotations)
+    # if no .i64 exists, keep -c so IDA creates a fresh database
     command = [
         IDA_EXECUTABLE_PATH,
         "-A",
@@ -439,29 +485,59 @@ def stop_ida_server() -> str:
 @tool
 def set_comment(address: int, comment: str) -> bool:
     """Sets a comment at a specific address in the disassembly"""
-    try:
-        conn = _connect()
-        result = conn.root.exposed_set_comment(address, comment)
-        conn.close()
-        return result
-    except Exception:
-        return False
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            result = conn.root.exposed_set_comment(address, comment)
+            return result
+        except ConnectionRefusedError:
+            return False
+        except EOFError as e:
+            last_error = e
+            wait = 2 * (attempt + 1)
+            print(f"[set_comment] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception:
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return False
 
 
 @tool
 def save_ida_database() -> str:
     """Saves the current IDA Pro database (.i64) with any annotations made"""
-    try:
-        conn = _connect()
-        success = conn.root.exposed_save_ida_database("")
-        conn.close()
-        return "Successfully saved IDA database." if success else "Failed to save IDA database."
-    except ConnectionRefusedError:
-        return _get_connection_error_msg()
-    except TimeoutError:
-        return "Error: Request timed out."
-    except Exception as e:
-        return f"Error saving database: {e}"
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            success = conn.root.exposed_save_ida_database("")
+            return "Successfully saved IDA database." if success else "Failed to save IDA database."
+        except ConnectionRefusedError:
+            return _get_connection_error_msg()
+        except TimeoutError:
+            return "Error: Request timed out."
+        except EOFError as e:
+            last_error = e
+            wait = 2 * (attempt + 1)
+            print(f"[save_ida_database] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            time.sleep(wait)
+        except Exception as e:
+            return f"Error saving database: {e}"
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return f"Error saving database: stream closed after 3 attempts: {last_error}"
 
 
 @tool

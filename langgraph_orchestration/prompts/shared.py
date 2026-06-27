@@ -26,6 +26,7 @@ _REVERSE_ENGINEERING_ALLOWED_TOOLS = [
     "decompile_function",
     "get_xrefs_to",
     "rename_local_variable",
+    "get_local_variables",
     "set_comment",
     "save_ida_database",
 ]

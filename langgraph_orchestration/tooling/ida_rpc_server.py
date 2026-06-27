@@ -81,7 +81,7 @@ class DecompilerService(rpyc.Service):
 
     def exposed_get_xrefs_to(self, address: int) -> list:
         """Finds code cross-references to a given address, transitively following data references
-        if they lead to data structures (like CFStrings or selector references) instead of functions."""
+        if they lead to data structures (like CFStrings or selector references) instead of functions"""
         def _do():
             import ida_funcs
             import idautils
@@ -214,7 +214,7 @@ class DecompilerService(rpyc.Service):
             return []
 
     def exposed_rename_local_variable(self, func_address: int, old_name: str, new_name: str) -> bool:
-        """Renames a local variable within a function's decompilation"""
+        """Renames a local variable within a function's decompilation and commits it to the database"""
         def _do():
             f = ida_funcs.get_func(func_address)
             if not f:
@@ -225,12 +225,31 @@ class DecompilerService(rpyc.Service):
             lvars = cfunc.get_lvars()
             for var in lvars:
                 if var.name == old_name:
-                    return cfunc.rename_lvar(var, new_name, True)
+                    renamed = cfunc.rename_lvar(var, new_name, True)
+                    if renamed:
+                        ida_hexrays.save_user_lvar_settings(cfunc)
+                    return renamed
             return False
         try:
             return _run_on_main_thread(_do)
         except Exception:
             return False
+
+    def exposed_get_local_variables(self, func_address: int) -> list:
+        """Returns the names of all local variables in a function's decompilation"""
+        def _do():
+            f = ida_funcs.get_func(func_address)
+            if not f:
+                return []
+            cfunc = ida_hexrays.decompile(f)
+            if not cfunc:
+                return []
+            return [str(v.name) for v in cfunc.get_lvars()]
+        try:
+            return _run_on_main_thread(_do)
+        except Exception as e:
+            print(f"Error in get_local_variables: {e}")
+            return []
 
     def exposed_set_comment(self, address: int, comment: str) -> bool:
         """Sets a repeatable comment at a specific address in the disassembly"""

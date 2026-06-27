@@ -1,0 +1,339 @@
+[dyld_diff]
+command: ipsw dyld info --dylibs --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone17,1_18.4_22E240_Restore/22E240__iPhone17,1/dyld_shared_cache_arm64e /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone17,1_18.4.1_22E252_Restore/22E252__iPhone17,1/dyld_shared_cache_arm64e
+parsed_item_count: 43
+parsed_items:
+/System/Library/Accounts/Notification/ASDAccountNotficationPlugin.bundle/ASDAccountNotficationPlugin
+/System/Library/Accounts/Notification/SiriCloudKitAccountsNotifier.bundle/SiriCloudKitAccountsNotifier
+/System/Library/Assistant/Plugins/CorrectionsProfilesSync.assistantBundle/CorrectionsProfilesSync
+/System/Library/Assistant/Plugins/LocaleSettings.assistantBundle/LocaleSettings
+/System/Library/Assistant/Plugins/SurfStatusSync.assistantBundle/SurfStatusSync
+/System/Library/Assistant/Plugins/SynapseSyncPlugin.assistantBundle/SynapseSyncPlugin
+/System/Library/ControlCenter/Bundles/SpokenNotificationsModule.bundle/SpokenNotificationsModule
+/System/Library/Frameworks/AudioToolbox.framework/AudioCodecs
+/System/Library/Frameworks/CoreServices.framework/CoreServices
+/System/Library/Frameworks/MobileCoreServices.framework/MobileCoreServices
+/System/Library/Frameworks/UserNotificationsUI.framework/UserNotificationsUI
+/System/Library/PrivateFrameworks/AppStoreDaemon.framework/AppStoreDaemon
+/System/Library/PrivateFrameworks/AppStoreFoundation.framework/AppStoreFoundation
+/System/Library/PrivateFrameworks/AppStoreUtilities.framework/AppStoreUtilities
+/System/Library/PrivateFrameworks/AssistantCardServiceSupport.framework/AssistantCardServiceSupport
+/System/Library/PrivateFrameworks/AssistantServices.framework/AssistantServices
+/System/Library/PrivateFrameworks/AssistantSettingsFoundation.framework/AssistantSettingsFoundation
+/System/Library/PrivateFrameworks/AssistantSettingsSupport.framework/AssistantSettingsSupport
+/System/Library/PrivateFrameworks/AssistantUI.framework/AssistantUI
+/System/Library/PrivateFrameworks/CoreServicesStore.framework/CoreServicesStore
+/System/Library/PrivateFrameworks/FoundationODR.framework/FoundationODR
+/System/Library/PrivateFrameworks/IPConfiguration.framework/IPConfiguration
+/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework/MobileSoftwareUpdate
+/System/Library/PrivateFrameworks/MobileWiFi.framework/MobileWiFi
+/System/Library/PrivateFrameworks/SiriActivation.framework/SiriActivation
+/System/Library/PrivateFrameworks/SiriActivationFoundation.framework/SiriActivationFoundation
+/System/Library/PrivateFrameworks/SiriHomeAccessoryFramework.framework/SiriHomeAccessoryFramework
+/System/Library/PrivateFrameworks/SiriObservation.framework/SiriObservation
+/System/Library/PrivateFrameworks/SiriReaderServices.framework/SiriReaderServices
+/System/Library/PrivateFrameworks/SiriSharedUI.framework/SiriSharedUI
+/System/Library/PrivateFrameworks/SiriTasks.framework/SiriTasks
+/System/Library/PrivateFrameworks/SiriUI.framework/SiriUI
+/System/Library/PrivateFrameworks/SiriUIActivation.framework/SiriUIActivation
+/System/Library/PrivateFrameworks/SiriUICardKitProviderSupport.framework/SiriUICardKitProviderSupport
+/System/Library/PrivateFrameworks/SiriUIFoundation.framework/SiriUIFoundation
+/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/SoftwareUpdateCore
+/System/Library/PrivateFrameworks/SoftwareUpdateCoreConnect.framework/SoftwareUpdateCoreConnect
+/System/Library/PrivateFrameworks/SoftwareUpdateCoreSupport.framework/SoftwareUpdateCoreSupport
+/System/Library/PrivateFrameworks/UserNotificationsKit.framework/UserNotificationsKit
+/System/Library/PrivateFrameworks/UserNotificationsUIKit.framework/UserNotificationsUIKit
+/System/Library/PrivateFrameworks/VoiceShortcutsUICardKitProviderSupport.framework/VoiceShortcutsUICardKitProviderSupport
+/System/Library/PrivateFrameworks/WatchListKit.framework/WatchListKit
+/usr/lib/libDHCPServer.A.dylib
+stdout:
+/System/Library/Accounts/Notification/AKAccountNotificationPlugin.bundle/AKAccountNotificationPlugin	(493.462.0.0.0)
+ /System/Library/Accounts/Notification/AMSAccountNotificationPlugin.bundle/AMSAccountNotificationPlugin	(8.4.26.2.1)
+ /System/Library/Accounts/Notification/AMSAccountSyncNotificationPlugin.bundle/AMSAccountSyncNotificationPlugin	(8.4.26.2.1)
+-/System/Library/Accounts/Notification/ASDAccountNotficationPlugin.bundle/ASDAccountNotficationPlugin	(11.4.24.2.2)
++/System/Library/Accounts/Notification/ASDAccountNotficationPlugin.bundle/ASDAccountNotficationPlugin	(11.4.24.2.4)
+ /System/Library/Accounts/Notification/AppleIDSSONotificationPlugin.bundle/AppleIDSSONotificationPlugin	(104.225.0.0.0)
+ /System/Library/Accounts/Notification/BTCloudPairingAccountNotificationPlugin.bundle/BTCloudPairingAccountNotificationPlugin	(24.26.1.1.0)
+ /System/Library/Accounts/Notification/CDPAccountNotificationPlugin_IOS.bundle/CDPAccountNotificationPlugin_IOS	(386.457.0.0.0)
+
+ /System/Library/Accounts/Notification/SecureBackupNotification.bundle/SecureBackupNotification	(638.100.48.0.0)
+ /System/Library/Accounts/Notification/SharingAccountNotificationPlugin.bundle/SharingAccountNotificationPlugin	(2060.50.171.2.2)
+ /System/Library/Accounts/Notification/ShortcutsCloudKitAccountNotificationPlugin.bundle/ShortcutsCloudKitAccountNotificationPlugin	(3514.0.4.101.0)
+-/System/Library/Accounts/Notification/SiriCloudKitAccountsNotifier.bundle/SiriCloudKitAccountsNotifier	(3404.80.4.11.3)
++/System/Library/Accounts/Notification/SiriCloudKitAccountsNotifier.bundle/SiriCloudKitAccountsNotifier	(3404.80.4.11.4)
+ /System/Library/Accounts/Notification/SocialAccountNotificationPlugin.bundle/SocialAccountNotificationPlugin	(765.0.0.0.0)
+ /System/Library/Accounts/Notification/WebBookmarksNotificationPlugin.bundle/WebBookmarksNotificationPlugin	(7621.1.15.10.7)
+ /System/Library/Accounts/Notification/com.apple.askpermission.AccountNotificationPlugin.bundle/com.apple.askpermission.AccountNotificationPlugin	(128.4.5.2.1)
+ /System/Library/Assistant/Plugins/AssistantTTSPlugin.assistantBundle/AssistantTTSPlugin	(3404.4.1.0.0)
+ /System/Library/Assistant/Plugins/Calendar.assistantBundle/Calendar	(909.0.0.0.0)
+ /System/Library/Assistant/Plugins/Contacts.assistantBundle/Contacts	(29.0.0.0.0)
+-/System/Library/Assistant/Plugins/CorrectionsProfilesSync.assistantBundle/CorrectionsProfilesSync	(3404.80.4.11.3)
++/System/Library/Assistant/Plugins/CorrectionsProfilesSync.assistantBundle/CorrectionsProfilesSync	(3404.80.4.11.4)
+ /System/Library/Assistant/Plugins/GEO.assistantBundle/GEO	(1986.34.9.12.34)
+ /System/Library/Assistant/Plugins/HMAssistant.assistantBundle/HMAssistant	(1278.5.13.1.5)
+-/System/Library/Assistant/Plugins/LocaleSettings.assistantBundle/LocaleSettings	(3404.80.4.11.3)
++/System/Library/Assistant/Plugins/LocaleSettings.assistantBundle/LocaleSettings	(3404.80.4.11.4)
+ /System/Library/Assistant/Plugins/Media.assistantBundle/Media	(4024.510.1.0.0)
+ /System/Library/Assistant/Plugins/Phone.assistantBundle/Phone	(2975.500.181.2.1)
+ /System/Library/Assistant/Plugins/Podcasts.assistantBundle/Podcasts	(4024.510.2.0.0)
+ /System/Library/Assistant/Plugins/Routine.assistantBundle/Routine	(990.0.10.0.0)
+-/System/Library/Assistant/Plugins/SurfStatusSync.assistantBundle/SurfStatusSync	(3404.80.4.11.3)
+-/System/Library/Assistant/Plugins/SynapseSyncPlugin.assistantBundle/SynapseSyncPlugin	(3404.80.4.11.3)
++/System/Library/Assistant/Plugins/SurfStatusSync.assistantBundle/SurfStatusSync	(3404.80.4.11.4)
++/System/Library/Assistant/Plugins/SynapseSyncPlugin.assistantBundle/SynapseSyncPlugin	(3404.80.4.11.4)
+ /System/Library/Assistant/UIPlugins/SiriFindMyUIPlugin.siriUIBundle/Frameworks/SiriFindMyUI.framework/SiriFindMyUI	(3404.12.1.0.0)
+ /System/Library/ControlCenter/Bundles/AccessibilityHeadphoneLevelsControlCenterModule.bundle/AccessibilityHeadphoneLevelsControlCenterModule	(3148.15.11.2.0)
+ /System/Library/ControlCenter/Bundles/AccessibilityLiveListenControlCenterModule.bundle/AccessibilityLiveListenControlCenterModule	(3148.15.11.2.0)
+
+ /System/Library/ControlCenter/Bundles/QRCodeModule.bundle/QRCodeModule	(600.4.24.102.0)
+ /System/Library/ControlCenter/Bundles/QuickNoteModule.bundle/QuickNoteModule	(2802.22.0.0.0)
+ /System/Library/ControlCenter/Bundles/ShazamModule.bundle/ShazamModule	(318.0.0.0.0)
+-/System/Library/ControlCenter/Bundles/SpokenNotificationsModule.bundle/SpokenNotificationsModule	(3404.71.4.11.4)
++/System/Library/ControlCenter/Bundles/SpokenNotificationsModule.bundle/SpokenNotificationsModule	(3404.71.4.11.5)
+ /System/Library/ControlCenter/Bundles/StopwatchModule.bundle/StopwatchModule	(600.4.24.102.0)
+ /System/Library/ControlCenter/Bundles/TVRemoteModule.bundle/TVRemoteModule	(496.41.1.0.0)
+ /System/Library/ControlCenter/Bundles/TimerModule.bundle/TimerModule	(214.5.15.0.0)
+
+ /System/Library/Frameworks/AppTrackingTransparency.framework/AppTrackingTransparency	(104.0.0.0.0)
+ /System/Library/Frameworks/AssetsLibrary.framework/AssetsLibrary	(752.0.108.0.0)
+ /System/Library/Frameworks/Assignables.framework/Assignables	(1.4.1.0.0)
+-/System/Library/Frameworks/AudioToolbox.framework/AudioCodecs	(746.5.10.0.0)
++/System/Library/Frameworks/AudioToolbox.framework/AudioCodecs	(746.5.11.0.0)
+ /System/Library/Frameworks/AudioToolbox.framework/AudioToolbox	(1456.533.30.3.0)
+ /System/Library/Frameworks/AudioToolbox.framework/libAudioDSP.dylib	(747.531.0.0.0)
+ /System/Library/Frameworks/AudioToolbox.framework/libEmbeddedSystemAUs.dylib	(1456.533.30.3.0)
+
+ /System/Library/Frameworks/CoreMediaIO.framework/CoreMediaIO	(5590.100.8.0.0)
+ /System/Library/Frameworks/CoreMotion.framework/CoreMotion	(2960.0.60.0.0)
+ /System/Library/Frameworks/CoreNFC.framework/CoreNFC	(354.27.0.0.0)
+-/System/Library/Frameworks/CoreServices.framework/CoreServices	(1378.17.0.0.0)
++/System/Library/Frameworks/CoreServices.framework/CoreServices	(1378.18.0.0.0)
+ /System/Library/Frameworks/CoreSpotlight.framework/CoreSpotlight	(2333.22.13.0.3)
+ /System/Library/Frameworks/CoreTelephony.framework/CoreTelephony	(12322.6.0.0.0)
+ /System/Library/Frameworks/CoreTelephony.framework/Support/CTParser.framework/CTParser	(12322.6.0.0.0)
+
+ /System/Library/Frameworks/MetalPerformanceShaders.framework/MetalPerformanceShaders	(128.4.8.0.0)
+ /System/Library/Frameworks/MetalPerformanceShadersGraph.framework/MetalPerformanceShadersGraph	(5.4.9.0.0)
+ /System/Library/Frameworks/MetricKit.framework/MetricKit	(261.0.0.0.0)
+-/System/Library/Frameworks/MobileCoreServices.framework/MobileCoreServices	(1378.17.0.0.0)
++/System/Library/Frameworks/MobileCoreServices.framework/MobileCoreServices	(1378.18.0.0.0)
+ /System/Library/Frameworks/ModelIO.framework/ModelIO	(266.1.12.0.0)
+ /System/Library/Frameworks/MultipeerConnectivity.framework/MultipeerConnectivity	(179.600.1.0.0)
+ /System/Library/Frameworks/MusicKit.framework/MusicKit	(4024.510.1.0.0)
+
+ /System/Library/Frameworks/UIKit.framework/UIKit	(8444.1.105.0.0)
+ /System/Library/Frameworks/UniformTypeIdentifiers.framework/UniformTypeIdentifiers	(841.8.0.0.0)
+ /System/Library/Frameworks/UserNotifications.framework/UserNotifications	(579.5.24.0.0)
+-/System/Library/Frameworks/UserNotificationsUI.framework/UserNotificationsUI	(941.5.3.106.0)
++/System/Library/Frameworks/UserNotificationsUI.framework/UserNotificationsUI	(941.5.3.107.0)
+ /System/Library/Frameworks/VideoSubscriberAccount.framework/VideoSubscriberAccount	(561.40.17.0.0)
+ /System/Library/Frameworks/VideoToolbox.framework/VideoToolbox	(3210.19.1.1.3)
+ /System/Library/Frameworks/Vision.framework/Vision	(8.0.76.2.0)
+
+ /System/Library/PrivateFrameworks/AppServerSupport.framework/AppServerSupport	(2894.102.1.0.0)
+ /System/Library/PrivateFrameworks/AppState.framework/AppState	(2.4.4.0.0)
+ /System/Library/PrivateFrameworks/AppStoreComponents.framework/AppStoreComponents	(7.4.13.0.0)
+-/System/Library/PrivateFrameworks/AppStoreDaemon.framework/AppStoreDaemon	(11.4.24.2.2)
++/System/Library/PrivateFrameworks/AppStoreDaemon.framework/AppStoreDaemon	(11.4.24.2.4)
+ /System/Library/PrivateFrameworks/AppStoreEvalLighthouseUtils.framework/AppStoreEvalLighthouseUtils	(1.3.31.0.0)
+-/System/Library/PrivateFrameworks/AppStoreFoundation.framework/AppStoreFoundation	(11.4.24.2.2)
++/System/Library/PrivateFrameworks/AppStoreFoundation.framework/AppStoreFoundation	(11.4.24.2.4)
+ /System/Library/PrivateFrameworks/AppStoreKit.framework/AppStoreKit	(10.4.36.2.1)
+ /System/Library/PrivateFrameworks/AppStoreOverlays.framework/AppStoreOverlays	(7.4.13.0.0)
+ /System/Library/PrivateFrameworks/AppStoreUI.framework/AppStoreUI	(1201.4.4.0.0)
+-/System/Library/PrivateFrameworks/AppStoreUtilities.framework/AppStoreUtilities	(11.4.24.2.2)
++/System/Library/PrivateFrameworks/AppStoreUtilities.framework/AppStoreUtilities	(11.4.24.2.4)
+ /System/Library/PrivateFrameworks/AppSupport.framework/AppSupport	(2646.0.0.0.0)
+ /System/Library/PrivateFrameworks/AppSupportUI.framework/AppSupportUI	(43.4.0.0.0)
+ /System/Library/PrivateFrameworks/AppSystemSettings.framework/AppSystemSettings	(3.3.5.0.0)
+
+ /System/Library/PrivateFrameworks/AssetCacheServicesExtensions.framework/AssetCacheServicesExtensions	(135.1.0.0.0)
+ /System/Library/PrivateFrameworks/AssetExplorer.framework/AssetExplorer	(752.0.108.0.0)
+ /System/Library/PrivateFrameworks/AssetViewer.framework/AssetViewer	(510.100.8.0.0)
+-/System/Library/PrivateFrameworks/AssistantCardServiceSupport.framework/AssistantCardServiceSupport	(3404.71.4.11.4)
+-/System/Library/PrivateFrameworks/AssistantServices.framework/AssistantServices	(3404.80.4.11.3)
+-/System/Library/PrivateFrameworks/AssistantSettingsFoundation.framework/AssistantSettingsFoundation	(3404.71.4.11.4)
+-/System/Library/PrivateFrameworks/AssistantSettingsSupport.framework/AssistantSettingsSupport	(3404.71.4.11.4)
+-/System/Library/PrivateFrameworks/AssistantUI.framework/AssistantUI	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/AssistantCardServiceSupport.framework/AssistantCardServiceSupport	(3404.71.4.11.5)
++/System/Library/PrivateFrameworks/AssistantServices.framework/AssistantServices	(3404.80.4.11.4)
++/System/Library/PrivateFrameworks/AssistantSettingsFoundation.framework/AssistantSettingsFoundation	(3404.71.4.11.5)
++/System/Library/PrivateFrameworks/AssistantSettingsSupport.framework/AssistantSettingsSupport	(3404.71.4.11.5)
++/System/Library/PrivateFrameworks/AssistantUI.framework/AssistantUI	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/AssistiveTouchUI.framework/AssistiveTouchUI	(3148.15.11.2.0)
+ /System/Library/PrivateFrameworks/AtomicsInternal.framework/AtomicsInternal	(103.1.0.0.0)
+ /System/Library/PrivateFrameworks/AttentionAwareness.framework/AttentionAwareness	(206.100.19.0.0)
+
+ /System/Library/PrivateFrameworks/CoreSVG.framework/CoreSVG	(341.4.0.2.0)
+ /System/Library/PrivateFrameworks/CoreSceneUnderstanding.framework/CoreSceneUnderstanding	(69.2.0.0.0)
+ /System/Library/PrivateFrameworks/CoreServicesInternal.framework/CoreServicesInternal	(554.5.0.0.0)
+-/System/Library/PrivateFrameworks/CoreServicesStore.framework/CoreServicesStore	(1378.17.0.0.0)
++/System/Library/PrivateFrameworks/CoreServicesStore.framework/CoreServicesStore	(1378.18.0.0.0)
+ /System/Library/PrivateFrameworks/CoreSpeech.framework/CoreSpeech	(3404.82.3.0.0)
+ /System/Library/PrivateFrameworks/CoreSpeechExclave.framework/CoreSpeechExclave	(3404.82.3.0.0)
+ /System/Library/PrivateFrameworks/CoreSpeechFoundation.framework/CoreSpeechFoundation	(3404.82.3.0.0)
+
+ /System/Library/PrivateFrameworks/FontServices.framework/libGSFontCache.dylib	(311.4.0.14.0)
+ /System/Library/PrivateFrameworks/FontServices.framework/libType1Scaler.dylib	(60.0.0.0.0)
+ /System/Library/PrivateFrameworks/FoundInAppsPlugins.framework/FoundInAppsPlugins	(1276.10.3.0.0)
+-/System/Library/PrivateFrameworks/FoundationODR.framework/FoundationODR	(11.4.24.2.2)
++/System/Library/PrivateFrameworks/FoundationODR.framework/FoundationODR	(11.4.24.2.4)
+ /System/Library/PrivateFrameworks/FramePacing.framework/FramePacing	(3.2.1.0.0)
+ /System/Library/PrivateFrameworks/FriendKit.framework/FriendKit	(31.0.0.0.0)
+ /System/Library/PrivateFrameworks/FrontBoard.framework/FrontBoard	(943.5.17.0.0)
+
+ /System/Library/PrivateFrameworks/IOMobileFramebuffer.framework/IOMobileFramebuffer	(399.26.8.0.0)
+ /System/Library/PrivateFrameworks/IOSurfaceAccelerator.framework/IOSurfaceAccelerator	(149.28.4.0.0)
+ /System/Library/PrivateFrameworks/IOUSBHost.framework/IOUSBHost	(1402.100.21.0.0)
+-/System/Library/PrivateFrameworks/IPConfiguration.framework/IPConfiguration	(494.102.1.0.0)
++/System/Library/PrivateFrameworks/IPConfiguration.framework/IPConfiguration	(494.102.2.0.0)
+ /System/Library/PrivateFrameworks/IPTelephony.framework/Support/libIPTelephony.dylib	(2376.2.0.0.0)
+ /System/Library/PrivateFrameworks/ISPExclaveKitServices.framework/ISPExclaveKitServices	(3.515.0.0.0)
+ /System/Library/PrivateFrameworks/ITMLKit.framework/ITMLKit	(646.0.0.0.0)
+
+ /System/Library/PrivateFrameworks/MobileSafari.framework/MobileSafari	(621.1.15.10.7)
+ /System/Library/PrivateFrameworks/MobileSafari.framework/PlugIns/Safari.wkbundle/Safari	(7621.1.15.10.7)
+ /System/Library/PrivateFrameworks/MobileSafariUI.framework/MobileSafariUI	(621.1.15.10.7)
+-/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework/MobileSoftwareUpdate	(2171.100.143.0.0)
++/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework/MobileSoftwareUpdate	(2171.102.1.0.0)
+ /System/Library/PrivateFrameworks/MobileSpotlightIndex.framework/MobileSpotlightIndex	(2333.22.13.0.3)
+ /System/Library/PrivateFrameworks/MobileStorage.framework/MobileStorage	(333.100.2.0.0)
+ /System/Library/PrivateFrameworks/MobileStoreDemoKit.framework/MobileStoreDemoKit	(1445.100.92.0.0)
+
+ /System/Library/PrivateFrameworks/MobileTimer.framework/MobileTimer	(2258.5.10.0.0)
+ /System/Library/PrivateFrameworks/MobileTimerSupport.framework/MobileTimerSupport	(2258.5.10.0.0)
+ /System/Library/PrivateFrameworks/MobileTimerUI.framework/MobileTimerUI	(2258.5.10.0.0)
+-/System/Library/PrivateFrameworks/MobileWiFi.framework/MobileWiFi	(1925.47.4.1.0)
++/System/Library/PrivateFrameworks/MobileWiFi.framework/MobileWiFi	(1925.47.4.2.0)
+ /System/Library/PrivateFrameworks/ModalityXObjects.framework/ModalityXObjects	(3300.2.1.0.0)
+ /System/Library/PrivateFrameworks/ModelCatalog.framework/ModelCatalog	(162.749.9.0.0)
+ /System/Library/PrivateFrameworks/ModelCatalogRuntime.framework/ModelCatalogRuntime	(162.749.9.0.0)
+
+ /System/Library/PrivateFrameworks/Silex.framework/Silex	(5676.2.0.0.0)
+ /System/Library/PrivateFrameworks/SilexVideo.framework/SilexVideo	(5676.2.0.0.0)
+ /System/Library/PrivateFrameworks/SilexWeb.framework/SilexWeb	(5676.2.0.0.0)
+-/System/Library/PrivateFrameworks/SiriActivation.framework/SiriActivation	(3404.71.4.11.4)
+-/System/Library/PrivateFrameworks/SiriActivationFoundation.framework/SiriActivationFoundation	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/SiriActivation.framework/SiriActivation	(3404.71.4.11.5)
++/System/Library/PrivateFrameworks/SiriActivationFoundation.framework/SiriActivationFoundation	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/SiriAnalytics.framework/SiriAnalytics	(3404.73.1.0.0)
+ /System/Library/PrivateFrameworks/SiriAppLaunchIntents.framework/SiriAppLaunchIntents	(3404.15.1.0.0)
+ /System/Library/PrivateFrameworks/SiriAppLaunchUIFramework.framework/SiriAppLaunchUIFramework	(3404.15.1.0.0)
+
+ /System/Library/PrivateFrameworks/SiriFlowEnvironment.framework/SiriFlowEnvironment	(3404.14.2.0.0)
+ /System/Library/PrivateFrameworks/SiriGeo.framework/SiriGeo	(3404.17.1.11.1)
+ /System/Library/PrivateFrameworks/SiriGestureBridge.framework/SiriGestureBridge	(3404.7.1.0.0)
+-/System/Library/PrivateFrameworks/SiriHomeAccessoryFramework.framework/SiriHomeAccessoryFramework	(3404.80.4.11.3)
++/System/Library/PrivateFrameworks/SiriHomeAccessoryFramework.framework/SiriHomeAccessoryFramework	(3404.80.4.11.4)
+ /System/Library/PrivateFrameworks/SiriIdentityInternal.framework/SiriIdentityInternal	(3402.6.1.0.0)
+ /System/Library/PrivateFrameworks/SiriInCall.framework/SiriInCall	(3400.14.1.0.0)
+ /System/Library/PrivateFrameworks/SiriInference.framework/SiriInference	(3404.45.3.0.0)
+
+ /System/Library/PrivateFrameworks/SiriNotebook.framework/SiriNotebook	(3404.24.1.0.0)
+ /System/Library/PrivateFrameworks/SiriNotebookUI.framework/SiriNotebookUI	(3404.24.1.0.0)
+ /System/Library/PrivateFrameworks/SiriNotificationsIntents.framework/SiriNotificationsIntents	(3404.12.1.0.0)
+-/System/Library/PrivateFrameworks/SiriObservation.framework/SiriObservation	(3404.80.4.11.3)
++/System/Library/PrivateFrameworks/SiriObservation.framework/SiriObservation	(3404.80.4.11.4)
+ /System/Library/PrivateFrameworks/SiriOntology.framework/SiriOntology	(3404.75.1.0.0)
+ /System/Library/PrivateFrameworks/SiriOntologyProtobuf.framework/SiriOntologyProtobuf	(3404.75.1.0.0)
+ /System/Library/PrivateFrameworks/SiriOrchestration.framework/SiriOrchestration	(3404.2.1.0.0)
+
+ /System/Library/PrivateFrameworks/SiriPrivateLearningInference.framework/SiriPrivateLearningInference	(3404.15.1.0.0)
+ /System/Library/PrivateFrameworks/SiriPrivateLearningLogging.framework/SiriPrivateLearningLogging	(3200.3.1.0.0)
+ /System/Library/PrivateFrameworks/SiriReaderIntents.framework/SiriReaderIntents	(3404.3.1.0.0)
+-/System/Library/PrivateFrameworks/SiriReaderServices.framework/SiriReaderServices	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/SiriReaderServices.framework/SiriReaderServices	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/SiriReferenceResolution.framework/SiriReferenceResolution	(3404.11.1.0.0)
+ /System/Library/PrivateFrameworks/SiriReferenceResolutionDataModel.framework/SiriReferenceResolutionDataModel	(3404.11.1.0.0)
+ /System/Library/PrivateFrameworks/SiriReferenceResolver.framework/SiriReferenceResolver	(3404.1.0.0.0)
+
+ /System/Library/PrivateFrameworks/SiriSettingsIntents.framework/SiriSettingsIntents	(3404.15.1.11.1)
+ /System/Library/PrivateFrameworks/SiriSettingsUI.framework/SiriSettingsUI	(3404.15.1.11.1)
+ /System/Library/PrivateFrameworks/SiriSetup.framework/SiriSetup	(3404.21.1.0.0)
+-/System/Library/PrivateFrameworks/SiriSharedUI.framework/SiriSharedUI	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/SiriSharedUI.framework/SiriSharedUI	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/SiriSignals.framework/SiriSignals	(3404.45.3.0.0)
+ /System/Library/PrivateFrameworks/SiriSocialConversation.framework/SiriSocialConversation	(3404.27.1.11.1)
+ /System/Library/PrivateFrameworks/SiriSpeechSynthesis.framework/SiriSpeechSynthesis	(3404.78.1.11.1)
+
+ /System/Library/PrivateFrameworks/SiriTTS.framework/SiriTTS	(3404.66.1.11.2)
+ /System/Library/PrivateFrameworks/SiriTTSService.framework/SiriTTSService	(3404.73.1.0.0)
+ /System/Library/PrivateFrameworks/SiriTaskEngagement.framework/SiriTaskEngagement	(3404.25.1.0.0)
+-/System/Library/PrivateFrameworks/SiriTasks.framework/SiriTasks	(3404.80.4.11.3)
++/System/Library/PrivateFrameworks/SiriTasks.framework/SiriTasks	(3404.80.4.11.4)
+ /System/Library/PrivateFrameworks/SiriTasksEvaluation.framework/SiriTasksEvaluation	(3400.3.1.0.0)
+ /System/Library/PrivateFrameworks/SiriTimeAlarmInternal.framework/SiriTimeAlarmInternal	(3404.19.1.0.0)
+ /System/Library/PrivateFrameworks/SiriTimeInternal.framework/SiriTimeInternal	(3404.19.1.0.0)
+
+ /System/Library/PrivateFrameworks/SiriTranslationUI.framework/SiriTranslationUI	(3404.12.1.0.0)
+ /System/Library/PrivateFrameworks/SiriTurnRestatement.framework/SiriTurnRestatement	(3404.56.2.0.0)
+ /System/Library/PrivateFrameworks/SiriTurnTakingManager.framework/SiriTurnTakingManager	(3404.19.1.0.0)
+-/System/Library/PrivateFrameworks/SiriUI.framework/SiriUI	(3404.71.4.11.4)
+-/System/Library/PrivateFrameworks/SiriUIActivation.framework/SiriUIActivation	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/SiriUI.framework/SiriUI	(3404.71.4.11.5)
++/System/Library/PrivateFrameworks/SiriUIActivation.framework/SiriUIActivation	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/SiriUIBridge.framework/SiriUIBridge	(3404.11.1.0.0)
+-/System/Library/PrivateFrameworks/SiriUICardKitProviderSupport.framework/SiriUICardKitProviderSupport	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/SiriUICardKitProviderSupport.framework/SiriUICardKitProviderSupport	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/SiriUICore.framework/SiriUICore	(3404.35.1.0.0)
+-/System/Library/PrivateFrameworks/SiriUIFoundation.framework/SiriUIFoundation	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/SiriUIFoundation.framework/SiriUIFoundation	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/SiriUserSegments.framework/SiriUserSegments	(3404.15.1.0.0)
+ /System/Library/PrivateFrameworks/SiriUtilities.framework/SiriUtilities	(3404.14.2.0.0)
+ /System/Library/PrivateFrameworks/SiriVOX.framework/SiriVOX	(3404.25.1.0.0)
+
+ /System/Library/PrivateFrameworks/SoftPosReader.framework/SoftPosReader	(34.20.0.0.0)
+ /System/Library/PrivateFrameworks/SoftwareUpdateBridge.framework/SoftwareUpdateBridge	(350.100.2.0.0)
+ /System/Library/PrivateFrameworks/SoftwareUpdateController.framework/SoftwareUpdateController	(166.100.3.0.0)
+-/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/SoftwareUpdateCore	(2171.100.143.0.0)
+-/System/Library/PrivateFrameworks/SoftwareUpdateCoreConnect.framework/SoftwareUpdateCoreConnect	(2171.100.143.0.0)
+-/System/Library/PrivateFrameworks/SoftwareUpdateCoreSupport.framework/SoftwareUpdateCoreSupport	(2171.100.143.0.0)
++/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/SoftwareUpdateCore	(2171.102.1.0.0)
++/System/Library/PrivateFrameworks/SoftwareUpdateCoreConnect.framework/SoftwareUpdateCoreConnect	(2171.102.1.0.0)
++/System/Library/PrivateFrameworks/SoftwareUpdateCoreSupport.framework/SoftwareUpdateCoreSupport	(2171.102.1.0.0)
+ /System/Library/PrivateFrameworks/SoftwareUpdateServices.framework/SoftwareUpdateServices	(905.100.8.0.0)
+ /System/Library/PrivateFrameworks/SoftwareUpdateServicesUI.framework/SoftwareUpdateServicesUI	(231.100.2.0.0)
+ /System/Library/PrivateFrameworks/SoftwareUpdateSettings.framework/SoftwareUpdateSettings	(412.100.2.0.0)
+
+ /System/Library/PrivateFrameworks/UserManagementLayout.framework/UserManagementLayout	(417.100.1.0.0)
+ /System/Library/PrivateFrameworks/UserManagementUI.framework/UserManagementUI	(417.100.1.0.0)
+ /System/Library/PrivateFrameworks/UserNotificationsCore.framework/UserNotificationsCore	(579.5.24.0.0)
+-/System/Library/PrivateFrameworks/UserNotificationsKit.framework/UserNotificationsKit	(941.5.3.106.0)
++/System/Library/PrivateFrameworks/UserNotificationsKit.framework/UserNotificationsKit	(941.5.3.107.0)
+ /System/Library/PrivateFrameworks/UserNotificationsServer.framework/UserNotificationsServer	(579.5.24.0.0)
+ /System/Library/PrivateFrameworks/UserNotificationsServices.framework/UserNotificationsServices	(579.5.24.0.0)
+ /System/Library/PrivateFrameworks/UserNotificationsSettings.framework/UserNotificationsSettings	(579.5.24.0.0)
+ /System/Library/PrivateFrameworks/UserNotificationsTranslation.framework/UserNotificationsTranslation	(579.5.24.0.0)
+-/System/Library/PrivateFrameworks/UserNotificationsUIKit.framework/UserNotificationsUIKit	(941.5.3.106.0)
++/System/Library/PrivateFrameworks/UserNotificationsUIKit.framework/UserNotificationsUIKit	(941.5.3.107.0)
+ /System/Library/PrivateFrameworks/UserSafety.framework/UserSafety	(91.14.0.0.0)
+ /System/Library/PrivateFrameworks/UserSafetyUI.framework/UserSafetyUI	(91.14.0.0.0)
+ /System/Library/PrivateFrameworks/VDAF.framework/VDAF	(29.0.0.0.0)
+
+ /System/Library/PrivateFrameworks/VoiceServices.framework/VoiceServices	(3404.4.1.0.0)
+ /System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient	(3514.0.4.101.0)
+ /System/Library/PrivateFrameworks/VoiceShortcuts.framework/VoiceShortcuts	(3514.0.4.101.0)
+-/System/Library/PrivateFrameworks/VoiceShortcutsUICardKitProviderSupport.framework/VoiceShortcutsUICardKitProviderSupport	(3404.71.4.11.4)
++/System/Library/PrivateFrameworks/VoiceShortcutsUICardKitProviderSupport.framework/VoiceShortcutsUICardKitProviderSupport	(3404.71.4.11.5)
+ /System/Library/PrivateFrameworks/VoiceTrigger.framework/VoiceTrigger	(3404.21.1.0.0)
+ /System/Library/PrivateFrameworks/VoiceTriggerUI.framework/VoiceTriggerUI	(3404.33.1.11.1)
+ /System/Library/PrivateFrameworks/VoicemailStore.framework/VoicemailStore	(835.0.0.0.0)
+
+ /System/Library/PrivateFrameworks/WatchControlAssets.framework/WatchControlAssets	(158.3.2.0.0)
+ /System/Library/PrivateFrameworks/WatchControlSettings.framework/WatchControlSettings	(158.3.2.0.0)
+ /System/Library/PrivateFrameworks/WatchFacesWallpaperSupport.framework/WatchFacesWallpaperSupport	(2483.147.68.0.0)
+-/System/Library/PrivateFrameworks/WatchListKit.framework/WatchListKit	(850.40.40.0.0)
++/System/Library/PrivateFrameworks/WatchListKit.framework/WatchListKit	(850.41.1.0.0)
+ /System/Library/PrivateFrameworks/WatchQuickActionsServices.framework/WatchQuickActionsServices	(158.3.2.0.0)
+ /System/Library/PrivateFrameworks/WatchReplies.framework/WatchReplies	(82.0.0.0.0)
+ /System/Library/PrivateFrameworks/WatchdogClient.framework/WatchdogClient	(299.100.5.0.0)
+
+ /usr/lib/libChineseTokenizer.dylib	(44.0.0.0.0)
+ /usr/lib/libCoreEntitlements.dylib	(69.100.2.0.0)
+ /usr/lib/libCoreEntitlements_V2.dylib	(69.100.2.0.0)
+-/usr/lib/libDHCPServer.A.dylib	(494.102.1.0.0)
++/usr/lib/libDHCPServer.A.dylib	(494.102.2.0.0)
+ /usr/lib/libETLDIAGLoggingDynamic.dylib	(1249.1.0.0.0)
+ /usr/lib/libETLDLFDynamic.dylib	(1249.1.0.0.0)
+ /usr/lib/libETLDLOADCoreDumpDynamic.dylib	(1249.1.0.0.0)
+stderr:
+[34m[1m   •[22m Differences found        [0m

@@ -26,7 +26,7 @@ from ipsw_service.utils import ensure_dir, list_files, read_text, write_json, wr
 IGNORE_PATTERNS = [
     r"\.metallib$",                       # metal compiled shaders
     r"\.g18p(?:_a0)?$",                   # apple Silicon ISP microcode
-    r"\.appex/",                          # uI Extensions (Widgets, watch faces)
+    r"\.appex/",                          # UI Extensions (Widgets, watch faces)
     r"/VideoProcessors/",                 # video processing bundles
     r"/NanoTimeKit/FaceBundles/",
     r"/Applications/Kaleidoscope",        # specific noisy apps
@@ -374,12 +374,6 @@ class FirmwareDiffService:
                 md_content.append(f"- {n}")
             md_content.append("\n")
             
-        if security_findings:
-            md_content.append("## Security Findings\n")
-            for f in security_findings:
-                md_content.append(f"- **{f.title}**: {f.impact}")
-            md_content.append("\n")
-            
         if md_content:
             diff_report_text += "\n\n" + "\n".join(md_content)
         
@@ -639,20 +633,8 @@ class FirmwareDiffService:
 
         import re
 
-        # ---------------------------------------------------------------------------
-        # _emit_inline_entry: shared helper that filters and emits one already-parsed
-        # inline diff entry (either from a sidecar file OR from an inline block in
-        # the raw ipsw README).
-        #
-        # Returns a list of output lines to append, or [] if the entry should be
-        # skipped (metadata-only, noisy binary, or no real code changes).
-        #
-        # strict=True  (default, used everywhere): require at least one non-metadata
-        #   +/- line, i.e. an actual section-size change, symbol name, CString, etc.
-        #   Pure recompile bumps (version string + UUID only) are excluded.
-        # strict=False (fallback): keep entries that have any +/- line at all.
-        #   Not currently used but retained for forward-compatibility.
-        # ---------------------------------------------------------------------------
+        # returns a list of output lines to append, or [] if the entry should be
+        # skipped (metadata-only, noisy binary, or no real code changes)
         def _emit_inline_entry(
             bin_name: str,
             original_path: str,
@@ -662,10 +644,7 @@ class FirmwareDiffService:
             if self._should_ignore_binary(original_path) or _is_noisy_binary(original_path):
                 return []
 
-            # ---------------------------------------------------------------
-            # Pre-process: strip sha256/sha1 hash suffixes from section lines
-            # (e.g. "__TEXT.__text: 0xe0f8 sha256:abc…" → "__TEXT.__text: 0xe0f8")
-            # ---------------------------------------------------------------
+            # strip sha256/sha1 hash suffixes from section lines
             cleaned_lines: list[str] = []
             for d_line in inner_lines:
                 stripped = d_line.strip()
@@ -677,16 +656,15 @@ class FirmwareDiffService:
                     d_line = d_line.split(" sha1:")[0]
                 cleaned_lines.append(d_line)
 
-            # ---------------------------------------------------------------
-            # Collapse identical pairs using run-based grouping.
-            #
-            # ipsw formats changed blocks as ALL minus lines first, then ALL
-            # plus lines (not interleaved adjacent pairs), so we collect
-            # contiguous minus-runs and the immediately following plus-run,
-            # then pair them by position.  When both sides have the same
-            # content after sha-stripping (same section size, different hash)
-            # the pair collapses to a context line — no real change.
-            # ---------------------------------------------------------------
+            # collapse identical pairs using run-based grouping
+            
+            # ipsw formats changed blocks as ALL - lines first, then ALL
+            # + lines (not interleaved adjacent pairs), so we collect those
+            # contiguous runs of -/+ then pair them by position
+
+            # when both sides have the same content after sha-stripping 
+            # (same section size, different hash)
+            # the pair collapses to a context line (no real change)
             consolidated_lines: list[str] = []
             ci = 0
             while ci < len(cleaned_lines):
@@ -732,7 +710,7 @@ class FirmwareDiffService:
                 if not self._is_metadata_line(content):
                     has_real_diff = True
                     if strict:
-                        break  # found a real code change — keep early
+                        break  # real code change
 
             if strict:
                 if not has_real_diff:
@@ -753,21 +731,19 @@ class FirmwareDiffService:
             out.append("")
             return out
 
-        # ---------------------------------------------------------------------------
-        # parse_lines: recursively processes the raw ipsw README lines.
-        #
-        # Handles three cases:
-        #  1. Index links  – e.g. "- [View N files](DYLIBS/foo.md)" → recurse
-        #  2. Sidecar links – e.g. "- [/path/to/bin](DYLIBS/bin.md)" → inline
-        #  3. Inline entries – ipsw has already inlined the diff blocks directly
-        #     into the README (no sidecar files).  Detected by the pattern:
+        # recursively processes the raw ipsw README lines.
+        
+        # handles:
+        #  1. index links  – e.g. "- [View N files](DYLIBS/foo.md)" → recurse
+        #  2. sidecar links – e.g. "- [/path/to/bin](DYLIBS/bin.md)" → inline
+        #  3. inline entries – ipsw has already inlined the diff blocks directly
+        #     into the README, detected by the pattern:
         #       #### BinaryName
         #       > `/full/path`
         #       ```diff
         #       …
         #       ```
-        #     These are accumulated and filtered the same as sidecar entries.
-        # ---------------------------------------------------------------------------
+
         def parse_lines(lines: list[str], current_prefix: str = "", in_dsc: bool = False) -> list[str]:
             out: list[str] = []
 
@@ -790,16 +766,7 @@ class FirmwareDiffService:
             while i < len(lines):
                 line = lines[i]
 
-                # -----------------------------------------------------------------
-                # Strict filtering applies everywhere (both ## MachO filesystem
-                # and ## DSC dylibs): only include entries where at least one +/-
-                # line is NOT pure metadata (version string, UUID, aggregate
-                # count).  Entries whose only changes are a recompile bump are
-                # not meaningful.
-                # ---------------------------------------------------------------------------
-                # (in_dsc_section is kept for forward-compatibility if we ever
-                # need to distinguish the two sections again.)
-                # -----------------------------------------------------------------
+                # forward-compatibility
                 if line.startswith("## "):
                     lowered_h2 = line[3:].strip().lower()
                     if "dsc" in lowered_h2:
@@ -807,16 +774,12 @@ class FirmwareDiffService:
                     elif "macho" in lowered_h2 or "mach-o" in lowered_h2:
                         in_dsc_section = True  # strict everywhere
 
-                # -----------------------------------------------------------------
-                # Skip raw HTML structural tags from ipsw output
-                # -----------------------------------------------------------------
+                # skip raw HTML structural tags from ipsw output
                 if line.strip() in ("<details>", "</details>") or line.strip().startswith("<summary>"):
                     i += 1
                     continue
 
-                # -----------------------------------------------------------------
-                # If we're inside an inline diff block, collect content lines
-                # -----------------------------------------------------------------
+                # if inside an inline diff block, collect content lines
                 if inline_in_block:
                     if line.strip().startswith("```"):
                         # End of the diff fence → flush the accumulated entry
@@ -835,15 +798,13 @@ class FirmwareDiffService:
                     i += 1
                     continue
 
-                # -----------------------------------------------------------------
-                # Detect the start of an inline diff block after ">  `/path`"
-                # -----------------------------------------------------------------
+                # detect the start of an inline diff block after ">  `/path`"
                 if pending_inline and line.strip().startswith("```diff"):
                     inline_in_block = True
                     i += 1
                     continue
 
-                # Detect ">  `/path/to/binary`" line — part of an inline entry
+                # detect ">  `/path/to/binary`" line (part of inline entry)
                 path_match = re.match(r">\s+`([^`]+)`", line)
                 if path_match and inline_name:
                     inline_path = path_match.group(1)
@@ -864,12 +825,11 @@ class FirmwareDiffService:
                     inline_name = ""
                     inline_path = ""
 
-                # Silently swallow empty lines while waiting for a pending diff fence
                 if pending_inline and not line.strip():
                     i += 1
                     continue
 
-                # Detect "#### BinaryName" — potential start of an inline entry
+                # detect "#### BinaryName" (potential start of an inline entry)
                 h4_match = re.match(r"####\s+(.+)", line)
                 if h4_match:
                     h4_title = h4_match.group(1).strip()
@@ -979,7 +939,7 @@ class FirmwareDiffService:
 
             count = sum(1 for sl in s_lines if sl.startswith(">  `"))
             if count > 0:
-                # preserve the original heading level from the raw ipsw README.
+                # preserve the original heading level from the raw ipsw README
                 # MachO filesystem uses ### and DSC dylibs use #### 
                 new_header = re.sub(r"\(\d+\)", f"({count})", header)
                 final_result.append(new_header)

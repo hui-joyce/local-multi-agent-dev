@@ -337,7 +337,6 @@ class VSCodeToolExecutor(BaseToolExecutor):
                 error=f"Failed to edit file: {exc}",
             )
 
-
 _TOOL_ERROR_SENTINELS = (
     "error:",
     "# error",
@@ -351,13 +350,7 @@ _TOOL_ERROR_SENTINELS = (
 
 
 def _looks_like_error(text: Any) -> bool:
-    """True when a decompiler tool returned an error string instead of real output.
-
-    Several IDA RPC tools signal failure in-band by returning a human-readable
-    error string while the Python call itself 'succeeds'. Without this check those
-    errors were surfaced to the model as valid evidence (success=True), inviting
-    hallucinated conclusions. This normalizes them back to failures.
-    """
+    """True when a decompiler tool returns an error str instead of output"""
     if not isinstance(text, str):
         return False
     lowered = text.strip().lower()
@@ -366,7 +359,6 @@ def _looks_like_error(text: Any) -> bool:
 
 class IDAToolExecutor(BaseToolExecutor):
     """Tool executor for RE workflows"""
-
     def __init__(self, workspace_root: Optional[str] = None, ida_instance: Optional[Any] = None):
         super().__init__(workspace_root)
         self.ida_instance = ida_instance
@@ -383,6 +375,7 @@ class IDAToolExecutor(BaseToolExecutor):
             "get_xrefs_to": self._remote_get_xrefs_to,
             "find_address": self._remote_find_address,
             "rename_local_variable": self._remote_rename_local_variable,
+            "get_local_variables": self._remote_get_local_variables,
             "set_comment": self._remote_set_comment,
             "start_ida_server_for_binary": self._remote_start_ida_server_for_binary,
             "stop_ida_server": self._remote_stop_ida_server,
@@ -478,14 +471,14 @@ class IDAToolExecutor(BaseToolExecutor):
         return ToolResult(tool_name="find_address", success=False, output="", error=f"Unexpected response: {output}")
     
     def _remote_rename_local_variable(self, req: ToolRequest) -> ToolResult:
-        from langgraph_orchestration.tooling.decompiler_tools import rename_local_variable
+        from langgraph_orchestration.tooling.decompiler_tools import rename_local_variable, get_local_variables
         func_address = req.arguments.get("func_address")
         old_name = req.arguments.get("old_name")
         new_name = req.arguments.get("new_name")
-        
+
         if func_address is None or not old_name or not new_name:
             return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Missing arguments")
-            
+
         try:
             addr_int = self._parse_address(func_address)
         except (ValueError, TypeError):
@@ -493,7 +486,28 @@ class IDAToolExecutor(BaseToolExecutor):
         success = rename_local_variable.invoke({"func_address": addr_int, "old_name": old_name, "new_name": new_name})
         if success:
             return ToolResult(tool_name="rename_local_variable", success=True, output="Variable renamed successfully.")
-        return ToolResult(tool_name="rename_local_variable", success=False, output="", error="Failed to rename variable.")
+        # fetch available names so the model knows exactly what to pass as old_name
+        available = get_local_variables.invoke({"func_address": addr_int})
+        return ToolResult(
+            tool_name="rename_local_variable",
+            success=False,
+            output="",
+            error=f"Failed to rename '{old_name}' — variable not found or rename failed. {available}",
+        )
+
+    def _remote_get_local_variables(self, req: ToolRequest) -> ToolResult:
+        from langgraph_orchestration.tooling.decompiler_tools import get_local_variables
+        func_address = req.arguments.get("func_address")
+        if func_address is None:
+            return ToolResult(tool_name="get_local_variables", success=False, output="", error="Missing func_address argument")
+        try:
+            addr_int = self._parse_address(func_address)
+        except (ValueError, TypeError):
+            return ToolResult(tool_name="get_local_variables", success=False, output="", error="Invalid func_address format")
+        output = get_local_variables.invoke({"func_address": addr_int})
+        if _looks_like_error(output):
+            return ToolResult(tool_name="get_local_variables", success=False, output="", error=output)
+        return ToolResult(tool_name="get_local_variables", success=True, output=output)
     
     def _remote_set_comment(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import set_comment
