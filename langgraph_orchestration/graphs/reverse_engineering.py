@@ -21,6 +21,7 @@ from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 from langgraph_orchestration.inference.inference_engine import GenerationConfig
 from ipsw_service.agents.ipsw_extractor import IpswExtractorAgent
 from ipsw_service.cli import build_download_args
+from ipsw_service.security_notes_service import SecurityNotesService
 from ipsw_service.firmware_diff_service import FirmwareDiffService
 from ipsw_service.models import FirmwareDiffRequest
 from ipsw_service.utils import ensure_dir, read_text, write_text
@@ -243,6 +244,27 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
         return cleaned or "feature"
 
+    _SECURITY_INDICATOR_RES = [
+        (re.compile(r'\b(malloc|calloc|realloc|free)\b'), "heap allocation"),
+        (re.compile(r'\bos_unfair_lock\b'), "lock primitive"),
+        (re.compile(r'\bpanic\b|\babort\b|\b__stack_chk_fail\b'), "bounds/stack guard"),
+        (re.compile(r'valueForEntitlement:', re.IGNORECASE), "entitlement check"),
+        (re.compile(r'\b(UAF|use.after.free|out.of.bounds|OOB|buffer overflow|race condition)\b', re.IGNORECASE), "vulnerability class"),
+        (re.compile(r'\bcom\.apple\.security\b|\bentitlements\b', re.IGNORECASE), "security entitlement"),
+    ]
+
+    def _extract_security_indicators(evidence: str) -> list[str]:
+        """Scan diff evidence for memory-safety and security-boundary patterns"""
+        found: list[str] = []
+        for pattern, label in _SECURITY_INDICATOR_RES:
+            for line in evidence.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(("+", "-")) and pattern.search(stripped):
+                    if label not in found:
+                        found.append(label)
+                    break
+        return found
+
     def _infer_feature_type(name: str, source: str) -> str:
         lowered = name.lower()
         if lowered.endswith(".framework"):
@@ -339,6 +361,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "decompile_function",
                     "get_xrefs_to",
                     "rename_local_variable",
+                    "get_local_variables",
                     "set_comment",
                     "get_entitlements",
                     "resolve_objc_dispatch",
@@ -351,19 +374,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 
             targets.append(target_entry)
 
-        # drop LOW_SIGNAL components before they reach the queue (triage rule engine, langgraph_orchestration.triage) 
-        high_signal_targets = []
+        # attach the deterministic triage signal to every target; filtering happens in
+        # feature_analysis_select_node *after* Apple Security Notes matching, so an
+        # advisory-named component can be promoted before the LOW_SIGNAL drop.
         for t in targets:
             result = triage_evidence_explained(t.get("evidence", ""))
             t["_triage_signal"] = result.signal
             t["_triage_reason"] = result.reason
             if result.evidence_line:
                 t["_triage_evidence_line"] = result.evidence_line
-            if result.is_high_signal:
-                high_signal_targets.append(t)
-            else:
-                print(f"[TRIAGE] Skipping {t.get('name', '?')} — LOW_SIGNAL ({result.reason})")
-        return high_signal_targets
+        return targets
 
     def retrieve_re_context_node(state: AgentState) -> AgentState:
         lowered_input = (state.user_input or "").lower()
@@ -679,6 +699,35 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                         pass
         return ""
 
+    def _resolve_target_version(state: AgentState) -> str | None:
+        report_path = state.intermediate_outputs.get("firmware_diff_report_path", "") or ""
+
+        # 1. 
+        if report_path.endswith("README.md") and os.path.isfile(report_path):
+            try:
+                first_line = read_text(report_path).splitlines()[0]
+                versions = re.findall(r"\d+\.\d+(?:\.\d+)?", first_line)
+                if versions:
+                    return versions[-1]
+            except Exception:
+                pass
+
+        # 2. diff directory name
+        m = re.search(r"_vs_(\d+(?:_\d+)*)_\d+[A-Za-z]\d+", report_path)
+        if m:
+            return m.group(1).replace("_", ".")
+
+        # 3. the newer of the two local IPSW artifacts
+        try:
+            _, new_ipsw = _select_diff_pair(state, _collect_confirmed_local_artifacts(state))
+            if new_ipsw:
+                m = re.search(r"_(\d+\.\d+(?:\.\d+)?)_", os.path.basename(new_ipsw))
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+        return None
+
     def feature_analysis_select_node(state: AgentState) -> AgentState:
         if not state.feature_analysis_queue and not state.feature_analysis_targets:
             report_json_str = _resolve_diff_report_json(state)
@@ -702,10 +751,52 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     if readme_diff:
                         t["evidence"] = t["evidence"] + "\n\nBinary diff (from README):\n" + readme_diff
 
-            state.feature_analysis_targets = targets
-            state.feature_analysis_queue = list(targets)
-            if targets:
-                state.record_analysis_note(f"feature_analysis targets: {len(targets)} HIGH_SIGNAL component(s).")
+            for t in targets:
+                indicators = _extract_security_indicators(t.get("evidence", ""))
+                if indicators:
+                    t["security_indicators"] = indicators
+
+            target_version = _resolve_target_version(state)
+            notes_service = SecurityNotesService.for_version(target_version)
+            matched = 0
+            promoted = 0
+            if notes_service.has_entries():
+                for t in targets:
+                    matched_component = notes_service.match_component(t["name"])
+                    if not matched_component:
+                        continue
+                    t["security_notes_match"] = matched_component
+                    matched += 1
+                    if t.get("_triage_signal") != "HIGH_SIGNAL":
+                        t["_triage_signal"] = "HIGH_SIGNAL"
+                        t["_triage_reason"] = (
+                            f"Apple Security Notes name this component ({matched_component}) "
+                            "as changed this release"
+                        )
+                        promoted += 1
+                note = (
+                    f"Apple Security Notes (iOS {target_version}) matched {matched} of "
+                    f"{len(targets)} component(s) by name"
+                )
+                if promoted:
+                    note += f" ({promoted} promoted from LOW_SIGNAL)"
+                state.record_analysis_note(note + ".")
+            else:
+                state.record_analysis_note(
+                    "Apple Security Notes matching skipped: could not fetch advisory for "
+                    f"version {target_version or 'unknown'}."
+                )
+
+            # keep only HIGH_SIGNAL components 
+            high_signal = [t for t in targets if t.get("_triage_signal") == "HIGH_SIGNAL"]
+            for t in targets:
+                if t.get("_triage_signal") != "HIGH_SIGNAL":
+                    print(f"[TRIAGE] Skipping {t.get('name', '?')} — LOW_SIGNAL ({t.get('_triage_reason', '')})")
+
+            state.feature_analysis_targets = high_signal
+            state.feature_analysis_queue = list(high_signal)
+            if high_signal:
+                state.record_analysis_note(f"feature_analysis targets: {len(high_signal)} HIGH_SIGNAL component(s).")
             else:
                 state.record_analysis_note(
                     "feature_analysis: diff report parsed but all components were LOW_SIGNAL "
@@ -727,7 +818,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
     def _is_macho_binary(filepath: str) -> bool:
-        """Check if a file is a Mach-O binary by reading magic bytes."""
         MACHO_MAGICS = {b'\xfe\xed\xfa\xce', b'\xfe\xed\xfa\xcf', b'\xce\xfa\xed\xfe', b'\xcf\xfa\xed\xfe', b'\xca\xfe\xba\xbe'}
         try:
             with open(filepath, 'rb') as f:
@@ -745,11 +835,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         import subprocess
 
         def _find_macho_in_dir(directory: str, target_name: str) -> str | None:
-            # Deterministic selection: os.walk yields directory entries in an
-            # arbitrary, filesystem-dependent order. When several cached binaries
-            # share a basename (e.g. different firmware versions), an unsorted walk
-            # can bind a different file on each run. Collect all matches and pick the
-            # lexicographically-smallest path so the choice is reproducible.
             matches: list[str] = []
             for root, dirs, files in os.walk(directory):
                 dirs.sort()
@@ -769,6 +854,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         os.makedirs(output_dir, exist_ok=True)
         target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
         extracted_binary = None
+
+        _dsc_path_prefixes = (
+            "/System/Library/Frameworks/",
+            "/System/Library/PrivateFrameworks/",
+            "/usr/lib/",
+        )
 
         # Strategy 1: recursive scan of .ipsw_features/ to avoid re-extracting on every component
         if os.path.isdir(output_dir):
@@ -819,14 +910,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                             state.record_analysis_note(f"Copied binary from existing mount: {mount_dir}")
                             break
 
-            # Strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps only).
-            # DSC-resident binaries (frameworks, private frameworks) live inside dyld_shared_cache and
-            # cannot be extracted with --files; attempting it triggers a plist parse error. Skip them here.
-            _dsc_path_prefixes = (
-                "/System/Library/Frameworks/",
-                "/System/Library/PrivateFrameworks/",
-                "/usr/lib/",
-            )
+            # Strategy 2c: Direct file extraction from IPSW archive (fallback for daemons/apps only)
             _is_dsc_binary = feature_binary_path and any(
                 feature_binary_path.startswith(p) for p in _dsc_path_prefixes
             )
@@ -873,9 +957,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         return state
 
     def cleanup_decompiler_node(state: AgentState) -> AgentState:
+        import time as _time
         from langgraph_orchestration.tooling.decompiler_tools import save_ida_database, stop_ida_server
-        # always persist the database before shutdown so the .i64 is written
-        save_result = save_ida_database.invoke({})
+        # retry save up to 3 times to guarantee .i64 is written before shutdown
+        save_result = "Not attempted"
+        for attempt in range(3):
+            save_result = save_ida_database.invoke({})
+            if "successfully" in save_result.lower():
+                break
+            state.record_analysis_note(f"Decompiler save attempt {attempt + 1} failed: {save_result}")
+            _time.sleep(2)
         state.record_analysis_note(f"Decompiler save: {save_result}")
         stop_result = stop_ida_server.invoke({})
         state.record_analysis_note(f"Decompiler cleanup: {stop_result}")
@@ -904,6 +995,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             component_name=feature.get("name", "Unknown Component"),
             has_tool_results=bool(state.tool_results),
             at_limit=ida_at_limit,
+            security_notes_match=feature.get("security_notes_match"),
+            security_indicators=feature.get("security_indicators"),
         )
         context_blocks = []
         if state.tool_results:
@@ -1089,7 +1182,15 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         )
         if triage_line:
             provenance += f"- **Deciding evidence**: `{triage_line}`\n"
-        provenance += f"- **Analysis mode**: {analysis_mode}\n\n"
+        provenance += f"- **Analysis mode**: {analysis_mode}\n"
+        notes_match = feature.get("security_notes_match")
+        if notes_match:
+            provenance += (
+                f"- **Apple Security Notes**: matches advisory component `{notes_match}` "
+                "— Apple confirms a security-relevant change here; this analysis examines the "
+                "likely vulnerability patch.\n"
+            )
+        provenance += "\n"
         markdown_report = provenance + markdown_report
 
         if score_json:

@@ -122,7 +122,6 @@ def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
     return json_path, md_path
 
 def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFactory) -> dict[str, str]:
-    """Trigger feature analysis using the structured report.json payload"""
     diff_report_path = Path(diff_report_path)
 
     report_json_path: Path | None = None

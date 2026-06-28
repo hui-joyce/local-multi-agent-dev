@@ -156,12 +156,37 @@ def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str
         body=body,
     )
 
-def build_unified_feature_analysis_prompt(user_input: str, component_evidence: str, component_name: str, has_tool_results: bool = False, at_limit: bool = False) -> str:
-    """Builds a unified prompt for deep-dive analysis, summarization, and prioritization"""
+def build_unified_feature_analysis_prompt(
+    user_input: str,
+    component_evidence: str,
+    component_name: str,
+    has_tool_results: bool = False,
+    at_limit: bool = False,
+    security_notes_match: str | None = None,
+    security_indicators: list[str] | None = None,
+) -> str:
+    notes_block = ""
+    if security_notes_match:
+        notes_block = (
+            f"\n**MATCHED IN APPLE SECURITY NOTES (component: {security_notes_match})**\n"
+            "Apple's security notes name this component as changed in this release, so it is a "
+            "high-priority target. Determine what security-relevant change the diff implements and "
+            "document it with specific evidence from the decompiled output.\n"
+        )
+
+    indicators_block = ""
+    if security_indicators:
+        indicators_block = (
+            f"\n**Security-relevant patterns detected in diff**: {', '.join(security_indicators)}\n"
+            "Prioritise decompiling functions that contain these patterns.\n"
+        )
+
     intro = (
         "You are an expert reverse engineer performing a comprehensive analysis of a single modified binary component from a firmware update. "
         "This component has already been selected for deep analysis by a deterministic triage system. "
         "Your mission is to use decompiler tools to understand the code's function, document your findings in full detail, and assign a priority score."
+        + notes_block
+        + indicators_block
     )
 
     workflow = """
@@ -270,8 +295,20 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
 
         **PSEUDOCODE REQUIREMENT**: In `## How is it implemented`, paste every decompiled function's raw pseudocode verbatim in a fenced \`\`\`c block before your prose explanation. Do not summarise or omit the raw output.
         """
+    if security_notes_match:
+        workflow += (
+            f"\n    **SECURITY-NOTES CORRELATION REQUIREMENT (MANDATORY when matched in Apple Security Notes)**\n"
+            f"    Apple's security notes name '{security_notes_match}' as changed this release. "
+            f"The `## Vulnerability Assessment` section MUST explicitly answer:\n"
+            f"    1. **Security-relevant change**: What did the diff actually change in this component?\n"
+            f"    2. **Patch mechanism**: Explain exactly how the decompiled/diff code achieves it "
+            f"(e.g., added size check before memcpy, introduced lock around shared state access).\n"
+            f"    3. **Evidence**: Justify your conclusion with specific evidence from the decompiled output. "
+            f"If you cannot find a security-relevant change, say so and assign a lower confidence score.\n"
+        )
+
     _, body = render_prompt(
-        "reverse_engineering/unified_analysis.md", 
+        "reverse_engineering/unified_analysis.md",
         intro=intro,
         workflow=workflow,
         output_format_instructions=output_format_instructions,
