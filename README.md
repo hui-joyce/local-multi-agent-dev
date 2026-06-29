@@ -264,17 +264,20 @@ Example response shape:
 
 ### 2) Direct Python graph invocation
 
+All three interfaces (`examples.py`, `app.py`, `api.py`) route through a single
+shared entry point — `OrchestrationRuntime` 
+
 ```python
-from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+from langgraph_orchestration.runtime import get_runtime
 
-graph = build_orchestration_graph()
-state = AgentState(user_input="Generate a Python sorting function and assess security risks")
-result = graph.invoke(state.model_dump())
+# Returns an AgentState; the runtime builds and caches the graph on first use
+final_state = get_runtime().run(
+    "Generate a Python sorting function and assess security risks"
+)
 
-print(result["selected_domain"])
-print(result["agent_chain"])
-print(result["final_output"])
+print(final_state.selected_domain)
+print(final_state.agent_chain)
+print(final_state.final_output)
 ```
 
 ### 3) Gradio chat interface

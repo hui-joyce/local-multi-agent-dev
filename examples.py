@@ -1,12 +1,9 @@
 import os
 from dotenv import load_dotenv
-from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
+from langgraph_orchestration.runtime import get_runtime
 
-# Load environment variables
 load_dotenv()
 
-# Enable LangSmith tracing if credentials are available
 if os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGSMITH_TRACING"] = "true"
     print(f"✓ LangSmith tracing enabled")
@@ -20,17 +17,10 @@ def run_orchestration_example(user_input: str) -> None:
     print(f"USER REQUEST: {user_input}")
     print("="*80 + "\n")
     
-    # Build the orchestration graph
-    graph = build_orchestration_graph()
-    
-    # Create initial state
-    initial_state = AgentState(user_input=user_input)
-    
-    # Execute the graph
+    # Execute the prompt through the shared orchestration runtime
     print("Executing orchestration graph...\n")
-    result = graph.invoke(initial_state.model_dump())
-    final_state = AgentState(**result)
-    
+    final_state = get_runtime().run(user_input)
+
     # Display results
     print(f"✓ Selected Domain: {final_state.selected_domain.upper()}\n")
     

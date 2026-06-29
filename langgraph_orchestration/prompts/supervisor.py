@@ -19,18 +19,20 @@ def build_label_routing_prompt(inference_engine: "MLXInferenceEngine", user_inpu
         user_input=user_message,
         context=None,
         system_prompt=system_prompt,
+        enable_thinking=False,
     )
 
 def build_split_tasks_prompt(inference_engine: "MLXInferenceEngine", user_input: str) -> str:
     """Build a prompt to extract domain-specific subtasks from a multi-domain request"""
-    
+
     system_prompt, user_message = render_prompt(
         "supervisor/split_tasks.md",
         user_input=user_input,
     )
-    
+
     return inference_engine.build_prompt(
         user_input=user_message,
         context=None,
         system_prompt=system_prompt,
+        enable_thinking=False,
     )

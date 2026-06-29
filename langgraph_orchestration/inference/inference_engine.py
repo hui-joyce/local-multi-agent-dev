@@ -12,7 +12,6 @@ class GenerationConfig:
     seed: int = 0
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for MLX."""
         return {
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
@@ -24,7 +23,6 @@ class GenerationConfig:
 
     @property
     def is_deterministic(self) -> bool:
-        """A temperature of 0 selects greedy decoding (argmax), which is reproducible."""
         return self.temperature <= 0.0
 
 @dataclass
@@ -76,10 +74,7 @@ class MLXInferenceEngine:
                     top_k=config.top_k,
                 )
             except Exception:
-                # If sampler construction fails, fall back to deterministic greedy
-                # decoding rather than silently using an unknown default.
                 pass
-        # temperature <= 0 -> leave sampler unset; mlx_lm uses greedy argmax (deterministic).
         return kwargs
     
     def generate_with_metrics(
@@ -209,23 +204,29 @@ class MLXInferenceEngine:
         user_input: str,
         context: Optional[list[str]] = None,
         system_prompt: Optional[str] = None,
+        enable_thinking: bool = True,
     ) -> str:
-        """Build formatted prompt with context."""
         system = system_prompt or self.system_prompt
-        
+
         context_section = ""
         if context:
             context_section = "## Relevant Context\n"
             for i, doc in enumerate(context, 1):
                 context_section += f"{i}. {doc}\n"
             context_section += "\n"
-        
-        prompt = f"""<|im_start|>system
-{system}<|im_end|>
-<|im_start|>user
-{context_section}{user_input}<|im_end|>
-<|im_start|>assistant"""
-        
+
+        parts = [
+            "<|im_start|>system",
+            f"{system}<|im_end|>",
+            "<|im_start|>user",
+            f"{context_section}{user_input}<|im_end|>",
+            "<|im_start|>assistant",
+        ]
+        prompt = "\n".join(parts)
+
+        if not enable_thinking:
+            prompt += "\n<think>\n\n</think>\n\n"
+
         return prompt
     
     def count_tokens(self, text: str) -> int:
@@ -358,16 +359,17 @@ class GeminiInferenceEngine:
         user_input: str,
         context: Optional[list[str]] = None,
         system_prompt: Optional[str] = None,
+        enable_thinking: bool = True,
     ) -> str:
         system = system_prompt or self.system_prompt
-        
+
         context_section = ""
         if context:
             context_section = "## Relevant Context\n"
             for i, doc in enumerate(context, 1):
                 context_section += f"{i}. {doc}\n"
             context_section += "\n"
-        
+
         prompt = f"System: {system}\n\nUser Context:\n{context_section}\n\nUser Input: {user_input}"
         return prompt
         

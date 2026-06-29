@@ -16,7 +16,7 @@ from langgraph_orchestration.prompts.supervisor import (
 class SupervisorAgent(SyncBaseAgent):
     DOMAIN_OPTIONS = ("software_dev", "reverse_engineering")
     LABEL_OPTIONS = ("SOFTWARE_DEV", "REVERSE_ENGINEERING", "BOTH")
-    # clear cache when it reaches this size to cap memory usage.
+    # clear cache when it reaches this size to cap memory usage
     _CACHE_MAX_SIZE = 1000
 
     def __init__(self, inference_engine: Optional[MLXInferenceEngine] = None):
@@ -93,14 +93,21 @@ class SupervisorAgent(SyncBaseAgent):
         if self.inference_engine is None:
             return None
 
-        resolver_prompt = (
+        resolver_system = (
             "You are a strict routing label resolver.\n"
             "Choose exactly one label for the request below.\n"
             "Allowed labels: SOFTWARE_DEV, REVERSE_ENGINEERING, BOTH.\n"
-            "Return only one label token and nothing else.\n\n"
+            "Return only one label token and nothing else."
+        )
+        resolver_user = (
             f"Request:\n{user_input}\n\n"
             "Classifier output to resolve (may be noisy):\n"
             f"{prior_output}\n"
+        )
+        resolver_prompt = self.inference_engine.build_prompt(
+            user_input=resolver_user,
+            system_prompt=resolver_system,
+            enable_thinking=False,
         )
 
         try:
