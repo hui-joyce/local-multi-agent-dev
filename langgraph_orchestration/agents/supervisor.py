@@ -213,35 +213,6 @@ class SupervisorAgent(SyncBaseAgent):
             "split_tasks": split_tasks or {},
         }
 
-    def _extract_decision(self, raw_output: str) -> Optional[dict]:
-        cleaned = raw_output.strip()
-        parsed = self._parse_json_from_text(cleaned)
-        if parsed is None:
-            return None
-        
-        execution_domains = parsed.get("execution_domains")
-        if not isinstance(execution_domains, list) or not execution_domains:
-            return None
-
-        # normalize and deduplicate domains
-        normalized_domains = [
-            str(d).strip().lower() for d in execution_domains if str(d).strip().lower() in self.DOMAIN_OPTIONS
-        ]
-        normalized_domains = list(dict.fromkeys(normalized_domains))
-        
-        if not normalized_domains:
-            return None
-
-        primary_domain = str(parsed.get("primary_domain", "")).strip().lower()
-        if primary_domain not in self.DOMAIN_OPTIONS:
-            primary_domain = normalized_domains[0]
-
-        split_tasks = parsed.get("split_tasks", {})
-        if not isinstance(split_tasks, dict):
-            split_tasks = {}
-
-        return self._build_decision(primary_domain, normalized_domains, split_tasks)
-    
     def invoke(
         self,
         user_input: str,

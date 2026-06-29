@@ -19,8 +19,7 @@ from ipsw_service.parsing import (
     strip_ansi,
 )
 from ipsw_service.agents.macho_analysis_engine import MachoAnalysisEngine
-from ipsw_service.reporting import render_report
-from ipsw_service.utils import ensure_dir, list_files, read_text, write_json, write_text
+from ipsw_service.utils import ensure_dir, read_text, write_json, write_text
 
 # define noise filters for non-analyzable binaries
 IGNORE_PATTERNS = [
@@ -471,7 +470,6 @@ class FirmwareDiffService:
         if not items:
             return []
 
-        filtered: list[str] = []
         records: dict[str, tuple[str, bool]] = {}
 
         for item in items:
@@ -609,24 +607,6 @@ class FirmwareDiffService:
     def _is_metadata_line(self, content: str) -> bool:
         return any(pattern.search(content) for pattern in _METADATA_ONLY_PATTERNS)
 
-    def _macho_diff_text_is_metadata_only(self, diff_text: str) -> bool:
-        changed_lines: list[str] = []
-        for line in diff_text.splitlines():
-            if not line:
-                continue
-            if not (line.startswith("+") or line.startswith("-")):
-                continue
-            if line.startswith("+++") or line.startswith("---"):
-                continue
-            content = line[1:].strip()
-            if content:
-                changed_lines.append(content)
-
-        if not changed_lines:
-            return True
-
-        return all(self._is_metadata_line(line) for line in changed_lines)
-
     def _consolidate_readme(self, diff_dir: str, readme_path: str) -> str:
         if not os.path.exists(readme_path):
             return ""
@@ -757,7 +737,6 @@ class FirmwareDiffService:
             inline_path: str = ""
             inline_inner: list[str] = []
             inline_in_block = False
-            inline_found_block = False
             # Whether we are currently accumulating an inline entry
             # (detected when we see "#### Name" followed by "> `/path`")
             pending_inline = False
@@ -784,14 +763,12 @@ class FirmwareDiffService:
                     if line.strip().startswith("```"):
                         # End of the diff fence → flush the accumulated entry
                         inline_in_block = False
-                        inline_found_block = True
                         result_lines = _emit_inline_entry(inline_name, inline_path, inline_inner, strict=in_dsc_section)
                         out.extend(result_lines)
                         # Reset state
                         inline_name = ""
                         inline_path = ""
                         inline_inner = []
-                        inline_found_block = False
                         pending_inline = False
                     else:
                         inline_inner.append(line)
@@ -852,7 +829,6 @@ class FirmwareDiffService:
                             inline_path = ""
                             inline_inner = []
                             inline_in_block = False
-                            inline_found_block = False
                             pending_inline = False
                             i += 1
                             continue
@@ -1022,45 +998,3 @@ class FirmwareDiffService:
         if dyld_ready or kernel_ready:
             return "partial"
         return "missing"
-
-    def _build_cstring_summary(self, diff_report_text: str) -> dict[str, dict[str, list[str]]]:
-        cstring_entries = extract_cstring_diffs(diff_report_text)
-
-        cstring_summary: dict[str, dict[str, list[str]]] = {}
-        for entry in cstring_entries:
-            if ":" in entry:
-                label, diff_line = entry.split(":", 1)
-                label = label.strip()
-            else:
-                label = "unknown"
-                diff_line = entry
-            diff_line = diff_line.strip()
-            if not diff_line:
-                continue
-            sign = diff_line[0]
-            text = diff_line[1:].strip()
-            bucket = cstring_summary.setdefault(label or "unknown", {"added": [], "removed": [], "modified": []})
-            if sign == "+":
-                bucket["added"].append(text)
-            elif sign == "-":
-                bucket["removed"].append(text)
-
-        # mark modified if same text appears in both added & removed
-        for label, buckets in cstring_summary.items():
-            added_set = set(buckets["added"])
-            removed_set = set(buckets["removed"])
-            modified = list(added_set & removed_set)
-            if modified:
-                buckets["modified"].extend(modified)
-                buckets["added"] = [s for s in buckets["added"] if s not in modified]
-                buckets["removed"] = [s for s in buckets["removed"] if s not in modified]
-
-        total_added = sum(len(b["added"]) for b in cstring_summary.values())
-        total_removed = sum(len(b["removed"]) for b in cstring_summary.values())
-        total_modified = sum(len(b["modified"]) for b in cstring_summary.values())
-
-        return {
-            "per_file": cstring_summary,
-            "totals": {"added": total_added, "removed": total_removed, "modified": total_modified},
-            "raw_entries": cstring_entries,
-        }

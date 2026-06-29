@@ -6,7 +6,6 @@
 - Batch operations for efficiency
 """
 
-import os
 import time
 from typing import Optional, Union
 from pathlib import Path

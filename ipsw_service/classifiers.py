@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Iterable
 
 from ipsw_service.models import DiffCounts, EvidenceItem, Finding
@@ -114,6 +113,3 @@ class ChangeClassifier:
                 )
             )
         return findings
-
-def serialize_findings(findings: list[Finding]) -> list[dict]:
-    return [asdict(finding) for finding in findings]

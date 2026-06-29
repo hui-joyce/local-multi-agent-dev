@@ -4,11 +4,9 @@ from rpyc.utils.server import ThreadedServer
 import ida_hexrays
 import ida_funcs
 import idc
-import idautils
 import idaapi
 import threading
 import queue
-import time
 
 if not ida_hexrays.init_hexrays_plugin():
     ida_hexrays.load_plugin()
@@ -177,8 +175,7 @@ class DecompilerService(rpyc.Service):
         def _do():
             import idc
             import idautils
-            import ida_segment
-            
+
             matches = []
             for s_ea in idautils.Segments():
                 name = idc.get_segm_name(s_ea).lower()

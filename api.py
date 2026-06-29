@@ -1,5 +1,4 @@
 import os
-import ipaddress
 from typing import Optional
 from functools import lru_cache
 from fastapi import FastAPI, HTTPException
@@ -26,7 +25,7 @@ async def lifespan(app: FastAPI):
     if os.getenv("LANGSMITH_TRACING", "false").lower() == "true":
         try:
             from langsmith import Client
-            client = Client()
+            Client()
             print(f"✓ LangSmith connected to project: {os.getenv('LANGSMITH_PROJECT', 'default')}")
         except Exception as e:
             print(f"⚠ LangSmith warning: {e}")
@@ -43,14 +42,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-def _is_loopback_host(host: str) -> bool:
-    if host in {"localhost", "127.0.0.1", "::1"}:
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
 
 app.add_middleware(
     CORSMiddleware,

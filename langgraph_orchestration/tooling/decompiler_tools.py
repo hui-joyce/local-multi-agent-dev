@@ -334,7 +334,6 @@ def find_address(query: str) -> Union[dict, str]:
 @tool
 def rename_local_variable(func_address: int, old_name: str, new_name: str) -> bool:
     """Renames a local variable within a function's decompilation"""
-    last_error = None
     for attempt in range(3):
         conn = None
         try:
@@ -344,7 +343,6 @@ def rename_local_variable(func_address: int, old_name: str, new_name: str) -> bo
         except ConnectionRefusedError:
             return False
         except EOFError as e:
-            last_error = e
             wait = 2 * (attempt + 1)
             print(f"[rename_local_variable] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
             time.sleep(wait)
@@ -402,8 +400,7 @@ def start_ida_server_for_binary(binary_path: str) -> str:
 
     import subprocess
     import socket
-    import glob
-    
+
     # force kill any lingering ida64/idat processes just in case
     subprocess.run(["pkill", "-9", "-f", "idat"], capture_output=True)
     subprocess.run(["pkill", "-9", "-f", "ida64"], capture_output=True)
@@ -485,7 +482,6 @@ def stop_ida_server() -> str:
 @tool
 def set_comment(address: int, comment: str) -> bool:
     """Sets a comment at a specific address in the disassembly"""
-    last_error = None
     for attempt in range(3):
         conn = None
         try:
@@ -495,7 +491,6 @@ def set_comment(address: int, comment: str) -> bool:
         except ConnectionRefusedError:
             return False
         except EOFError as e:
-            last_error = e
             wait = 2 * (attempt + 1)
             print(f"[set_comment] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
             time.sleep(wait)

@@ -3,7 +3,6 @@
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
-from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.graphs.software_dev import build_software_dev_graph
 from langgraph_orchestration.synthesis.synthesizer import synthesize_orchestration_output
@@ -98,9 +97,6 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
             return "software_dev"
         else:
             return "reverse_engineering"
-
-    def route_to_synthesis(state: AgentState) -> str:
-        return "final_synthesis"
 
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("software_dev", software_dev_router)

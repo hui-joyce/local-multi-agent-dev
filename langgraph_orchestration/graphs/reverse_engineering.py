@@ -47,12 +47,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 return ""
         return text.strip()
 
-    def _extract_report_title(report_text: str) -> str:
-        for line in (report_text or "").splitlines():
-            if line.startswith("# "):
-                return line[2:].strip()
-        return ""
-
     full_download_timeout = 4 * 60 * 60
 
     graph = StateGraph(AgentState)

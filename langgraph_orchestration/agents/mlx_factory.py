@@ -1,6 +1,6 @@
 from typing import Optional
 from langgraph_orchestration.inference.model_loader import MLXModelLoader
-from langgraph_orchestration.inference.inference_engine import MLXInferenceEngine, GeminiInferenceEngine
+from langgraph_orchestration.inference.inference_engine import MLXInferenceEngine
 from langgraph_orchestration.agents.mlx_agents import (
     MLXCodeGenerationAgent,
     MLXUnitTestingAgent,
