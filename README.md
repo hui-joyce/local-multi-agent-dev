@@ -122,7 +122,7 @@ artifacts/firmware_diff/<timestamp>/
 The feature analysis pipeline connects to IDA Pro 9.1 via a headless RPyC RPC server (`langgraph_orchestration/tooling/ida_rpc_server.py`).
 
 **How it works:**
-1. `prepare_decompiler_node` extracts the target binary from the DSC using `ipsw dyld extract` into `.ipsw_features/`.
+1. `prepare_decompiler_node` extracts the target binary from the DSC using `ipsw dyld extract` into a per-comparison folder under `.ipsw_features/` (named for the firmware diff, e.g. `.ipsw_features/iPhone17,1__18_4_22E240_vs_18_4_1_22E252/`).
 2. IDA is launched headlessly: `idat -A -c -S<rpc_server.py> <binary>`.
 3. The LLM calls IDA tools during feature analysis: `find_address`, `get_xrefs_to`, `decompile_function`, `rename_local_variable`, `set_comment`.
 4. `cleanup_decompiler_node` **always** calls `save_ida_database` before stopping IDA, guaranteeing the `.i64` is written regardless of LLM behaviour.
@@ -130,12 +130,17 @@ The feature analysis pipeline connects to IDA Pro 9.1 via a headless RPyC RPC se
 **IDA database files:**
 ```
 .ipsw_features/
-├── IMSharedUtilities          ← extracted Mach-O binary
-├── IMSharedUtilities.i64      ← saved IDA database (written by cleanup_decompiler_node)
-├── AppPredictionClient
-├── AppPredictionClient.i64
-└── ...
+└── iPhone18,1__26_4_1_23E254_vs_26_4_2_23E261/   ← one folder per firmware comparison
+    ├── MANIFEST.md             ← comparison metadata + list of .i64 databases
+    ├── IMSharedUtilities       ← extracted Mach-O binary (from the NEW build)
+    ├── IMSharedUtilities.i64   ← saved IDA database (written by cleanup_decompiler_node)
+    ├── AppPredictionClient
+    ├── AppPredictionClient.i64
+    └── ...
 ```
+
+The folder name is derived from the diff pair by `_comparison_dirname`, matching the
+`artifacts/firmware_diff/.../diff/<old>_vs_<new>` naming so the two cross-reference.
 
 > **Important:** If a `.i64` already exists for a binary, `start_ida_server_for_binary` will reload it (preserving prior annotations) instead of creating a fresh database. Only the unpacked working files (`.id0/.id1/.nam/.til`) from aborted runs are cleaned up on restart.
 
@@ -151,8 +156,8 @@ IDA listens on `localhost:18861`. The client uses a 360-second RPC timeout (larg
 
 The `prepare_decompiler_node` uses the following extraction strategy (in priority order):
 
-1. **Pre-extracted binary** — checks `.ipsw_features/` for an already-extracted Mach-O.
-2. **DSC extraction** — `ipsw dyld extract <dsc_path> <binary_path> -o .ipsw_features/` (fastest, no DMG mount).
+1. **Pre-extracted binary** — checks this comparison's `.ipsw_features/<comparison>/` folder for an already-extracted Mach-O.
+2. **DSC extraction** — `ipsw dyld extract <dsc_path> <binary_path> -o .ipsw_features/<comparison>/` (fastest, no DMG mount).
 3. **Existing DMG mount** — scans `/private/tmp/*.mount` for binaries left by `ipsw diff`.
 4. **IPSW archive extraction** — `ipsw extract <ipsw> --files --pattern <name>` (fallback for daemons and apps not in the DSC).
 

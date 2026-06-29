@@ -234,6 +234,32 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         version, build = match.group(1), match.group(2)
         return f"{version} ({build})"
 
+    _IPSW_NAME_RE = re.compile(
+        r"(iPhone\d+,\d+|iPad\d+,\d+|Watch\d+,\d+|AppleTV\d+,\d+)"
+        r"_(\d+\.\d+(?:\.\d+)?)_([A-Za-z0-9]+)_Restore\.ipsw"
+    )
+
+    def _comparison_dirname(old_ipsw: str | None, new_ipsw: str | None) -> str | None:
+    """Per-comparison .ipsw_features/ directory matching the firmware-diff naming
+    scheme. Returns None if the new IPSW cannot be parsed"""
+        def _parse(path: str | None) -> tuple[str, str, str] | None:
+            if not path:
+                return None
+            m = _IPSW_NAME_RE.search(os.path.basename(path))
+            return m.groups() if m else None 
+
+        new_p = _parse(new_ipsw)
+        if not new_p:
+            return None
+        device, new_ver, new_build = new_p
+        new_tag = f"{new_ver.replace('.', '_')}_{new_build}"
+        old_p = _parse(old_ipsw)
+        if old_p:
+            _, old_ver, old_build = old_p
+            old_tag = f"{old_ver.replace('.', '_')}_{old_build}"
+            return f"{device}__{old_tag}_vs_{new_tag}"
+        return f"{device}__{new_tag}"
+
     def _slugify_feature(text: str) -> str:
         cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
         return cleaned or "feature"
@@ -370,7 +396,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
         # attach the deterministic triage signal to every target; filtering happens in
         # feature_analysis_select_node *after* Apple Security Notes matching, so an
-        # advisory-named component can be promoted before the LOW_SIGNAL drop.
+        # advisory-named component can be promoted before the LOW_SIGNAL drop
         for t in targets:
             result = triage_evidence_explained(t.get("evidence", ""))
             t["_triage_signal"] = result.signal
@@ -844,7 +870,15 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return state
 
         feature_binary_path = feature.get("binary_path", "")
-        output_dir = os.path.join(state.workspace_root or os.getcwd(), ".ipsw_features")
+
+        # Route extraction into a per-comparison subfolder so cached binaries and
+        # annotated .i64 databases stay grouped by the firmware diff they came from.
+        import glob
+        local_ipsws = _collect_confirmed_local_artifacts(state)
+        old_ipsw, new_ipsw = _select_diff_pair(state, local_ipsws)
+        features_root = os.path.join(state.workspace_root or os.getcwd(), ".ipsw_features")
+        comparison_subdir = _comparison_dirname(old_ipsw, new_ipsw)
+        output_dir = os.path.join(features_root, comparison_subdir) if comparison_subdir else features_root
         os.makedirs(output_dir, exist_ok=True)
         target_basename = os.path.basename(feature_binary_path) if feature_binary_path else component_name
         extracted_binary = None
@@ -855,18 +889,17 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             "/usr/lib/",
         )
 
-        # Strategy 1: recursive scan of .ipsw_features/ to avoid re-extracting on every component
+        # Strategy 1: scan this comparison's folder to avoid re-extracting on every component
         if os.path.isdir(output_dir):
             extracted_binary = _find_macho_in_dir(output_dir, target_basename)
             if extracted_binary:
-                state.record_analysis_note(f"Re-using cached binary from .ipsw_features/: {extracted_binary}")
+                state.record_analysis_note(
+                    f"Re-using cached binary from .ipsw_features/{comparison_subdir or ''}: "
+                    f"{os.path.basename(extracted_binary)}"
+                )
 
         # Strategy 2: extract from DSC / IPSW if not already cached
         if not extracted_binary:
-            import glob
-            local_ipsws = _collect_confirmed_local_artifacts(state)
-            _, new_ipsw = _select_diff_pair(state, local_ipsws)
-
             # Strategy 2a: DSC dylib extraction (only if DSC already in .ipsw_extracted/)
             if feature_binary_path:
                 dsc_path = None
