@@ -12,20 +12,20 @@ from ipsw_service.cli import IpswCliRunner, build_dyld_diff_args
 from ipsw_service.models import FirmwareDiffArtifacts, FirmwareDiffRequest, FirmwareDiffResult, FirmwareDiffSummary
 from ipsw_service.parsing import (
     extract_cstring_diffs,
+    extract_symbol_diffs,
     parse_diff_markdown,
     parse_dyld_diff_output,
     parse_simple_list_output,
     strip_ansi,
 )
 from ipsw_service.agents.macho_analysis_engine import MachoAnalysisEngine
-from ipsw_service.reporting import render_report
-from ipsw_service.utils import ensure_dir, list_files, read_text, write_json, write_text
+from ipsw_service.utils import ensure_dir, read_text, write_json, write_text
 
 # define noise filters for non-analyzable binaries
 IGNORE_PATTERNS = [
     r"\.metallib$",                       # metal compiled shaders
     r"\.g18p(?:_a0)?$",                   # apple Silicon ISP microcode
-    r"\.appex/",                          # uI Extensions (Widgets, watch faces)
+    r"\.appex/",                          # UI Extensions (Widgets, watch faces)
     r"/VideoProcessors/",                 # video processing bundles
     r"/NanoTimeKit/FaceBundles/",
     r"/Applications/Kaleidoscope",        # specific noisy apps
@@ -38,6 +38,12 @@ _METADATA_ONLY_PATTERNS = (
     re.compile(r"^LC_CODE_SIGNATURE\b", re.IGNORECASE),
     re.compile(r"^__LINKEDIT\b", re.IGNORECASE),
     re.compile(r"^__TEXT\.__info_plist\b", re.IGNORECASE),
+    re.compile(r"^sha256:\s*", re.IGNORECASE),
+    re.compile(r"^sha1:\s*", re.IGNORECASE),
+    # Mach-O version strings are purely compile-time metadata (e.g. "386.231.1.0.0")
+    re.compile(r"^\d+(?:\.\d+){2,}$"),
+    # Aggregate counts change on every recompile; only symbol/CString *names* matter
+    re.compile(r"^(Functions|Symbols|CStrings):\s+\d+", re.IGNORECASE),
 )
 
 _METAL_HINTS = (".metallib", ".g18p")
@@ -106,30 +112,48 @@ class FirmwareDiffService:
         return "\n".join(lines).strip() + "\n"
 
     def run(self, request: FirmwareDiffRequest) -> FirmwareDiffResult:
+        def _extract_version(path: str) -> str:
+            import os
+            base = os.path.basename(path)
+            parts = base.split('_')
+            if len(parts) >= 3:
+                return f"{parts[1]}_{parts[2]}".replace('.', '_')
+            return base.replace('.ipsw', '')
+
         output_dir = request.output_dir or self._timestamped_output_dir()
         ensure_dir(output_dir)
-        diff_dir = ensure_dir(os.path.join(output_dir, "diff"))
+        old_vs_new = f"{_extract_version(request.old_ipsw)}_vs_{_extract_version(request.new_ipsw)}"
+        diff_dir = ensure_dir(os.path.join(output_dir, "diff", old_vs_new))
         ent_dir = ensure_dir(os.path.join(output_dir, "entitlements"))
         artifacts_dir = ensure_dir(os.path.join(output_dir, "artifacts"))
 
         gaps: list[str] = []
         low_memory = os.getenv("IPSW_DIFF_LOW_MEMORY") == "1"
 
+        import tempfile
+        temp_diff_dir_obj = tempfile.TemporaryDirectory()
+        temp_diff_dir = temp_diff_dir_obj.name
+
         diff_result = self.framework_diff_engine.diff_firmware(
             request.old_ipsw,
             request.new_ipsw,
-            diff_dir,
+            temp_diff_dir,
             include_fw=request.include_fw_components,
             include_launchd=request.include_launchd,
             include_strs=request.include_strs,
             markdown=True,
             low_memory=low_memory,
+            clean=request.clean_cache,
         )
         if not diff_result.get("success"):
             gaps.append(f"ipsw diff failed: {diff_result.get('stderr') or 'unknown error'}")
 
-        diff_report_path = diff_result.get("markdown_report")
-        diff_report_text = read_text(diff_report_path) if diff_report_path else ""
+        diff_report_path = diff_result.get("markdown_report") or None
+        diff_report_text = ""
+        if diff_report_path and os.path.exists(diff_report_path):
+            actual_diff_dir = os.path.dirname(diff_report_path)
+            diff_report_text = self._consolidate_readme(actual_diff_dir, diff_report_path)
+
         diff_data = parse_diff_markdown(diff_report_text) if diff_report_text else {
             "added_binaries": [],
             "modified_binaries": [],
@@ -143,15 +167,17 @@ class FirmwareDiffService:
             "iboot_added": [],
             "iboot_modified": [],
             "cstring_changes": [],
+            "symbol_changes": [],
         }
-        diff_report_root = os.path.dirname(diff_report_path) if diff_report_path else diff_dir
+        diff_report_root = temp_diff_dir
         
         if diff_report_text:
             diff_data["cstring_changes"] = extract_cstring_diffs(diff_report_text)
+            diff_data["symbol_changes"] = extract_symbol_diffs(diff_report_text)
         macho_note = None
         if diff_report_path:
-            macho_dir = os.path.join(diff_report_root, "MACHOS")
-            if not os.path.isdir(macho_dir):
+            # ipsw diff now inlines MachO diffs directly into the README.md, so the MACHOS dir is no longer generated
+            if diff_report_text and "## MachO" not in diff_report_text and "## Mach-O" not in diff_report_text:
                 macho_note = (
                     "MachO diff artifacts missing; filesystem diff likely failed or was skipped."
                 )
@@ -197,7 +223,7 @@ class FirmwareDiffService:
             gaps.append("dyld_shared_cache paths missing; dyld diff skipped")
 
 
-        # compute explicit cstring count across candidate binaries.
+        # compute explicit cstring count across candidate binaries
         macho_engine = MachoAnalysisEngine(self.runner)
         cstring_count = 0
         try:
@@ -292,7 +318,6 @@ class FirmwareDiffService:
             high_risk_changes=len(security_findings),
         )
 
-        report_markdown_path = os.path.join(output_dir, "report.md")
         report_json_path = os.path.join(output_dir, "report.json")
 
         kernel_diff_path = os.path.join(artifacts_dir, "kernel_diff.txt")
@@ -306,16 +331,18 @@ class FirmwareDiffService:
             self._format_component_diff("launchd_diff", diff_data.get("launchd_changes", [])),
         )
 
+        # Save the inlined README report
+        readme_output_path = os.path.join(diff_dir, "README.md")
+
         artifacts = FirmwareDiffArtifacts(
             output_dir=output_dir,
-            report_markdown=report_markdown_path,
             report_json=report_json_path,
             entitlement_diff=ent_diff_path,
             sandbox_diff=sandbox_diff_path,
             kext_diff=kext_diff_path,
             dyld_diff=dyld_diff_path,
             kernel_diff=kernel_diff_path,
-            framework_diff=diff_report_path,
+            framework_diff=readme_output_path,
             launchd_diff=launchd_diff_path,
             raw_diff_dir=diff_dir,
         )
@@ -328,10 +355,34 @@ class FirmwareDiffService:
             notes=notes,
         )
 
-        report_payload = self._build_report_payload(diff_data, cstring_count)
-        report_text = render_report(report_payload, notes=notes, gaps=gaps)
-        write_text(report_markdown_path, report_text)
+        gaps = list(dict.fromkeys(gaps))
+        notes = list(dict.fromkeys([n for n in notes if n not in gaps]))
+
+        report_payload = self._build_report_payload(diff_data, cstring_count, gaps, notes, security_findings)
+        
+        md_content = []
+        if gaps:
+            md_content.append("## Gaps & Warnings\n")
+            for g in gaps:
+                md_content.append(f"- {g}")
+            md_content.append("\n")
+            
+        if notes:
+            md_content.append("## Analysis Notes\n")
+            for n in notes:
+                md_content.append(f"- {n}")
+            md_content.append("\n")
+            
+        if md_content:
+            diff_report_text += "\n\n" + "\n".join(md_content)
+        
+        # Save the inlined README report
+        write_text(readme_output_path, diff_report_text)
+        
         write_json(report_json_path, report_payload)
+
+        # Cleanup the temp directory
+        temp_diff_dir_obj.cleanup()
 
         return result
 
@@ -360,7 +411,14 @@ class FirmwareDiffService:
                     break
         return notes
 
-    def _build_report_payload(self, diff_data: dict[str, list[str]], cstring_count: int) -> dict[str, object]:
+    def _build_report_payload(
+        self, 
+        diff_data: dict[str, list[str]], 
+        cstring_count: int,
+        gaps: list[str],
+        notes: list[str],
+        security_findings: list[Finding]
+    ) -> dict[str, object]:
         # gather all specialized paths so we can subtract them
         specialized_paths = set(_dedupe_stripped([
             *diff_data.get("framework_changes", []),
@@ -384,6 +442,10 @@ class FirmwareDiffService:
             *diff_data.get("iboot_modified", []),
         ])
 
+        analysis_notes = {"notes": notes}
+        if gaps != notes:
+            analysis_notes["gaps"] = gaps
+
         return {
             "summary_metrics": {
                 "total_cstring_changes": cstring_count 
@@ -400,13 +462,14 @@ class FirmwareDiffService:
             },
             "base_firmware_changes": base_firmware_changes,
             "cstring_context": diff_data.get("cstring_changes", []),
+            "symbol_context": diff_data.get("symbol_changes", []),
+            "analysis_notes": analysis_notes
         }
 
     def _filter_modified_binaries(self, items: list[str], diff_dir: str) -> list[str]:
         if not items:
             return []
 
-        filtered: list[str] = []
         records: dict[str, tuple[str, bool]] = {}
 
         for item in items:
@@ -537,12 +600,381 @@ class FirmwareDiffService:
                 changed_lines.append(content)
 
         if not changed_lines:
-            return False
+            return True
 
         return all(self._is_metadata_line(line) for line in changed_lines)
 
     def _is_metadata_line(self, content: str) -> bool:
         return any(pattern.search(content) for pattern in _METADATA_ONLY_PATTERNS)
+
+    def _consolidate_readme(self, diff_dir: str, readme_path: str) -> str:
+        if not os.path.exists(readme_path):
+            return ""
+
+        import re
+
+        # returns a list of output lines to append, or [] if the entry should be
+        # skipped (metadata-only, noisy binary, or no real code changes)
+        def _emit_inline_entry(
+            bin_name: str,
+            original_path: str,
+            inner_lines: list[str],
+            strict: bool = True,
+        ) -> list[str]:
+            if self._should_ignore_binary(original_path) or _is_noisy_binary(original_path):
+                return []
+
+            # strip sha256/sha1 hash suffixes from section lines
+            cleaned_lines: list[str] = []
+            for d_line in inner_lines:
+                stripped = d_line.strip()
+                if stripped.startswith("-sha") or stripped.startswith("+sha") or stripped in ("sha256:", "sha1:"):
+                    continue
+                if " sha256:" in d_line:
+                    d_line = d_line.split(" sha256:")[0]
+                elif " sha1:" in d_line:
+                    d_line = d_line.split(" sha1:")[0]
+                cleaned_lines.append(d_line)
+
+            # collapse identical pairs using run-based grouping
+            
+            # ipsw formats changed blocks as ALL - lines first, then ALL
+            # + lines (not interleaved adjacent pairs), so we collect those
+            # contiguous runs of -/+ then pair them by position
+
+            # when both sides have the same content after sha-stripping 
+            # (same section size, different hash)
+            # the pair collapses to a context line (no real change)
+            consolidated_lines: list[str] = []
+            ci = 0
+            while ci < len(cleaned_lines):
+                c_line = cleaned_lines[ci]
+                if c_line.startswith("-") and not c_line.startswith("---"):
+                    minus_run: list[str] = []
+                    while ci < len(cleaned_lines) and cleaned_lines[ci].startswith("-") and not cleaned_lines[ci].startswith("---"):
+                        minus_run.append(cleaned_lines[ci])
+                        ci += 1
+                    plus_run: list[str] = []
+                    while ci < len(cleaned_lines) and cleaned_lines[ci].startswith("+") and not cleaned_lines[ci].startswith("+++"):
+                        plus_run.append(cleaned_lines[ci])
+                        ci += 1
+                    max_len = max(len(minus_run), len(plus_run))
+                    for j in range(max_len):
+                        if j < len(minus_run) and j < len(plus_run):
+                            m_content = minus_run[j][1:]
+                            p_content = plus_run[j][1:]
+                            if m_content == p_content:
+                                consolidated_lines.append(" " + m_content)
+                            else:
+                                consolidated_lines.append(minus_run[j])
+                                consolidated_lines.append(plus_run[j])
+                        elif j < len(minus_run):
+                            consolidated_lines.append(minus_run[j])
+                        else:
+                            consolidated_lines.append(plus_run[j])
+                else:
+                    consolidated_lines.append(c_line)
+                    ci += 1
+
+            has_real_diff = False
+            has_any_diff = False
+            for dl in consolidated_lines:
+                if not (dl.startswith("+") or dl.startswith("-")):
+                    continue
+                if dl.startswith("+++") or dl.startswith("---"):
+                    continue
+                content = dl[1:].strip()
+                if not content:
+                    continue
+                has_any_diff = True
+                if not self._is_metadata_line(content):
+                    has_real_diff = True
+                    if strict:
+                        break  # real code change
+
+            if strict:
+                if not has_real_diff:
+                    return []
+            else:
+                if not has_any_diff:
+                    return []
+
+            out: list[str] = []
+            out.append(f"#### {bin_name}")
+            out.append("")
+            out.append(f">  `{original_path}`")
+            out.append("")
+            out.append("```diff")
+            for d_line in consolidated_lines:
+                out.append(d_line)
+            out.append("```")
+            out.append("")
+            return out
+
+        # recursively processes the raw ipsw README lines.
+        
+        # handles:
+        #  1. index links  – e.g. "- [View N files](DYLIBS/foo.md)" → recurse
+        #  2. sidecar links – e.g. "- [/path/to/bin](DYLIBS/bin.md)" → inline
+        #  3. inline entries – ipsw has already inlined the diff blocks directly
+        #     into the README, detected by the pattern:
+        #       #### BinaryName
+        #       > `/full/path`
+        #       ```diff
+        #       …
+        #       ```
+
+        def parse_lines(lines: list[str], current_prefix: str = "", in_dsc: bool = False) -> list[str]:
+            out: list[str] = []
+
+            # Strict filtering is applied in both MachO and DSC sections.
+            # An entry must have at least one real (non-metadata) +/- line to be
+            # included.  Start as True; updated by ## section headings.
+            in_dsc_section: bool = in_dsc if in_dsc else True
+
+            # State machine for inline entries
+            inline_name: str = ""
+            inline_path: str = ""
+            inline_inner: list[str] = []
+            inline_in_block = False
+            # Whether we are currently accumulating an inline entry
+            # (detected when we see "#### Name" followed by "> `/path`")
+            pending_inline = False
+
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+
+                # forward-compatibility
+                if line.startswith("## "):
+                    lowered_h2 = line[3:].strip().lower()
+                    if "dsc" in lowered_h2:
+                        in_dsc_section = True
+                    elif "macho" in lowered_h2 or "mach-o" in lowered_h2:
+                        in_dsc_section = True  # strict everywhere
+
+                # skip raw HTML structural tags from ipsw output
+                if line.strip() in ("<details>", "</details>") or line.strip().startswith("<summary>"):
+                    i += 1
+                    continue
+
+                # if inside an inline diff block, collect content lines
+                if inline_in_block:
+                    if line.strip().startswith("```"):
+                        # End of the diff fence → flush the accumulated entry
+                        inline_in_block = False
+                        result_lines = _emit_inline_entry(inline_name, inline_path, inline_inner, strict=in_dsc_section)
+                        out.extend(result_lines)
+                        # Reset state
+                        inline_name = ""
+                        inline_path = ""
+                        inline_inner = []
+                        pending_inline = False
+                    else:
+                        inline_inner.append(line)
+                    i += 1
+                    continue
+
+                # detect the start of an inline diff block after ">  `/path`"
+                if pending_inline and line.strip().startswith("```diff"):
+                    inline_in_block = True
+                    i += 1
+                    continue
+
+                # detect ">  `/path/to/binary`" line (part of inline entry)
+                path_match = re.match(r">\s+`([^`]+)`", line)
+                if path_match and inline_name:
+                    inline_path = path_match.group(1)
+                    pending_inline = True
+                    i += 1
+                    continue
+
+                if inline_name and not line.strip():
+                    i += 1
+                    continue
+
+                if pending_inline and line.strip() and not line.strip().startswith("```"):
+                    # buffered name/path didn't lead to a diff block — pass through
+                    out.append(f"#### {inline_name}")
+                    if inline_path:
+                        out.append(f">  `{inline_path}`")
+                    pending_inline = False
+                    inline_name = ""
+                    inline_path = ""
+
+                if pending_inline and not line.strip():
+                    i += 1
+                    continue
+
+                # detect "#### BinaryName" (potential start of an inline entry)
+                h4_match = re.match(r"####\s+(.+)", line)
+                if h4_match:
+                    h4_title = h4_match.group(1).strip()
+                    is_section_header = (
+                        "⬆️" in h4_title
+                        or "🆕" in h4_title
+                        or "Removed" in h4_title
+                        or "Updated" in h4_title
+                        or "Added" in h4_title
+                    )
+                    if not is_section_header:
+                        # if the next non-empty line is "> `/path`"
+                        # this is the start of an inline entry
+                        j = i + 1
+                        while j < len(lines) and not lines[j].strip():
+                            j += 1
+                        if j < len(lines) and re.match(r">\s+`[^`]+`", lines[j]):
+                            # Flush any un-flushed pending
+                            inline_name = h4_title
+                            inline_path = ""
+                            inline_inner = []
+                            inline_in_block = False
+                            pending_inline = False
+                            i += 1
+                            continue
+
+                # suppress stray raw ipsw section banners 
+                raw_dylibs_banner = re.match(
+                    r"##\s+Dylibs\s*[—–-]\s*(Updated|Added|Removed)\s*\(\d+\)", line
+                )
+                if raw_dylibs_banner:
+                    i += 1
+                    continue
+
+                # index links  e.g. "- [View N files](DYLIBS/foo.md)"
+                index_match = re.match(
+                    r"-\s+\[View \d+ .*?files\]\((DYLIBS/.*\.md|MACHOS/.*\.md)\)", line
+                )
+                if index_match:
+                    index_rel_path = index_match.group(1)
+                    index_path = os.path.join(diff_dir, index_rel_path)
+                    if os.path.exists(index_path):
+                        index_lines = read_text(index_path).splitlines()
+                        new_prefix = os.path.dirname(index_rel_path)
+                        out.extend(parse_lines(index_lines, current_prefix=new_prefix, in_dsc=in_dsc_section))
+                    i += 1
+                    continue
+
+                # sidecar links  e.g. "- [/path/to/bin](DYLIBS/bin.md)"
+                link_match = re.match(r"-\s+\[(.*?)\]\((.*?\.md)\)", line)
+                if link_match:
+                    bin_name = os.path.basename(link_match.group(1))
+                    sidecar_raw = link_match.group(2)
+
+                    if not (sidecar_raw.startswith("MACHOS/") or sidecar_raw.startswith("DYLIBS/")):
+                        sidecar_rel = os.path.join(current_prefix, sidecar_raw)
+                    else:
+                        sidecar_rel = sidecar_raw
+
+                    sidecar_path = os.path.join(diff_dir, sidecar_rel)
+                    original_path = link_match.group(1)
+
+                    if os.path.exists(sidecar_path):
+                        diff_text = read_text(sidecar_path)
+
+                        inner: list[str] = []
+                        in_b = False
+                        found_b = False
+                        for d_line in diff_text.splitlines():
+                            if d_line.strip().startswith("```"):
+                                if in_b:
+                                    in_b = False
+                                else:
+                                    in_b = True
+                                    found_b = True
+                                continue
+                            if in_b:
+                                inner.append(d_line)
+
+                        if not found_b:
+                            for d_line in diff_text.splitlines():
+                                if d_line.startswith("## ") or d_line.startswith("> "):
+                                    continue
+                                inner.append(d_line)
+
+                        result_lines = _emit_inline_entry(bin_name, original_path, inner, strict=in_dsc_section)
+                        out.extend(result_lines)
+                    i += 1
+                    continue
+
+                out.append(line)
+                i += 1
+
+            return out
+
+        lines = read_text(readme_path).splitlines()
+        consolidated = parse_lines(lines)
+
+        final_result: list[str] = []
+        section_lines: list[str] = []
+        current_header = ""
+
+        def finalize_section(header: str, s_lines: list[str]) -> None:
+            if "Removed" in header:
+                return
+
+            count = sum(1 for sl in s_lines if sl.startswith(">  `"))
+            if count > 0:
+                # preserve the original heading level from the raw ipsw README
+                # MachO filesystem uses ### and DSC dylibs use #### 
+                new_header = re.sub(r"\(\d+\)", f"({count})", header)
+                final_result.append(new_header)
+                final_result.append("")
+                final_result.append("<details>")
+                if "Added" in header:
+                    final_result.append("  <summary><i>View Added</i></summary>")
+                else:
+                    final_result.append("  <summary><i>View Updated</i></summary>")
+                final_result.append("")
+                final_result.extend(s_lines)
+                final_result.append("</details>")
+                final_result.append("")
+
+        for line in consolidated:
+            is_header = False
+            if (
+                (line.startswith("## ") or line.startswith("### ") or line.startswith("#### "))
+                and "Removed" in line
+            ):
+                is_header = True
+            elif (
+                line.startswith("### ⬆️ Updated (")
+                or line.startswith("### 🆕 Added (")
+                or line.startswith("#### ⬆️ Updated (")
+                or line.startswith("#### 🆕 Added (")
+            ):
+                is_header = True
+
+            if is_header:
+                if current_header:
+                    finalize_section(current_header, section_lines)
+                current_header = line
+                section_lines = []
+            else:
+                if current_header:
+                    if line.startswith("- `/"):
+                        continue
+                    # top-level headings that appear after the section
+                    # entries (e.g. ### iBoot, ## DSC) are structural  
+                    # close the current section and flow to final_result
+                    if line.startswith("## ") or line.startswith("### "):
+                        finalize_section(current_header, section_lines)
+                        current_header = ""
+                        section_lines = []
+                        final_result.append(line)
+                        continue
+                    section_lines.append(line)
+                else:
+                    if line.startswith("- `/"):
+                        continue
+                    final_result.append(line)
+
+        if current_header:
+            finalize_section(current_header, section_lines)
+
+        result = "\n".join(final_result)
+        result = result.replace("## Inputs\n", "## IPSWs\n")
+        return result
 
     def _timestamped_output_dir(self) -> str:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -566,45 +998,3 @@ class FirmwareDiffService:
         if dyld_ready or kernel_ready:
             return "partial"
         return "missing"
-
-    def _build_cstring_summary(self, diff_report_text: str) -> dict[str, dict[str, list[str]]]:
-        cstring_entries = extract_cstring_diffs(diff_report_text)
-
-        cstring_summary: dict[str, dict[str, list[str]]] = {}
-        for entry in cstring_entries:
-            if ":" in entry:
-                label, diff_line = entry.split(":", 1)
-                label = label.strip()
-            else:
-                label = "unknown"
-                diff_line = entry
-            diff_line = diff_line.strip()
-            if not diff_line:
-                continue
-            sign = diff_line[0]
-            text = diff_line[1:].strip()
-            bucket = cstring_summary.setdefault(label or "unknown", {"added": [], "removed": [], "modified": []})
-            if sign == "+":
-                bucket["added"].append(text)
-            elif sign == "-":
-                bucket["removed"].append(text)
-
-        # mark modified if same text appears in both added & removed
-        for label, buckets in cstring_summary.items():
-            added_set = set(buckets["added"])
-            removed_set = set(buckets["removed"])
-            modified = list(added_set & removed_set)
-            if modified:
-                buckets["modified"].extend(modified)
-                buckets["added"] = [s for s in buckets["added"] if s not in modified]
-                buckets["removed"] = [s for s in buckets["removed"] if s not in modified]
-
-        total_added = sum(len(b["added"]) for b in cstring_summary.values())
-        total_removed = sum(len(b["removed"]) for b in cstring_summary.values())
-        total_modified = sum(len(b["modified"]) for b in cstring_summary.values())
-
-        return {
-            "per_file": cstring_summary,
-            "totals": {"added": total_added, "removed": total_removed, "modified": total_modified},
-            "raw_entries": cstring_entries,
-        }

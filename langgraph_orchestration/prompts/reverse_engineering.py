@@ -156,26 +156,41 @@ def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str
         body=body,
     )
 
-def build_unified_feature_analysis_prompt(user_input: str, component_evidence: str, component_name: str, has_tool_results: bool = False, at_limit: bool = False) -> str:
-    """Builds a unified prompt for deep-dive analysis, summarization, and prioritization"""
+def build_unified_feature_analysis_prompt(
+    user_input: str,
+    component_evidence: str,
+    component_name: str,
+    has_tool_results: bool = False,
+    at_limit: bool = False,
+    security_notes_match: str | None = None,
+    security_indicators: list[str] | None = None,
+) -> str:
+    notes_block = ""
+    if security_notes_match:
+        notes_block = (
+            f"\n**MATCHED IN APPLE SECURITY NOTES (component: {security_notes_match})**\n"
+            "Apple's security notes name this component as changed in this release, so it is a "
+            "high-priority target. Determine what security-relevant change the diff implements and "
+            "document it with specific evidence from the decompiled output.\n"
+        )
+
+    indicators_block = ""
+    if security_indicators:
+        indicators_block = (
+            f"\n**Security-relevant patterns detected in diff**: {', '.join(security_indicators)}\n"
+            "Prioritise decompiling functions that contain these patterns.\n"
+        )
+
     intro = (
         "You are an expert reverse engineer performing a comprehensive analysis of a single modified binary component from a firmware update. "
-        "Your mission is to use decompiler tools to understand the code's function, document your findings, and assign a priority score."
+        "This component has already been selected for deep analysis by a deterministic triage system. "
+        "Your mission is to use decompiler tools to understand the code's function, document your findings in full detail, and assign a priority score."
+        + notes_block
+        + indicators_block
     )
 
     workflow = """
     **Workflow:**
-
-    **STAGE 0: PRE-DECOMPILATION TRIAGE GATE**
-    Evaluate the diff evidence against the following rules.
-    *High-Signal Indicators:* Added/Removed symbols or ObjC selectors, new CStrings, new entitlements, function count changes, security/privacy/IPC/database terminology.
-    *Low-Signal Indicators:* UUID changes only, version bumps only, __const/__got size changes, small section drift, no symbol/string count changes.
-    
-    *AUTO-PROMOTE RULES:* Elevate to TIER_1 if you see: added exported symbols, security/privacy strings, authentication logic, payload filtering, XPC interfaces, server bags, cryptography, or migration logic.
-    *AUTO-IGNORE RULES:* Classify as TIER_3 if only UUID/version/GOT/section-sizes changed with NO new symbols or strings.
-    
-    If AUTO-IGNORE applies: DO NOT decompile. Output the final metadata-only assessment immediately with `decompile: false`.
-    If HIGH-SIGNAL applies: Proceed to Stage 1.
 
     **STAGE 1: CANDIDATE SELECTION (TOOL BUDGET LIMITS)**
     You MUST NOT exhaustively search every string/symbol. Observe these strict limits per component:
@@ -185,11 +200,13 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
 
     **TOOL SELECTION GUIDE — READ CAREFULLY:**
     *   **`find_address`**: Use this to find the memory address of ANY entry listed under **`Symbols:`** or **`CStrings:`** in the diff. Pass the raw string from the diff as the `query`.
-    *   **`get_xrefs_to`**: Finds code that references a specific DATA address. Use this on addresses returned by `find_address` when the result type is `string_data`.
-    *   **`decompile_function`**: Decompile a CODE address to get C-like pseudo-code. Use this on addresses returned by `find_address` when the result type is `symbol`, or on xref addresses.
-    *   **`resolve_objc_dispatch`**: When you see `objc_msgSend(v4, "doSomething")` and need to resolve `v4`'s class.
-    *   **`trace_variable_source`**: If a function takes an untrusted pointer, use this to trace its initialization.
-    *   **`rename_local_variable` & `set_comment`**: Document the binary as you decipher variables.
+        *CRITICAL*: If a symbol/string is marked with `-` (minus sign) in the diff, it means it was REMOVED in the new version. The `find_address` tool runs against the NEW binary, so it WILL NOT find removed items. If a feature was entirely removed, document its removal thoroughly in the final report — do NOT skip the component.
+    *   **`get_xrefs_to`**: Finds code that references a specific DATA address. Use this on addresses returned by `find_address` when the result type is `string_data`. (Args: `address`)
+    *   **`decompile_function`**: Decompile a CODE address to get C-like pseudo-code. Use this on addresses returned by `find_address` when the result type is `symbol`, or on xref addresses. (Args: `address`)
+    *   **`resolve_objc_dispatch`**: When you see `objc_msgSend(v4, "doSomething")` and need to resolve `v4`'s class. (Args: `func_ea`, `call_ea`)
+    *   **`trace_variable_source`**: If a function takes an untrusted pointer, use this to trace its initialization. (Args: `func_ea`, `var_name`)
+    *   **`rename_local_variable`**: Document the binary as you decipher variables. (Args: `func_address`, `old_name`, `new_name`)
+    *   **`set_comment`**: Add a comment to a specific assembly address. (Args: `address`, `comment`)
     *   **`save_ida_database`**: Persist the `.i64` file after annotating.
 
     **STAGE 2: LIMITED DECOMPILATION & DB ANNOTATION (TOOL BUDGET LIMITS)**
@@ -197,64 +214,101 @@ def build_unified_feature_analysis_prompt(user_input: str, component_evidence: s
     - Max 20 decompiled functions
     Focus only on the most critical cross-references that map to high-signal indicators.
     *Recursive Decompilation:* Perform further/recursive decompilation when a called/calling function is critical to understanding the implementation of a feature.
-    *Database Annotation (MANDATORY for Tier 1 & Tier 2 features):* For each binary of the feature opened, you MUST utilize the `set_comment` tool to document data flow, call traces, and important entry points. Rename variables with `rename_local_variable` when you decipher them, and call `save_ida_database` to persist annotations.
+    *Database Annotation (MANDATORY):* For each binary opened, you MUST utilize the `set_comment` tool to document data flow, call traces, and important entry points. Rename variables with `rename_local_variable` when you decipher them, and call `save_ida_database` to persist annotations.
 
     **STAGE 3: REPORTING & CORRELATION**
     Synthesize findings into these sections:
     *   `## What this feature does`: High-level summary based on evidence.
-    *   `## How is it implemented`: Detailed code logic if decompiled. You MUST include detailed and accurate decompiled pseudocode snippets, rewritten with the variable names and structure you renamed/discovered (`rename_local_variable` and symbolication) to ensure high readability. Document the call chains and data flow tracing thoroughly.
+    *   `## How is it implemented`: Detailed code logic if decompiled. CRITICAL: You MUST NEVER hallucinate or infer pseudocode. If `decompile_function` was called, you MUST paste the raw pseudocode output verbatim in a fenced \`\`\`c block at the start of this section, then follow with your prose explanation. Any pseudocode in this section MUST come directly from the `decompile_function` tool output — never paraphrase or omit it. If IDA was unavailable, describe the implementation from binary-level diff evidence (section size changes, removed dylib dependencies, symbol/function count changes) and string evidence.
     *   `## How to trigger this feature`: Infer trigger conditions.
-    *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements).
-    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, `confidence`, `decompile`, and `reason`.
+    *   `## Vulnerability Assessment`: Analyze structural changes (new bounds checks, locking mechanisms, changed parameter types, memory management) to determine if this is a security patch. If it is a potential vulnerability fix, identify the likely vulnerability class (e.g., Use-After-Free, Out-of-Bounds, Privilege Escalation, Race Condition), how the old code was exploitable, how the new code mitigates it, and the potential impact if left unpatched. Be highly accurate and base this strictly on the evidence.
+    *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements, binary diff).
+    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, `confidence`, `decompile`, and `reason`. Use this rubric to assign `tier` — the value MUST be exactly one of these three strings, no substitutions:
+        - `TIER_1`: Critical/high interest. Security boundaries, privilege changes, crypto/auth logic, IPC protocol updates, entitlement changes, privacy-sensitive framework changes, or any memory-safety fix (UAF, OOB, race).
+        - `TIER_2`: Medium interest. Core business-logic updates, data-sync or serialisation changes, new internal subsystem logging, daemon lifecycle changes (e.g. observer registration/removal), or refactors with clear functional impact.
+        - `TIER_3`: Low interest/noise. Pure UI text, version bumps, asset-table expansions with no code logic change, or telemetry jitter with no privacy implication.
+        Assign `TIER_1` or `TIER_2` for any component whose change has observable runtime behaviour or security relevance.
     If the evidence contains multiple related binaries (e.g. sharing a subsystem or version bump), synthesize them as a single cohesive feature change.
-    """ 
-    if not has_tool_results:
+    """
+    # Four cases based on tool state and IDA availability:
+    # 1. No tools used yet + IDA available      → Stage 1: must call find_address first
+    # 2. No tools used yet + IDA unavailable    → Stage 3: write report from evidence only
+    # 3. Has tool results  + budget exhausted   → Stage 3: final report now
+    # 4. Has tool results  + budget remaining   → Stage 2: continue decompilation
+    if not has_tool_results and at_limit:
+        # IDA unavailable — write the report from binary diff + string/symbol evidence
         output_format_instructions = """
-        **CURRENT STATE: PRE-DECOMPILATION TRIAGE (STAGE 0) & CANDIDATE SELECTION (STAGE 1)**
-        You have not used any tools yet. First, evaluate the diff against the AUTO-IGNORE rules.
-        - **IF AUTO-IGNORE APPLIES (TIER_3)**: Do NOT use any tools. Immediately output the final report starting with `## What this feature does` (which will be a metadata-only assessment) and conclude with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": false`.
-        - **IF HIGH-SIGNAL APPLIES (TIER_1/2)**: You MUST use tools to gather evidence. Do NOT output the final report. Output ONLY `<tool_call>` blocks. 
-        
-        **CRITICAL INSTRUCTION FOR LOCAL MODELS**: Ignore any previous general instructions that say "DO NOT include `<tool_call>` JSON". Right now, you are NOT writing the final response. You MUST include the full, valid JSON body inside EVERY `<tool_call>` block!
+        **CURRENT STATE: FINAL REPORT FROM EVIDENCE (STAGE 3 — IDA UNAVAILABLE)**
+        The decompiler could not be started for this component. You MUST still write a thorough report using the binary-level diff evidence provided above (section size changes, removed/added dylib dependencies, function count changes, symbol/string changes).
+
+        Your response MUST be a single markdown document starting EXACTLY with `## What this feature does`.
+        DO NOT include any `<tool_call>` tags.
+        End with `---AI_PRIORITISATION_SCORE---` and the JSON score using `"decompile": false`.
+        In `## How is it implemented`, describe what the binary diff reveals about the change — removed classes, dropped dependencies, text section shrinkage, etc.
+        No conversational filler. No skipping sections.
+        """
+    elif not has_tool_results:
+        # IDA available and no tools used yet — must call tools before writing the report
+        output_format_instructions = """
+        **CURRENT STATE: CANDIDATE SELECTION (STAGE 1)**
+        You have not used any tools yet. You MUST call tools to gather evidence before writing the final report.
+        DO NOT output the final report in this turn. Output ONLY `<tool_call>` blocks.
+
+        **CRITICAL INSTRUCTION FOR TOOL CALLS**: Output a fully valid JSON object wrapped exactly in `<tool_call>...</tool_call>` tags.
 
         **STAGE 1 TOOL MAPPING RULES (follow exactly):**
-        - For ANY item listed under `Symbols:` or `CStrings:` that you want to investigate, call `find_address` (max 20 calls).
+        - For items listed under `Symbols:` or `CStrings:`, call `find_address` (max 20 calls total).
         - Pass the exact text from the diff as the `query` parameter.
-        - Prioritize strings/symbols related to security, privacy, IPC, authentication, or added functionality.
-        Do all applicable calls in this single round.
+        - Prioritize added symbols, security/privacy strings, and IPC/authentication identifiers.
+        - Issue all applicable `find_address` calls in this single round — do not stop after one.
         """
-    else:
-        if at_limit:
-            output_format_instructions = """
+    elif at_limit:
+        output_format_instructions = """
         **CURRENT STATE: FINAL REPORT (STAGE 3)**
         **NO MORE TOOL CALLS ALLOWED.** You MUST output the final report now based on all evidence gathered.
-        
-        Your response MUST be a single markdown document containing the four analysis sections, followed by `---AI_PRIORITISATION_SCORE---` and the JSON score. No conversational filler.
+
+        Your response MUST be a single markdown document. You MUST start your response EXACTLY with `## What this feature does`. DO NOT include any `<tool_call>` tags. End your report with `---AI_PRIORITISATION_SCORE---` and the JSON score. No conversational filler.
+
+        **PSEUDOCODE REQUIREMENT**: If `decompile_function` was called during this analysis, you MUST paste every decompiled function's raw output verbatim in a fenced \`\`\`c block inside `## How is it implemented`, before your prose explanation. Do not summarise or paraphrase the pseudocode — include it in full.
         """
-        else:
-            output_format_instructions = """
+    else:
+        output_format_instructions = """
         **CURRENT STATE: LIMITED DECOMPILATION (STAGE 2)**
         Review the tool results above. You MUST strictly adhere to the tool budget limits:
         - Max 20 `get_xrefs_to` calls total.
         - Max 20 `decompile_function` calls total.
-        
+
         Continue the investigation chain carefully:
         - If you have **data addresses** but haven't called `get_xrefs_to` yet, call it on the most critical addresses (up to the limit).
         - If you have **function addresses** from `get_xrefs_to`, call `decompile_function` on the most promising ones (up to the limit).
         - If you see a function taking an untrusted pointer, trace it using `trace_variable_source`.
         - If you see an `objc_msgSend` block you want to resolve, use `resolve_objc_dispatch`.
-        - For Tier 1 and Tier 2 features, you MUST use the `set_comment` tool for each binary of the feature opened to trace data flow, call traces, and important entry points.
-        - Use the `rename_local_variable` tool to give meaningful names to variables as you decipher them.
+        - You MUST use `set_comment` to document data flow and call traces for each binary opened.
+        - Use `rename_local_variable` to give meaningful names to variables as you decipher them.
         - Always run `save_ida_database` after renaming variables or setting comments to persist your work.
 
         Output ONLY `<tool_call>` blocks if you need more evidence and haven't hit your budget.
-        
-        **CRITICAL INSTRUCTION FOR LOCAL MODELS**: Ignore any previous general instructions that say "DO NOT include `<tool_call>` JSON". Right now, you are NOT writing the final response. You MUST include the full, valid JSON body inside EVERY `<tool_call>` block!
-        
-        If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting with `## What this feature does` and conclude with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": true`.
+
+        **CRITICAL INSTRUCTION FOR TOOL CALLS**: Output a fully valid JSON object wrapped exactly in `<tool_call>...</tool_call>` tags. Do not output conversational text.
+
+        If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting EXACTLY with `## What this feature does` and concluding with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": true`.
+
+        **PSEUDOCODE REQUIREMENT**: In `## How is it implemented`, paste every decompiled function's raw pseudocode verbatim in a fenced \`\`\`c block before your prose explanation. Do not summarise or omit the raw output.
         """
+    if security_notes_match:
+        workflow += (
+            f"\n    **SECURITY-NOTES CORRELATION REQUIREMENT (MANDATORY when matched in Apple Security Notes)**\n"
+            f"    Apple's security notes name '{security_notes_match}' as changed this release. "
+            f"The `## Vulnerability Assessment` section MUST explicitly answer:\n"
+            f"    1. **Security-relevant change**: What did the diff actually change in this component?\n"
+            f"    2. **Patch mechanism**: Explain exactly how the decompiled/diff code achieves it "
+            f"(e.g., added size check before memcpy, introduced lock around shared state access).\n"
+            f"    3. **Evidence**: Justify your conclusion with specific evidence from the decompiled output. "
+            f"If you cannot find a security-relevant change, say so and assign a lower confidence score.\n"
+        )
+
     _, body = render_prompt(
-        "reverse_engineering/unified_analysis.md", 
+        "reverse_engineering/unified_analysis.md",
         intro=intro,
         workflow=workflow,
         output_format_instructions=output_format_instructions,

@@ -3,27 +3,32 @@ from typing import Optional, Iterator, Union
 from dataclasses import dataclass
 
 @dataclass
-class GenerationConfig:    
+class GenerationConfig:
     max_tokens: int = 2048
     temperature: float = 0.7
     top_p: float = 0.95
     top_k: int = 50
     repeat_penalty: float = 1.0
-    
+    seed: int = 0
+
     def to_dict(self) -> dict:
-        """Convert to dictionary for MLX."""
         return {
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "top_k": self.top_k,
             "repeat_penalty": self.repeat_penalty,
+            "seed": self.seed,
         }
+
+    @property
+    def is_deterministic(self) -> bool:
+        return self.temperature <= 0.0
 
 @dataclass
 class GenerationMetrics:
     """Metrics captured during text generation"""
-    ttft_seconds: float  # Time to first token
+    ttft_seconds: float  # time to first token
     prompt_tokens: int
     generated_tokens: int
     prompt_generation_speed_tok_s: float  # tokens/second for prompt building
@@ -49,6 +54,28 @@ class MLXInferenceEngine:
         self.tokenizer = tokenizer
         self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
         self.last_metrics: Optional[GenerationMetrics] = None
+
+    def _build_generate_kwargs(self, config: GenerationConfig) -> dict:
+        """Translate GenerationConfig into mlx_lm.generate kwargs.
+        Seed RNG so runs are reproducible.
+        """
+        import mlx.core as mx
+
+        mx.random.seed(config.seed)
+
+        kwargs = {"max_tokens": config.max_tokens, "verbose": False}
+        if config.temperature and config.temperature > 0.0:
+            try:
+                from mlx_lm.sample_utils import make_sampler
+
+                kwargs["sampler"] = make_sampler(
+                    temp=config.temperature,
+                    top_p=config.top_p,
+                    top_k=config.top_k,
+                )
+            except Exception:
+                pass
+        return kwargs
     
     def generate_with_metrics(
         self,
@@ -64,6 +91,10 @@ class MLXInferenceEngine:
         try:
             import mlx.core as mx
             from mlx_lm import generate
+            
+            # Set cache limit to 2GB to prevent large KV caches from causing Metal OOMs
+            mx.set_cache_limit(2 * 1024 * 1024 * 1024)
+
         except ImportError as e:
             raise RuntimeError(
                 "MLX not available. Install with: pip install -r requirements.txt"
@@ -78,15 +109,16 @@ class MLXInferenceEngine:
             prompt_generation_speed = prompt_tokens / prompt_tokenization_time if prompt_tokenization_time > 0 else 0
             
             gen_start = time.time()
-            
+
             generated_text = generate(
                 self.model,
                 self.tokenizer,
                 prompt=prompt,
-                max_tokens=config.max_tokens,
-                verbose=False,
+                **self._build_generate_kwargs(config),
             )
-            
+
+            mx.clear_cache()
+
             gen_end = time.time()
             total_gen_time = gen_end - gen_start
             
@@ -137,18 +169,11 @@ class MLXInferenceEngine:
                 self.model,
                 self.tokenizer,
                 prompt=prompt,
-                max_tokens=config.max_tokens,
-                verbose=False,
+                **self._build_generate_kwargs(config),
             )
+            mx.clear_cache()
             return generated_text
-            generated_text = generate(
-                self.model,
-                self.tokenizer,
-                prompt=prompt,
-                max_tokens=config.max_tokens,
-                verbose=False,
-            )
-            return generated_text
+
         
         except Exception as e:
             raise RuntimeError(f"Generation failed: {str(e)}") from e
@@ -158,20 +183,19 @@ class MLXInferenceEngine:
         prompt: str,
         config: GenerationConfig,
     ) -> Iterator[str]:
-        """Generate text in streaming mode (token by token)."""
+        """Generate text in streaming mode"""
         try:
             from mlx_lm import generate
         except ImportError:
             raise RuntimeError("MLX not installed")
-        
+
         full_text = generate(
             self.model,
             self.tokenizer,
             prompt=prompt,
-            max_tokens=config.max_tokens,
-            verbose=False,
+            **self._build_generate_kwargs(config),
         )
-        
+
         for word in full_text.split():
             yield word + " "
     
@@ -180,23 +204,29 @@ class MLXInferenceEngine:
         user_input: str,
         context: Optional[list[str]] = None,
         system_prompt: Optional[str] = None,
+        enable_thinking: bool = True,
     ) -> str:
-        """Build formatted prompt with context."""
         system = system_prompt or self.system_prompt
-        
+
         context_section = ""
         if context:
             context_section = "## Relevant Context\n"
             for i, doc in enumerate(context, 1):
                 context_section += f"{i}. {doc}\n"
             context_section += "\n"
-        
-        prompt = f"""<|im_start|>system
-{system}<|im_end|>
-<|im_start|>user
-{context_section}{user_input}<|im_end|>
-<|im_start|>assistant"""
-        
+
+        parts = [
+            "<|im_start|>system",
+            f"{system}<|im_end|>",
+            "<|im_start|>user",
+            f"{context_section}{user_input}<|im_end|>",
+            "<|im_start|>assistant",
+        ]
+        prompt = "\n".join(parts)
+
+        if not enable_thinking:
+            prompt += "\n<think>\n\n</think>\n\n"
+
         return prompt
     
     def count_tokens(self, text: str) -> int:
@@ -254,36 +284,55 @@ class GeminiInferenceEngine:
         
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
         
+        generation_config = {
+            "maxOutputTokens": config.max_tokens,
+            "temperature": config.temperature,
+            "topP": config.top_p,
+            "topK": config.top_k,
+            "seed": config.seed,
+        }
+        if config.temperature <= 0.0:
+            generation_config["temperature"] = 0.0
+            generation_config["topK"] = 1
+
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "maxOutputTokens": config.max_tokens,
-                "temperature": config.temperature,
-                "topP": config.top_p,
-                "topK": config.top_k,
-            }
+            "generationConfig": generation_config,
         }
         
         req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
         
-        try:
-            with urllib.request.urlopen(req) as response:
-                result = json.loads(response.read().decode('utf-8'))
-                
-                # Check if there is text in the response
-                if "candidates" in result and len(result["candidates"]) > 0:
-                    candidate = result["candidates"][0]
-                    if "content" in candidate and "parts" in candidate["content"]:
-                        text = "".join(part.get("text", "") for part in candidate["content"]["parts"])
-                        if stream:
-                            return iter([text])
-                        return text
-                return ""
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            raise RuntimeError(f"Gemini generation failed: {e.code} - {error_body}") from e
-        except Exception as e:
-            raise RuntimeError(f"Generation failed: {str(e)}") from e
+        max_retries = 3
+        retry_delay = 5
+        
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=300) as response:
+                    result = json.loads(response.read().decode('utf-8'))
+                    
+                    if "candidates" in result and len(result["candidates"]) > 0:
+                        candidate = result["candidates"][0]
+                        if "content" in candidate and "parts" in candidate["content"]:
+                            text = "".join(part.get("text", "") for part in candidate["content"]["parts"])
+                            if stream:
+                                return iter([text])
+                            return text
+                    return ""
+            except urllib.error.HTTPError as e:
+                error_body = e.read().decode('utf-8')
+                if e.code in (503, 429) and attempt < max_retries - 1:
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                raise RuntimeError(f"Model generation failed: {e.code} - {error_body}") from e
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                raise RuntimeError(f"Generation failed: {str(e)}") from e
             
     def generate_with_metrics(
         self,
@@ -297,7 +346,7 @@ class GeminiInferenceEngine:
         metrics = GenerationMetrics(
             ttft_seconds=0.0,
             prompt_tokens=0,
-            generated_tokens=len(text.split()), # approximate
+            generated_tokens=len(text.split()),
             prompt_generation_speed_tok_s=0.0,
             generation_speed_tok_s=0.0,
             total_generation_seconds=round(total_time, 3),
@@ -310,16 +359,17 @@ class GeminiInferenceEngine:
         user_input: str,
         context: Optional[list[str]] = None,
         system_prompt: Optional[str] = None,
+        enable_thinking: bool = True,
     ) -> str:
         system = system_prompt or self.system_prompt
-        
+
         context_section = ""
         if context:
             context_section = "## Relevant Context\n"
             for i, doc in enumerate(context, 1):
                 context_section += f"{i}. {doc}\n"
             context_section += "\n"
-        
+
         prompt = f"System: {system}\n\nUser Context:\n{context_section}\n\nUser Input: {user_input}"
         return prompt
         

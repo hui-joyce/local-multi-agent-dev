@@ -1,22 +1,19 @@
 import os
-import ipaddress
 from typing import Optional
-from functools import lru_cache
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
-from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 from langgraph_orchestration.retrievers.config import RAGConfigManager
+from langgraph_orchestration.runtime import get_runtime
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 
 load_dotenv()
-@lru_cache(maxsize=1)
+
 def get_cached_graph():
-    graph = build_orchestration_graph()
+    graph = get_runtime().ensure_ready()
     graph.name = "Multi-Agent Orchestration"
     graph.description = "Supervisor-based multi-agent system routing to software development or reverse engineering domains"
     return graph
@@ -26,14 +23,14 @@ async def lifespan(app: FastAPI):
     if os.getenv("LANGSMITH_TRACING", "false").lower() == "true":
         try:
             from langsmith import Client
-            client = Client()
+            Client()
             print(f"✓ LangSmith connected to project: {os.getenv('LANGSMITH_PROJECT', 'default')}")
         except Exception as e:
             print(f"⚠ LangSmith warning: {e}")
-    
+
     get_cached_graph()
     print("✓ Graph loaded and cached for LangSmith discovery")
-    
+
     yield
 
 app = FastAPI(
@@ -42,15 +39,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-
-def _is_loopback_host(host: str) -> bool:
-    if host in {"localhost", "127.0.0.1", "::1"}:
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,11 +114,8 @@ async def get_info():
 @app.post("/invoke", response_model=AgentResponse)
 async def invoke_orchestration(request: AgentRequest):
     try:
-        graph = get_cached_graph()
-        initial_state = AgentState(user_input=request.user_input)
-        result = graph.invoke(initial_state.model_dump())
-        final_state = AgentState(**result)
-        
+        final_state = get_runtime().run(request.user_input)
+
         return AgentResponse(
             selected_domain=final_state.selected_domain,
             agent_chain=final_state.agent_chain,
@@ -261,18 +246,15 @@ async def get_graph_schema():
 async def invoke_langgraph(request: AgentRequest):
     """for LangSmith Studio integration"""
     try:
-        graph = get_cached_graph()
-        initial_state = AgentState(user_input=request.user_input)
-        
         # Invoke with explicit tracing tags for LangSmith
-        result = graph.invoke(
-            initial_state.model_dump(),
+        final_state = get_runtime().run(
+            request.user_input,
             config={
                 "run_name": "multi-agent-orchestration",
-                "tags": ["orchestration", "multi-agent"]
-            }
+                "tags": ["orchestration", "multi-agent"],
+            },
         )
-        return result
+        return final_state.model_dump()
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -388,11 +370,8 @@ async def rag_stats():
 @app.post("/threads/{thread_id}/messages")
 async def send_message(thread_id: str, request: AgentRequest):
     try:
-        graph = get_cached_graph()
-        initial_state = AgentState(user_input=request.user_input)
-        result = graph.invoke(initial_state.model_dump())
-        final_state = AgentState(**result)
-        
+        final_state = get_runtime().run(request.user_input)
+
         return {
             "thread_id": thread_id,
             "message": AgentResponse(

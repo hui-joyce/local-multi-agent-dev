@@ -36,7 +36,6 @@ def load_ipsw_skill_context(max_chars: int = 14000) -> str:
     except Exception:
         pass
 
-    # reference files
     ref_dir = skill_dir / "references"
     if ref_dir.exists():
         preferred = [

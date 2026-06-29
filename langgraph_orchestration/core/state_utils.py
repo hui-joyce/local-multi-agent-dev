@@ -8,15 +8,15 @@ class StateManager:
         if not text:
             return text
         
-        # Unwrap internal reasoning (extract content, don't delete)
+        # unwrap internal reasoning (extract content, don't delete)
         text = re.sub(r'<think>(.*?)</think>', r'\1', text, flags=re.DOTALL)
         text = re.sub(r'<thinking>(.*?)</thinking>', r'\1', text, flags=re.DOTALL)
         
-        # Remove tool call envelopes
+        # remove tool call envelopes
         text = re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL)
         text = re.sub(r'\[CONTEXT_COMPLETE\]', '', text, flags=re.DOTALL)
         
-        # Clean up excessive whitespace created by removal
+        # clean up excessive whitespace created by removal
         text = re.sub(r'\n\n\n+', '\n\n', text)
         
         return text.strip()
@@ -79,7 +79,6 @@ class StateManager:
                     if content:
                         formatted_text += f"\n\n**File: `{path}`**\n```python\n{content}\n```\n"
 
-            # fallback
             if parsed.parse_errors:
                 formatted_text += "\n\n*(Parser encountered issues extracting tool calls. Please check your workspace for the files.)*"
 
@@ -112,7 +111,7 @@ class StateManager:
                 command_line = f"\ncommand: {command}" if command else ""
                 body = result.output or (result.error or "")
                 
-                # Protect against max context length overflow from massive decompiler outputs
+                # protect against max context length overflow from massive decompiler outputs
                 if len(body) > 4000:
                     body = body[:2000] + "\n\n...[CONTENT TRUNCATED FOR CONTEXT LENGTH]...\n\n" + body[-2000:]
                     

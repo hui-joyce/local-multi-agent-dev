@@ -49,8 +49,10 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             "Perform baseline comparison and feature inference.\n\n"
             # "Version 1: iPhone17,1_18.2_22C152_Restore.ipsw\n"
             # "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
-            "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
-            "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
+            # "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
+            # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
+            "Version 1: iPhone17,1_18.4_22E240_Restore.ipsw\n"
+            "Version 2: iPhone17,1_18.4.1_22E252_Restore.ipsw\n"
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
     )
@@ -59,7 +61,7 @@ def run_ipsw_diff_case(graph: Any, case: IpswDiffCase) -> tuple[IpswDiffResult, 
     state = AgentState(user_input=case.user_input)
 
     start = time.perf_counter()
-    raw_result = graph.invoke(state.model_dump())
+    raw_result = graph.invoke(state.model_dump(), config={"recursion_limit": 1000})
     elapsed = time.perf_counter() - start
 
     final_state = AgentState(**raw_result)
@@ -120,7 +122,6 @@ def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
     return json_path, md_path
 
 def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFactory) -> dict[str, str]:
-    """Trigger feature analysis using the structured report.json payload"""
     diff_report_path = Path(diff_report_path)
 
     report_json_path: Path | None = None
@@ -146,7 +147,7 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFact
     start = time.perf_counter()
 
     re_graph = build_reverse_engineering_graph(factory=factory)
-    raw_result = re_graph.invoke(state.model_dump())
+    raw_result = re_graph.invoke(state.model_dump(), config={"recursion_limit": 1000})
 
     elapsed = time.perf_counter() - start
     final_state = AgentState(**raw_result)
@@ -163,8 +164,7 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFact
 def main() -> None:
     load_dotenv()
 
-    factory = MLXAgentFactory()
-    factory.ensure_loaded() 
+    factory = MLXAgentFactory() 
     graph = build_orchestration_graph(factory=factory)
 
     case = build_ipsw_diff_case()
@@ -186,6 +186,27 @@ def main() -> None:
 
     if not diff_report_path:
         diff_report_path = final_state_from_run.intermediate_outputs.get("firmware_diff_report_path")
+
+    idiff_path = None
+    if raw_diff_dir and Path(raw_diff_dir).exists():
+        ent_dir = Path(raw_diff_dir).parent / "entitlements"
+        if ent_dir.exists():
+            for root, _, files in os.walk(ent_dir):
+                for f in files:
+                    if f.endswith(".idiff"):
+                        idiff_path = Path(root) / f
+                        break
+                if idiff_path:
+                    break
+                
+    if idiff_path:
+        from ipsw_service.models import IDiffReport
+        print(f"\nLoading idiff payload from: {idiff_path}")
+        try:
+            idiff_report = IDiffReport.from_file(str(idiff_path))
+            print(f"Successfully loaded idiff report '{idiff_report.title}' with {len(idiff_report.machos)} binaries/dylibs tracked.")
+        except Exception as e:
+            print(f"Failed to load idiff report: {e}")
 
     if diff_report_path and Path(diff_report_path).exists():
         feature_reports = trigger_feature_analysis(diff_report_path, factory)

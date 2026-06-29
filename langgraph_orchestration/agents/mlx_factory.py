@@ -1,6 +1,6 @@
 from typing import Optional
 from langgraph_orchestration.inference.model_loader import MLXModelLoader
-from langgraph_orchestration.inference.inference_engine import MLXInferenceEngine, GeminiInferenceEngine
+from langgraph_orchestration.inference.inference_engine import MLXInferenceEngine
 from langgraph_orchestration.agents.mlx_agents import (
     MLXCodeGenerationAgent,
     MLXUnitTestingAgent,
@@ -22,8 +22,8 @@ class MLXAgentFactory:
         self.inference_engine: Optional[MLXInferenceEngine] = None
         self._model_loaded = False
 
-    def ensure_loaded(self) -> GeminiInferenceEngine:
-        """Ensure model is loaded and return a valid inference engine."""
+    def ensure_loaded(self) -> MLXInferenceEngine:
+        """Ensure model is loaded and return a valid inference engine"""
         if not self._model_loaded or self.inference_engine is None:
             self.load_model()
 
@@ -43,6 +43,9 @@ class MLXAgentFactory:
             model=model,
             tokenizer=tokenizer,
         )
+        
+        self._model_loaded = True
+        print("✓ MLX model loaded and ready")
         
         if self.inference_engine is None:
             raise RuntimeError("Model load completed but inference engine is None")
@@ -83,7 +86,7 @@ class MLXAgentFactory:
         }
     
     def get_model_info(self) -> dict:
-        """Get information about loaded model."""
+        """Get information about loaded model"""
         if not self._model_loaded:
             return {"status": "not_loaded"}
         

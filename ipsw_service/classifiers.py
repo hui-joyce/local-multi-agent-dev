@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Iterable
 
 from ipsw_service.models import DiffCounts, EvidenceItem, Finding
@@ -21,7 +20,7 @@ PRIVILEGED_PATH_HINTS = [
     "/System/Library/PrivateFrameworks",
 ]
 
-# Keywords that indicate an IPC/XPC surface within a sandbox policy line
+# keywords that indicate an IPC/XPC surface within a sandbox policy line
 _IPC_KEYWORDS = ("mach-lookup", "xpc")
 
 class ChangeClassifier:
@@ -47,10 +46,9 @@ class ChangeClassifier:
 
         findings: list[Finding] = []
         findings.extend(self._classify_entitlements(diff_data.get("entitlement_changes", [])))
-        # Sandbox classifier sub-tags IPC lines instead of emitting a separate
-        # IPC finding for each, avoiding double-counting.
+        # sandbox classifier sub-tags IPC lines instead of emitting a separate
+        # iPC finding for each, avoiding double-counting.
         findings.extend(self._classify_sandbox(diff_data.get("sandbox_changes", [])))
-        findings.extend(self._classify_privileged_binaries(diff_data.get("added_binaries", [])))
         findings.extend(self._classify_launchd(diff_data.get("launchd_changes", [])))
 
         return counts, findings
@@ -101,22 +99,6 @@ class ChangeClassifier:
                 )
         return findings
 
-    def _classify_privileged_binaries(self, binaries: Iterable[str]) -> list[Finding]:
-        findings: list[Finding] = []
-        for binary in binaries:
-            if any(hint in binary for hint in self.privileged_path_hints):
-                findings.append(
-                    Finding(
-                        title="New privileged binary added",
-                        change_type="binary_added",
-                        impact="New executable in privileged path may expand attack surface.",
-                        mitigation="Perform static analysis and entitlement review on the new binary.",
-                        confidence=0.6,
-                        evidence=[EvidenceItem(source="firmware_diff", summary=binary)],
-                    )
-                )
-        return findings
-
     def _classify_launchd(self, changes: Iterable[str]) -> list[Finding]:
         findings: list[Finding] = []
         for line in changes:
@@ -131,6 +113,3 @@ class ChangeClassifier:
                 )
             )
         return findings
-
-def serialize_findings(findings: list[Finding]) -> list[dict]:
-    return [asdict(finding) for finding in findings]

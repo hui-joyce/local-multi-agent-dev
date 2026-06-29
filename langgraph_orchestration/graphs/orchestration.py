@@ -3,7 +3,6 @@
 from langgraph.graph import StateGraph, END
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
-from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
 from langgraph_orchestration.graphs.software_dev import build_software_dev_graph
 from langgraph_orchestration.synthesis.synthesizer import synthesize_orchestration_output
@@ -22,7 +21,6 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
 
     supervisor = factory.create_supervisor_agent()
 
-    # Build domain-specific subgraphs
     dev_graph = build_software_dev_graph(factory=factory)
     re_graph = build_reverse_engineering_graph(factory=factory)
 
@@ -100,27 +98,23 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
         else:
             return "reverse_engineering"
 
-    def route_to_synthesis(state: AgentState) -> str:
-        return "final_synthesis"
-
-    # Add nodes
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("software_dev", software_dev_router)
     graph.add_node("reverse_engineering", reverse_engineering_router)
     graph.add_node("final_synthesis", final_synthesis)
 
-    # Add edges and routing
+    # add edges and routing
     graph.add_conditional_edges(
         "supervisor",
         route_after_supervisor,
         {
             "software_dev": "software_dev",
             "reverse_engineering": "reverse_engineering",
-            "software_dev_and_re": "software_dev",  # Start with software dev, then flow to RE
+            "software_dev_and_re": "software_dev",  # start with software dev, then flow to RE
         },
     )
     
-    # After software dev, route to RE if needed, otherwise to synthesis
+    # after software dev, route to RE if needed, otherwise to synthesis
     def route_after_software_dev(state: AgentState) -> str:
         if "reverse_engineering" in state.execution_domains:
             return "reverse_engineering"
@@ -135,10 +129,10 @@ def build_orchestration_graph(factory: MLXAgentFactory = None):
         },
     )
     
-    # After reverse engineering, always route to synthesis
+    # after reverse engineering, always route to synthesis
     graph.add_edge("reverse_engineering", "final_synthesis")
     
-    # Final synthesis to end
+    # final synthesis to end
     graph.add_edge("final_synthesis", END)
 
     graph.set_entry_point("supervisor")

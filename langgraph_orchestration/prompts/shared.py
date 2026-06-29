@@ -18,11 +18,6 @@ _REVERSE_ENGINEERING_ALLOWED_TOOLS = [
     "read_file",
     "read_many_files",
     "read_decompilation",
-    "read_disassembly",
-    "xrefs_to",
-    "xrefs_from",
-    "lookup_funcs",
-    "basic_blocks",
     "ipsw_cli",
     "ipsw_download",
     "ipsw_extract",
@@ -31,7 +26,9 @@ _REVERSE_ENGINEERING_ALLOWED_TOOLS = [
     "decompile_function",
     "get_xrefs_to",
     "rename_local_variable",
+    "get_local_variables",
     "set_comment",
+    "save_ida_database",
 ]
 
 def get_allowed_tools(domain: str) -> list[str]:

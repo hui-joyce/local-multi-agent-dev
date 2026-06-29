@@ -198,7 +198,7 @@ def run_case(graph: Any, case: BenchmarkCase, factory: Any = None) -> BenchmarkR
     initial_state = AgentState(user_input=case.user_input)
 
     start = time.perf_counter()
-    result = graph.invoke(initial_state.model_dump())
+    result = graph.invoke(initial_state.model_dump(), config={"recursion_limit": 1000})
     elapsed = time.perf_counter() - start
 
     final_state = AgentState(**result)

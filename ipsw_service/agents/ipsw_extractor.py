@@ -24,12 +24,9 @@ class IpswExtractorAgent:
             commands: list[str] = []
             errors: list[str] = []
 
-            # DSC extraction
-            # Skip if the base DSC is already present 
             existing_dyld_paths = self._find_extracted_paths(ipsw_dir, "dyld_shared_cache")
             existing_dyld_paths = [p for p in existing_dyld_paths if os.path.exists(p) and "." not in os.path.basename(p)]
             if existing_dyld_paths:
-                # Already extracted — record a synthetic command for the audit log.
                 commands.append(f"[skipped] dyld already extracted to {ipsw_dir}")
                 dyld_result_stdout = ""
                 dyld_result_stderr = ""
@@ -50,7 +47,6 @@ class IpswExtractorAgent:
                     errors.append(dyld_result.stderr or "dyld extraction failed")
                     overall_success = False
 
-            # Kernelcache extraction 
             existing_kernel_paths = self._find_extracted_paths(ipsw_dir, "kernelcache")
             existing_kernel_paths = [p for p in existing_kernel_paths if os.path.exists(p)]
             if existing_kernel_paths:
@@ -73,7 +69,7 @@ class IpswExtractorAgent:
                     errors.append(kernel_result.stderr or "kernel extraction failed")
                     overall_success = False
 
-            # Resolve paths: prefer paths surfaced by CLI output, then fall back to filesystem scan
+            # resolve paths: prefer paths surfaced by CLI output, then fall back to filesystem scan
             dyld_paths = extract_paths_by_keyword(
                 dyld_result_stdout + "\n" + dyld_result_stderr, "dyld_shared_cache"
             )
@@ -84,7 +80,7 @@ class IpswExtractorAgent:
             kernel_paths = [path for path in kernel_paths if os.path.exists(path)]
             if not dyld_paths:
                 dyld_paths = self._find_extracted_paths(ipsw_dir, "dyld_shared_cache")
-                # Only keep the base cache file (no subcache shard extensions like .01, .02…)
+                # only keep the base cache file (no subcache shard extensions like .01, .02…)
                 dyld_paths = [p for p in dyld_paths if "." not in os.path.basename(p)]
             if not kernel_paths:
                 kernel_paths = self._find_extracted_paths(ipsw_dir, "kernelcache")

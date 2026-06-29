@@ -38,7 +38,7 @@ _ITEM_EXTENSIONS = (
     ".g18p",
 )
 
-# Matches a bare com.apple.* entitlement token
+# matches a bare com.apple.* entitlement token
 _ENTITLEMENT_RE = re.compile(r"(?<![/\w])(com\.apple\.[a-z0-9.\-]+)", re.IGNORECASE)
 
 def strip_ansi(text: str) -> str:
@@ -50,7 +50,7 @@ def extract_paths_by_keyword(output: str, keyword: str) -> list[str]:
     if not output:
         return []
     cleaned = strip_ansi(output)
-    # Strictly anchor to path-safe characters to prevent capturing punctuation
+    # strictly anchor to path-safe characters to prevent capturing punctuation
     pattern = rf"(/[a-zA-Z0-9_\-\./]*{re.escape(keyword)}[a-zA-Z0-9_\-\./]*)"
     return list(dict.fromkeys(re.findall(pattern, cleaned)))
 
@@ -93,8 +93,6 @@ def _resolve_component(titles: list[str]) -> str | None:
             return "firmware"
         if "iboot" in lowered:
             return "iboot"
-        if "framework" in lowered:
-            return "framework"
         if "launchd" in lowered or "service" in lowered:
             return "launchd"
         if "kernel" in lowered:
@@ -107,7 +105,7 @@ def _looks_like_item(text: str) -> bool:
     lowered = text.lower()
     if text.startswith("/"):
         return True
-    if "/" in text and len(text) > 2:  # Prevent catching isolated slashes in conversational text
+    if "/" in text and len(text) > 2:  # prevent catching isolated slashes in conversational text
         return True
     if lowered.startswith("com.apple."):
         return True
@@ -115,12 +113,12 @@ def _looks_like_item(text: str) -> bool:
 
 def _extract_item_token(text: str) -> str | None:
     """Tokenizes and extracts the core path, bundle ID, or markdown link from noisy text"""
-    # Matches explicit markdown links e.g. [name](/path)
+    # matches explicit markdown links e.g. [name](/path)
     link_match = re.search(r"(\[.*?\]\(.*?\))", text)
     if link_match:
         return link_match.group(1)
     
-    # Split text to bypass surrounding conversational syntax and extract valid paths
+    # split text to bypass surrounding conversational syntax and extract valid paths
     for word in text.split():
         clean_word = word.strip(":,()[]{}*`\"'")
         if _looks_like_item(clean_word):
@@ -143,24 +141,25 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
 
     added_binaries: list[str] = []
     modified_binaries: list[str] = []
+    macho_binaries: list[str] = []   # filesystem Mach-O origin (## MachO section)
+    dsc_dylibs: list[str] = []       # dyld_shared_cache origin (## DSC section)
     entitlements: list[str] = []
     sandbox: list[str] = []
     kexts: list[str] = []
-    frameworks: list[str] = []
     launchd: list[str] = []
     firmware_added: list[str] = []
     firmware_modified: list[str] = []
     iboot_added: list[str] = []
     iboot_modified: list[str] = []
 
-    seen = {
+    seen: dict[str, set[str]] = {
         "added": set(),
-        "removed": set(),
         "modified": set(),
+        "macho_binaries": set(),
+        "dsc_dylibs": set(),
         "entitlements": set(),
         "sandbox": set(),
         "kexts": set(),
-        "frameworks": set(),
         "launchd": set(),
         "firmware_added": set(),
         "firmware_modified": set(),
@@ -170,11 +169,23 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
 
     component_hint: str | None = None
     active_change_type: str | None = None
+    active_section: str | None = None  # "macho" | "dsc" | None — set by ## headings
+    in_diff_block: bool = False         # True while inside a ```diff...``` fence
 
     for raw in text.splitlines():
         line = strip_ansi(raw).rstrip()
         level, title = _heading_level(line)
         if level:
+            # Top-level (##) headings determine the binary origin section
+            if level == 2:
+                lowered = title.lower()
+                if "macho" in lowered or "mach-o" in lowered:
+                    active_section = "macho"
+                elif "dsc" in lowered:
+                    active_section = "dsc"
+                else:
+                    active_section = None
+
             headings[level - 1] = title
             for idx in range(level, len(headings)):
                 headings[idx] = None
@@ -199,24 +210,22 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
                 change_type = _resolve_change_type(titles) or active_change_type
                 if change_type:
                     _apply_item(
-                        item,
-                        titles,
-                        change_type,
-                        component_hint,
-                        added_binaries,
-                        modified_binaries,
-                        kexts,
-                        frameworks,
-                        launchd,
-                        firmware_added,
-                        firmware_modified,
-                        iboot_added,
-                        iboot_modified,
-                        seen,
+                        item, titles, change_type, component_hint, active_section,
+                        added_binaries, modified_binaries, macho_binaries, dsc_dylibs,
+                        kexts, launchd, firmware_added, firmware_modified,
+                        iboot_added, iboot_modified, seen,
                     )
             continue
 
         stripped = line.strip()
+        # Track diff fences — items inside a ```diff block are diff content, not binary paths.
+        if stripped.startswith("```"):
+            in_diff_block = stripped.startswith("```diff")
+            continue
+
+        if in_diff_block:
+            continue
+
         if stripped.startswith("- "):
             raw_item = stripped[2:].strip()
             item = _extract_item_token(raw_item)
@@ -227,20 +236,10 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             if not change_type:
                 continue
             _apply_item(
-                item,
-                titles,
-                change_type,
-                component_hint,
-                added_binaries,
-                modified_binaries,
-                kexts,
-                frameworks,
-                launchd,
-                firmware_added,
-                firmware_modified,
-                iboot_added,
-                iboot_modified,
-                seen,
+                item, titles, change_type, component_hint, active_section,
+                added_binaries, modified_binaries, macho_binaries, dsc_dylibs,
+                kexts, launchd, firmware_added, firmware_modified,
+                iboot_added, iboot_modified, seen,
             )
             continue
 
@@ -254,20 +253,10 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             if not change_type:
                 continue
             _apply_item(
-                item,
-                titles,
-                change_type,
-                component_hint,
-                added_binaries,
-                modified_binaries,
-                kexts,
-                frameworks,
-                launchd,
-                firmware_added,
-                firmware_modified,
-                iboot_added,
-                iboot_modified,
-                seen,
+                item, titles, change_type, component_hint, active_section,
+                added_binaries, modified_binaries, macho_binaries, dsc_dylibs,
+                kexts, launchd, firmware_added, firmware_modified,
+                iboot_added, iboot_modified, seen,
             )
             continue
 
@@ -289,10 +278,11 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
     return {
         "added_binaries": added_binaries,
         "modified_binaries": modified_binaries,
+        "macho_binaries": macho_binaries,
+        "dsc_dylibs": dsc_dylibs,
         "entitlement_changes": entitlements,
         "sandbox_changes": sandbox,
         "kext_changes": kexts,
-        "framework_changes": frameworks,
         "launchd_changes": launchd,
         "firmware_added": firmware_added,
         "firmware_modified": firmware_modified,
@@ -305,10 +295,12 @@ def _apply_item(
     titles: list[str],
     change_type: str,
     component_hint: str | None,
+    active_section: str | None,
     added_binaries: list[str],
     modified_binaries: list[str],
+    macho_binaries: list[str],
+    dsc_dylibs: list[str],
     kexts: list[str],
-    frameworks: list[str],
     launchd: list[str],
     firmware_added: list[str],
     firmware_modified: list[str],
@@ -320,32 +312,32 @@ def _apply_item(
     if component_hint and (component is None or component in {"kernel", "dsc"}):
         component = component_hint
 
+    # Route to flat change lists (used by classifier for counts)
     if change_type == "added":
         _add_unique(added_binaries, item, seen["added"])
     elif change_type == "modified":
         _add_unique(modified_binaries, item, seen["modified"])
 
+    # Route to specialised component lists
     if component == "kext":
         _add_unique(kexts, item, seen["kexts"])
 
     lowered = item.lower()
-    if component == "framework" or "/frameworks/" in lowered or ".framework" in lowered:
-        _add_unique(frameworks, item, seen["frameworks"])
-
     if component == "launchd" or "/launchdaemons" in lowered or "/launchagents" in lowered:
         _add_unique(launchd, item, seen["launchd"])
 
     if component == "firmware":
-        if change_type == "added":
-            _add_unique(firmware_added, item, seen["firmware_added"])
-        elif change_type == "modified":
-            _add_unique(firmware_modified, item, seen["firmware_modified"])
+        target, key = (firmware_added, "firmware_added") if change_type == "added" else (firmware_modified, "firmware_modified")
+        _add_unique(target, item, seen[key])
 
     if component == "iboot":
-        if change_type == "added":
-            _add_unique(iboot_added, item, seen["iboot_added"])
-        elif change_type == "modified":
-            _add_unique(iboot_modified, item, seen["iboot_modified"])
+        target, key = (iboot_added, "iboot_added") if change_type == "added" else (iboot_modified, "iboot_modified")
+        _add_unique(target, item, seen[key])
+
+    if active_section == "macho":
+        _add_unique(macho_binaries, item, seen["macho_binaries"])
+    elif active_section == "dsc":
+        _add_unique(dsc_dylibs, item, seen["dsc_dylibs"])
 
 def parse_simple_list_output(text: str) -> list[str]:
     cleaned = strip_ansi(text)
@@ -410,7 +402,7 @@ def extract_cstring_diffs(text: str) -> list[str]:
             in_cstring_section = True
             continue
         elif line.strip().endswith(":") and not line.startswith("+") and not line.startswith("-"):
-            # Some other section like "Symbols:"
+            # some other section like "Symbols:"
             in_cstring_section = False
 
         if not (line.startswith("+") or line.startswith("-")):
@@ -423,6 +415,64 @@ def extract_cstring_diffs(text: str) -> list[str]:
             continue
 
         if not in_cstring_section:
+            continue
+
+        label = current_item or ""
+        entry = f"{label}: {line.strip()}" if label else line.strip()
+        if entry not in seen:
+            seen.add(entry)
+            results.append(entry)
+
+    return results
+
+def extract_symbol_diffs(text: str) -> list[str]:
+    headings: list[str | None] = [None] * 6
+    results: list[str] = []
+    seen: set[str] = set()
+    current_item: str | None = None
+    in_diff_block = False
+    in_symbol_section = False
+
+    for raw in text.splitlines():
+        line = strip_ansi(raw).rstrip()
+        if line.strip().startswith("```"):
+            if line.strip().startswith("```diff"):
+                in_diff_block = True
+                in_symbol_section = False
+            else:
+                in_diff_block = False
+                in_symbol_section = False
+            continue
+
+        level, title = _heading_level(line)
+        if level:
+            headings[level - 1] = title
+            for idx in range(level, len(headings)):
+                headings[idx] = None
+            if level >= 4 and title and not _is_group_heading(title):
+                extracted = _extract_item_token(title)
+                current_item = extracted if extracted else title.strip(" `*")
+            continue
+
+        if not in_diff_block:
+            continue
+
+        if line.strip() == "Symbols:":
+            in_symbol_section = True
+            continue
+        elif line.strip().endswith(":") and not line.startswith("+") and not line.startswith("-"):
+            in_symbol_section = False
+
+        if not (line.startswith("+") or line.startswith("-")):
+            continue
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+
+        lowered = line.lower()
+        if "symbols:" in lowered or "__symbol" in lowered:
+            continue
+
+        if not in_symbol_section:
             continue
 
         label = current_item or ""

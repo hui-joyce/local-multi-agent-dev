@@ -16,7 +16,7 @@ from langgraph_orchestration.prompts.supervisor import (
 class SupervisorAgent(SyncBaseAgent):
     DOMAIN_OPTIONS = ("software_dev", "reverse_engineering")
     LABEL_OPTIONS = ("SOFTWARE_DEV", "REVERSE_ENGINEERING", "BOTH")
-    # Clear cache when it reaches this size to cap memory usage.
+    # clear cache when it reaches this size to cap memory usage
     _CACHE_MAX_SIZE = 1000
 
     def __init__(self, inference_engine: Optional[MLXInferenceEngine] = None):
@@ -40,7 +40,7 @@ class SupervisorAgent(SyncBaseAgent):
 
         text = self._remove_thinking_blocks(text)
 
-        # Remove fenced JSON blocks that include diagnostic keys
+        # remove fenced JSON blocks that include diagnostic keys
         def _remove_block(match):
             block = match.group(0)
             if re.search(r"\b(tool|metric|trace|langgraph|orchestration|diagnostic|tool_result|metrics)\b", block, flags=re.IGNORECASE):
@@ -49,7 +49,7 @@ class SupervisorAgent(SyncBaseAgent):
 
         text = re.sub(r"```json[\s\S]*?```", _remove_block, text, flags=re.IGNORECASE)
 
-        # Remove inline lines that look like tool traces
+        # remove inline lines that look like tool traces
         cleaned_lines = []
         for line in text.splitlines():
             if re.search(r"\b(tool|tool_call|tool_result|metrics|trace|langgraph)\b", line, flags=re.IGNORECASE):
@@ -93,14 +93,21 @@ class SupervisorAgent(SyncBaseAgent):
         if self.inference_engine is None:
             return None
 
-        resolver_prompt = (
+        resolver_system = (
             "You are a strict routing label resolver.\n"
             "Choose exactly one label for the request below.\n"
             "Allowed labels: SOFTWARE_DEV, REVERSE_ENGINEERING, BOTH.\n"
-            "Return only one label token and nothing else.\n\n"
+            "Return only one label token and nothing else."
+        )
+        resolver_user = (
             f"Request:\n{user_input}\n\n"
             "Classifier output to resolve (may be noisy):\n"
             f"{prior_output}\n"
+        )
+        resolver_prompt = self.inference_engine.build_prompt(
+            user_input=resolver_user,
+            system_prompt=resolver_system,
+            enable_thinking=False,
         )
 
         try:
@@ -118,7 +125,7 @@ class SupervisorAgent(SyncBaseAgent):
         """Extract domain-specific subtasks from a multi-domain request"""
         normalized_input = re.sub(r"\s+", " ", user_input).strip()
 
-        # Prefer deterministic splits for explicit "and then" requests.
+        # prefer deterministic splits for explicit "and then" requests.
         split_markers = (
             r"\band then\b",
             r"\bthen\b",
@@ -213,35 +220,6 @@ class SupervisorAgent(SyncBaseAgent):
             "split_tasks": split_tasks or {},
         }
 
-    def _extract_decision(self, raw_output: str) -> Optional[dict]:
-        cleaned = raw_output.strip()
-        parsed = self._parse_json_from_text(cleaned)
-        if parsed is None:
-            return None
-        
-        execution_domains = parsed.get("execution_domains")
-        if not isinstance(execution_domains, list) or not execution_domains:
-            return None
-
-        # Normalize and deduplicate domains
-        normalized_domains = [
-            str(d).strip().lower() for d in execution_domains if str(d).strip().lower() in self.DOMAIN_OPTIONS
-        ]
-        normalized_domains = list(dict.fromkeys(normalized_domains))
-        
-        if not normalized_domains:
-            return None
-
-        primary_domain = str(parsed.get("primary_domain", "")).strip().lower()
-        if primary_domain not in self.DOMAIN_OPTIONS:
-            primary_domain = normalized_domains[0]
-
-        split_tasks = parsed.get("split_tasks", {})
-        if not isinstance(split_tasks, dict):
-            split_tasks = {}
-
-        return self._build_decision(primary_domain, normalized_domains, split_tasks)
-    
     def invoke(
         self,
         user_input: str,
@@ -281,7 +259,7 @@ class SupervisorAgent(SyncBaseAgent):
                         + "\n\nIMPORTANT: Output one label only: SOFTWARE_DEV or REVERSE_ENGINEERING or BOTH."
                     )
 
-                # Capture generation metrics on the first attempt
+                # capture generation metrics on the first attempt
                 output = self.inference_engine.generate_with_metrics(
                     prompt=attempt_prompt,
                     config=config,

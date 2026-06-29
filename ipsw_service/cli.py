@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Optional
+
+_HDIUTIL_PERM_RE = re.compile(r"hdiutil:\s+attach\s+failed.*permission\s+denied", re.IGNORECASE)
 
 @dataclass
 class CommandResult:
@@ -66,12 +70,121 @@ class IpswCliRunner:
                 success=False,
             )
 
-    def run_shell(self, command: str, timeout: int = 600, cwd: Optional[str] = None) -> CommandResult:
-        """Run a shell command string (supports pipes) and return a CommandResult.
+    def _needs_sudo_retry(self, result: CommandResult) -> bool:
+        """Return True if the result contains the SystemOS mount permission error"""
+        combined = result.stdout + result.stderr
+        return bool(_HDIUTIL_PERM_RE.search(combined))
 
-        This is used for lightweight shell pipelines such as piping output to `wc -l` to avoid
-        capturing extremely large stdout blobs in Python memory.
+    def run_with_sudo_fallback(
+        self,
+        args: list[str],
+        timeout: int = 600,
+        cwd: Optional[str] = None,
+    ) -> CommandResult:
+        """Run the command; if hdiutil permission denied is detected, retry with sudo.
+
+        Sudo credential resolution order:
+          1. ``IPSW_SUDO_PASSWORD`` environment variable — piped to ``sudo -S``.
+          2. Passwordless sudo (``sudo -n``) — works if the user has a
+             NOPASSWD entry for ``ipsw`` in sudoers
+          3. Falls back to returning the original (non-sudo) result
         """
+        result = self.run(args, timeout=timeout, cwd=cwd)
+        if not self._needs_sudo_retry(result):
+            return result
+
+        # Attempt 1: passwordless sudo (-n flag — no password prompt)
+        sudo_password = os.environ.get("IPSW_SUDO_PASSWORD", "")
+        cmd_base = [self.executable, *args]
+
+        if not sudo_password:
+            sudo_cmd = ["sudo", "-n", *cmd_base]
+            started = time.perf_counter()
+            try:
+                proc = subprocess.run(
+                    sudo_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=cwd or self.cwd,
+                )
+                duration = time.perf_counter() - started
+                stdout = (proc.stdout or "").strip()
+                stderr = (proc.stderr or "").strip()
+                # If passwordless sudo also hit permission denied, fall through
+                combined = stdout + stderr
+                if proc.returncode == 0 or not _HDIUTIL_PERM_RE.search(combined):
+
+                    return CommandResult(
+                        args=sudo_cmd,
+                        command=" ".join(sudo_cmd),
+                        stdout=stdout,
+                        stderr=stderr,
+                        exit_code=proc.returncode,
+                        duration_seconds=round(duration, 3),
+                        success=proc.returncode == 0,
+                    )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+            # Passwordless sudo unavailable, return original result with a note
+            annotated = CommandResult(
+                args=result.args,
+                command=result.command,
+                stdout=result.stdout,
+                stderr=(
+                    result.stderr
+                    + "\n[sudo-retry] SystemOS volume requires sudo. "
+                    "Set IPSW_SUDO_PASSWORD env var or grant NOPASSWD sudo for ipsw."
+                ),
+                exit_code=result.exit_code,
+                duration_seconds=result.duration_seconds,
+                success=result.success,
+            )
+            return annotated
+
+        # Attempt 2: sudo -S (password via stdin)
+        sudo_cmd = ["sudo", "-S", *cmd_base]
+        started = time.perf_counter()
+        try:
+            proc = subprocess.run(
+                sudo_cmd,
+                input=sudo_password + "\n",
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=cwd or self.cwd,
+            )
+            duration = time.perf_counter() - started
+            stdout = (proc.stdout or "").strip()
+            stderr = (proc.stderr or "").strip()
+            return CommandResult(
+                args=sudo_cmd,
+                command="sudo -S " + " ".join(cmd_base),
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=proc.returncode,
+                duration_seconds=round(duration, 3),
+                success=proc.returncode == 0,
+            )
+        except FileNotFoundError:
+            pass
+        except subprocess.TimeoutExpired:
+            duration = time.perf_counter() - started
+            return CommandResult(
+                args=sudo_cmd,
+                command="sudo -S " + " ".join(cmd_base),
+                stdout="",
+                stderr=f"sudo ipsw command timed out after {timeout}s",
+                exit_code=124,
+                duration_seconds=round(duration, 3),
+                success=False,
+            )
+
+        # return original
+        return result
+
+    def run_shell(self, command: str, timeout: int = 600, cwd: Optional[str] = None) -> CommandResult:
+        """Run a shell command string (supports pipes) and return a CommandResult"""
         started = time.perf_counter()
         try:
             proc = subprocess.run(
@@ -117,7 +230,6 @@ class IpswCliRunner:
                 success=False,
             )
 
-
 def build_download_args(
     device: str,
     version: Optional[str] = None,
@@ -128,6 +240,12 @@ def build_download_args(
     include_kernel: bool = False,
     include_dyld: bool = False,
 ) -> list[str]:
+    # ensure version and build are properly separated if a concatenated string is passed
+    if version and not build and "_" in str(version):
+        parts = str(version).split("_", 1)
+        version = parts[0]
+        build = parts[1]
+
     args = ["download", "ipsw", "--device", str(device)]
     if build:
         args.extend(["--build", str(build)])
@@ -175,9 +293,11 @@ def build_diff_args(
     include_fw: bool = True,
     include_launchd: bool = True,
     include_entitlements: bool = False,
+    include_sandbox: bool = False,
     include_strs: bool = True,
     low_memory: bool = False,
     json_output: bool = False,
+    clean: bool = False,
 ) -> list[str]:
     args = ["diff", str(old_ipsw), str(new_ipsw)]
     if output_dir:
@@ -190,12 +310,16 @@ def build_diff_args(
         args.append("--launchd")
     if include_entitlements:
         args.append("--ent")
+    if include_sandbox:
+        args.append("--sandbox")
     if include_strs:
         args.append("--strs")
     if low_memory:
         args.append("--low-memory")
     if json_output:
         args.append("--json")
+    if clean:
+        args.append("--clean")
     return args
 
 

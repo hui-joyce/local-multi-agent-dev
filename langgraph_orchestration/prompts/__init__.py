@@ -39,7 +39,7 @@ def render_prompt(relative_path: str, **kwargs: Any) -> tuple[str, str]:
 	frontmatter, body = load_prompt_file(relative_path)
 	system_prompt = frontmatter.get("system_prompt", "")
 
-	# Only replace simple identifier placeholders like {user_input}, {attempt}
+	# only replace simple identifier placeholders like {user_input}, {attempt}
 	pattern = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 	def _repl(match: re.Match) -> str:
