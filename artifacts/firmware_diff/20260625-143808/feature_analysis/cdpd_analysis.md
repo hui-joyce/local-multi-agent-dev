@@ -3,38 +3,30 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `- _OBJC_CLASS_$_CDPDUnlockObserver`
 - **Analysis mode**: decompiled
+- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
 
 ## What this feature does
-The `cdpd` binary (CoreCDP Daemon) has undergone a reduction in scope in the 18.2.1 update. Specifically, the `CDPDUnlockObserver` class and its associated logic have been removed. This component was responsible for observing system unlock events to trigger CoreCDP (Core Data Protection) workflows, likely related to keychain synchronization or device-bound secret recovery upon user authentication. The removal of this observer suggests a deprecation of this specific event-driven trigger within the daemon, potentially shifting the responsibility to a different process or simplifying the unlock-handling architecture.
+The binary `cdpd` (CoreCDP Daemon) has undergone a reduction in its symbol table and binary footprint in the 18.2.1 update. Specifically, the `CDPDUnlockObserver` class has been removed. This indicates that the daemon no longer maintains an internal observer for device unlock events, likely shifting the responsibility for handling unlock-triggered CDP (Core Data Protection) operations to a different component or consolidating the logic elsewhere in the framework.
 
 ## How is it implemented
-The implementation change is characterized by the removal of the `CDPDUnlockObserver` symbol and a corresponding reduction in the binary's text and data segments. The decompilation of the remaining stub `_objc_release_x23` confirms that the binary is now essentially a minimal shell, as the primary functional class has been excised.
-
-```c
-__int64 objc_release_x23()
-{
-  return _objc_release_x23();
-}
-```
-
-The removal of `_OBJC_CLASS_$_CDPDUnlockObserver` indicates that the daemon no longer registers for or processes unlock notifications via this specific class. The binary size reduction (from 0x24c to 0x214 in `__TEXT.__text`) and the removal of the `CoreCDPInternal` framework dependency confirm that the logic previously contained within this binary has been stripped out.
+The implementation change is characterized by the removal of the `CDPDUnlockObserver` Objective-C class. As the symbol `_OBJC_CLASS_$_CDPDUnlockObserver` is no longer present in the binary, the associated logic for registering for and responding to unlock notifications has been excised. The reduction in `__TEXT.__text` size (from 0x24c to 0x214) and the removal of the `CoreFoundation` dependency confirm that the binary has been simplified by removing this observer pattern.
 
 ## How to trigger this feature
-This feature is no longer triggerable as the code responsible for the `CDPDUnlockObserver` has been removed from the `cdpd` binary in version 18.2.1.
+This feature change is triggered by the system's internal notification center. Previously, `cdpd` would have been listening for unlock notifications (e.g., `kSBLockStateChangedNotification` or similar Darwin notifications) via the `CDPDUnlockObserver`. With this class removed, the trigger condition is no longer handled by this specific binary.
 
 ## Vulnerability Assessment
-The removal of `CDPDUnlockObserver` is likely a cleanup or refactoring effort rather than a direct security patch. By removing an observer class, the attack surface of the `cdpd` daemon is slightly reduced, as there is one less entry point for event-driven code execution. No evidence of a vulnerability fix (such as added bounds checks or memory management improvements) was observed; the change appears to be a functional deprecation.
+This change is likely a refactoring or cleanup effort rather than a direct security patch. The removal of an observer class suggests a reduction in the attack surface of the `cdpd` daemon by eliminating a potential entry point for event-driven logic. No evidence of a memory safety fix (such as UAF or OOB) was found in the diff; the changes are consistent with code consolidation.
 
 ## Evidence
-- **Binary**: `/System/Library/PrivateFrameworks/CoreCDP.framework/cdpd`
-- **Removed Symbol**: `_OBJC_CLASS_$_CDPDUnlockObserver`
-- **Removed Dependency**: `/System/Library/PrivateFrameworks/CoreCDPInternal.framework/CoreCDPInternal`
-- **Binary Diff**: Reduction in `__TEXT.__text` (0x24c -> 0x214) and `__DATA_CONST` segments.
+- **Binary Diff**: `cdpd` size reduction in `__TEXT.__text` (0x24c -> 0x214).
+- **Symbol Removal**: `_OBJC_CLASS_$_CDPDUnlockObserver` removed.
+- **Dependency Change**: `CoreFoundation.framework` dependency removed.
+- **UUID Change**: `6C1C13B3-63F9-3E84-8118-E002420C8A24` -> `0852048F-712F-33DD-B876-D3E494C0BB3C`.
 
 ## AI Prioritisation Scoring System
 
-- **static_analysis**
+- **binary_diff_analysis**
   - **Tier**: TIER_2
   - **Category**: refactor
-  - **Reasoning**: Removal of a core observer class in a security-sensitive daemon (CoreCDP) indicates a significant architectural change in how unlock events are handled, warranting medium-priority tracking.
+  - **Reasoning**: The removal of a daemon-level observer class represents a significant change in the daemon's lifecycle and event-handling architecture, warranting medium interest.
 

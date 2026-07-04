@@ -111,6 +111,15 @@ class AgentState(BaseModel):
         description="Generated feature analysis reports keyed by feature name",
     )
 
+    feature_triage_index: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Classification record for every diff component (HIGH/LOW signal, "
+            "security score, tier, Apple Security Notes match, whether analysed). "
+            "Rendered into the consolidated feature_analysis summary at the end."
+        ),
+    )
+
     intermediate_outputs: dict[str, str] = Field(
         default_factory=dict,
         description="Outputs from individual agents {agent_name: output}",

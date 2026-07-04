@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import stat
 from datetime import datetime, timezone
 import re
 from typing import Optional
@@ -20,6 +22,22 @@ from ipsw_service.parsing import (
 )
 from ipsw_service.agents.macho_analysis_engine import MachoAnalysisEngine
 from ipsw_service.utils import ensure_dir, read_text, write_json, write_text
+
+
+def _force_rmtree(path: str) -> None:
+    """Remove a tree even when extracted firmware leaves read-only dirs"""
+
+    def _onerror(func, p, _exc_info):
+        parent = os.path.dirname(p)
+        try:
+            os.chmod(parent, os.stat(parent).st_mode | stat.S_IRWXU)
+            os.chmod(p, os.stat(p).st_mode | stat.S_IRWXU)
+        except OSError:
+            pass
+        func(p)
+
+    shutil.rmtree(path, onerror=_onerror)
+
 
 # define noise filters for non-analyzable binaries
 IGNORE_PATTERNS = [
@@ -42,7 +60,7 @@ _METADATA_ONLY_PATTERNS = (
     re.compile(r"^sha1:\s*", re.IGNORECASE),
     # Mach-O version strings are purely compile-time metadata (e.g. "386.231.1.0.0")
     re.compile(r"^\d+(?:\.\d+){2,}$"),
-    # Aggregate counts change on every recompile; only symbol/CString *names* matter
+    # Aggregate counts change on every recompile
     re.compile(r"^(Functions|Symbols|CStrings):\s+\d+", re.IGNORECASE),
 )
 
@@ -376,13 +394,18 @@ class FirmwareDiffService:
         if md_content:
             diff_report_text += "\n\n" + "\n".join(md_content)
         
-        # Save the inlined README report
+        # save the inlined README report
         write_text(readme_output_path, diff_report_text)
         
         write_json(report_json_path, report_payload)
 
-        # Cleanup the temp directory
-        temp_diff_dir_obj.cleanup()
+        # cleanup temp directory
+        try:
+            _force_rmtree(temp_diff_dir)
+        except OSError:
+            pass
+        finally:
+            temp_diff_dir_obj._finalizer.detach()
 
         return result
 
@@ -711,7 +734,7 @@ class FirmwareDiffService:
             out.append("")
             return out
 
-        # recursively processes the raw ipsw README lines.
+        # recursively processes the raw ipsw README lines
         
         # handles:
         #  1. index links  – e.g. "- [View N files](DYLIBS/foo.md)" → recurse

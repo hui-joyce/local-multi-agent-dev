@@ -1,0 +1,5 @@
+[sandbox_diff]
+command: ipsw sb opts --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone15,4_17.0.3_21A360_Restore/21A360__iPhone15,4/kernelcache.release.iPhone15,4 /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone15,4_17.1_21B80_Restore/21B80__iPhone15,4/kernelcache.release.iPhone15,4
+parsed_item_count: 0
+stderr:
+[34m[1m   •[22m No differences found     [0m

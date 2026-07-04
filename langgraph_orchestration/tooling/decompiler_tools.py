@@ -535,6 +535,59 @@ def save_ida_database() -> str:
     return f"Error saving database: stream closed after 3 attempts: {last_error}"
 
 
+def auto_annotate_function(func_address: int, header_comment: str = "") -> dict:
+    """Returns a dict with integer 'renamed'/'commented' counts"""
+    last_error = None
+    for attempt in range(3):
+        conn = None
+        try:
+            conn = _connect()
+            result = conn.root.exposed_auto_annotate_function(func_address, header_comment or "")
+            data = dict(result)
+            return {
+                "ok": bool(data.get("ok", False)),
+                "renamed": int(data.get("renamed", 0) or 0),
+                "commented": int(data.get("commented", 0) or 0),
+            }
+        except ConnectionRefusedError:
+            return {"ok": False, "renamed": 0, "commented": 0, "error": _get_connection_error_msg()}
+        except EOFError as e:
+            last_error = e
+            time.sleep(2 * (attempt + 1))
+        except Exception as e:
+            return {"ok": False, "renamed": 0, "commented": 0, "error": str(e)}
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+    return {"ok": False, "renamed": 0, "commented": 0, "error": f"stream closed after 3 attempts: {last_error}"}
+
+
+def count_user_annotations(func_addresses: list[int]) -> dict:
+    """Count persisted user annotations across the given functions 
+    Returns {'named_lvars', 'comments', 'functions'} as ints"""
+    conn = None
+    try:
+        conn = _connect()
+        result = conn.root.exposed_count_user_annotations([int(a) for a in func_addresses])
+        data = dict(result)
+        return {
+            "named_lvars": int(data.get("named_lvars", 0) or 0),
+            "comments": int(data.get("comments", 0) or 0),
+            "functions": int(data.get("functions", 0) or 0),
+        }
+    except Exception as e:
+        return {"named_lvars": 0, "comments": 0, "functions": 0, "error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 @tool
 def get_entitlements(binary_path: str) -> str:
     """Extracts entitlements from a Mach-O binary using ipsw"""

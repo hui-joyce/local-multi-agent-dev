@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html as _html
+import json
 import os
 import re
 import urllib.request
@@ -12,6 +13,14 @@ from functools import lru_cache
 _APPLE_SECURITY_RELEASES_URL = "https://support.apple.com/en-us/100100"
 _HTTP_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X)"}
 _HTTP_TIMEOUT = 15
+
+_WAYBACK_INDEX_ORIGINAL = "support.apple.com/en-us/HT201222"
+_WAYBACK_CDX_URL = (
+    "http://web.archive.org/cdx/search/cdx?url={url}&output=json"
+    "&fl=timestamp&collapse=timestamp:4&filter=statuscode:200"
+)
+_WAYBACK_SNAPSHOT_URL = "http://web.archive.org/web/{ts}id_/https://{url}"
+_WAYBACK_TIMEOUT = 30
 
 # suffixes that appear on binary/bundle names but not on Apple component names
 _NAME_SUFFIXES = (".framework", ".dylib", ".bundle", ".kext", ".app")
@@ -55,28 +64,79 @@ def _normalize(name: str) -> str:
     # collapse to alphanumerics so "Find My" == "FindMy"
     return re.sub(r"[^a-z0-9]+", "", base)
 
-def _http_get(url: str) -> str | None:
-    try:
-        req = urllib.request.Request(url, headers=_HTTP_HEADERS)
-        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
-            return resp.read().decode("utf-8", "replace")
-    except Exception:
-        return None
+def _http_get(url: str, timeout: int = _HTTP_TIMEOUT, retries: int = 0) -> str | None:
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=_HTTP_HEADERS)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read().decode("utf-8", "replace")
+        except Exception:
+            if attempt == retries:
+                return None
+    return None
+
+
+def _version_regexes(version: str) -> list[re.Pattern]:
+    candidates = [version] + ([version[:-2]] if version.endswith(".0") else [])
+    return [re.compile(r"(?<![A-Za-z])iOS\s+" + re.escape(v) + r"(?!\.?\d)") for v in candidates]
+
+
+def _find_advisory_link(html_text: str, version_res: list[re.Pattern]) -> str | None:
+    """Return the support.apple.com advisory URL whose anchor text names the version.
+
+    Handles both the live page (direct https://support.apple.com/... hrefs) and
+    Wayback snapshots"""
+    for m in re.finditer(r'<a href="([^"]*support\.apple\.com/[^"]+)"[^>]*>([^<]+)</a>', html_text):
+        text = _html.unescape(m.group(2))
+        if not any(vr.search(text) for vr in version_res):
+            continue
+        real = re.search(r"https?://support\.apple\.com/.*$", m.group(1))
+        if real:
+            return real.group(0)
+    return None
+
 
 def _resolve_advisory_url(version: str) -> str | None:
-    """Find the Apple advisory URL for an iOS version via the releases index"""
+    version_res = _version_regexes(version)
+
     index = _http_get(_APPLE_SECURITY_RELEASES_URL)
-    if not index:
-        return None
-    candidates = [version] + ([version[:-2]] if version.endswith(".0") else [])
-    version_res = [
-        re.compile(r"(?<![A-Za-z])iOS\s+" + re.escape(v) + r"(?!\.?\d)") for v in candidates
-    ]
-    for m in re.finditer(
-        r'<a href="(https://support\.apple\.com/[^"]+)"[^>]*>([^<]+)</a>', index
-    ):
-        url, text = m.group(1), _html.unescape(m.group(2))
-        if any(vr.search(text) for vr in version_res):
+    if index:
+        url = _find_advisory_link(index, version_res)
+        if url:
+            return url
+
+    return _resolve_advisory_url_via_wayback(version_res)
+
+
+@lru_cache(maxsize=1)
+def _wayback_snapshot_timestamps() -> tuple[str, ...]:
+    """Yearly Wayback capture timestamps of Apple's legacy index - oldest first"""
+    cdx = _http_get(_WAYBACK_CDX_URL.format(url=_WAYBACK_INDEX_ORIGINAL),
+                    timeout=_WAYBACK_TIMEOUT, retries=1)
+    if not cdx:
+        return ()
+    try:
+        rows = json.loads(cdx)
+    except (ValueError, TypeError):
+        return ()
+    return tuple(r[0] for r in rows[1:] if r)  # rows[0] = CDX header
+
+
+@lru_cache(maxsize=16)
+def _wayback_snapshot_html(ts: str) -> str | None:
+    return _http_get(_WAYBACK_SNAPSHOT_URL.format(ts=ts, url=_WAYBACK_INDEX_ORIGINAL),
+                     timeout=_WAYBACK_TIMEOUT, retries=1)
+
+
+def _resolve_advisory_url_via_wayback(version_res: list[re.Pattern]) -> str | None:
+    # newest snapshot first: it lists everything up to its capture date, so a
+    # recently-aged-off version is found on the first fetch
+    for ts in reversed(_wayback_snapshot_timestamps()):
+        html_text = _wayback_snapshot_html(ts)
+        if not html_text:
+            continue
+        url = _find_advisory_link(html_text, version_res)
+        if url:
             return url
     return None
 
@@ -131,4 +191,14 @@ class SecurityNotesService:
         return bool(self._index)
 
     def match_component(self, component_name: str) -> str | None:
-        return self._index.get(_normalize(component_name))
+        hit = self._index.get(_normalize(component_name))
+        if hit:
+            return hit
+        # Kext/bundle IDs are reverse-DNS (com.apple.security.sandbox)
+        # Apple advisories name the component ("Sandbox")
+        # Fall back to the final segment 
+        if component_name.startswith(("com.", "org.", "io.")) and "." in component_name:
+            last_segment = component_name.rsplit(".", 1)[-1]
+            if last_segment:
+                return self._index.get(_normalize(last_segment))
+        return None

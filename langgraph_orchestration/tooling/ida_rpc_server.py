@@ -1,4 +1,5 @@
 """Queue-based main-thread execution for headless mode"""
+import re
 import rpyc
 from rpyc.utils.server import ThreadedServer
 import ida_hexrays
@@ -41,6 +42,147 @@ def _run_on_main_thread(func, *args, timeout=120):
     return result_container["value"]
 
 
+# ida default variable names that deterministic annotation floor rewrites 
+_DEFAULT_LVAR_RE = re.compile(r"^(?:v\d+|a\d+|x\d+|var_[0-9A-Fa-f]+|arg_[0-9A-Fa-f]+)$")
+
+def _type_prefix(type_str: str) -> str:
+    """Derive a type-based prefix for deterministic variable renaming"""
+    t = (type_str or "").lower()
+    if "char *" in t or "char*" in t:
+        return "str"
+    if "cfstring" in t:
+        return "cfstr"
+    if "nsstring" in t:
+        return "nsstr"
+    if "bool" in t:
+        return "flag"
+    if "float" in t or "double" in t:
+        return "flt"
+    if "*" in t:
+        token = re.sub(r"[^a-z0-9]", "", t.split("*")[0])
+        return (token[:12] or "ptr")
+    if any(k in t for k in ("int", "long", "short", "byte", "word", "dword", "qword", "unsigned", "signed")):
+        return "n"
+    token = re.sub(r"[^a-z0-9]", "", t)
+    return token[:12] or "var"
+
+def _pseudocode_lines(cfunc) -> list:
+    """Return the tag-stripped pseudocode lines for a decompiled function"""
+    return [ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()]
+
+def _auto_annotate_core(func_ea: int, header_comment: str = "") -> dict:
+    out = {"ok": False, "renamed": 0, "commented": 0, "func": int(func_ea)}
+    f = ida_funcs.get_func(func_ea)
+    if not f:
+        return out
+    out["ok"] = True
+    start = f.start_ea
+
+    # ensure an entry comment without overwriting LLM output
+    try:
+        existing = idc.get_cmt(start, 1) or idc.get_cmt(start, 0) or ""
+        if header_comment:
+            if not existing:
+                idc.set_cmt(start, header_comment, 1)
+                out["commented"] = 1
+            elif header_comment not in existing:
+                idc.set_cmt(start, existing + "\n" + header_comment, 1)
+                out["commented"] = 1
+            else:
+                out["commented"] = 1
+        elif existing:
+            out["commented"] = 1
+    except Exception:
+        pass
+
+    # rename opaque locals using their decompiler type via ida_hexrays.rename_lvar
+    try:
+        cfunc = ida_hexrays.decompile(f)
+        if cfunc:
+            used = {str(v.name) for v in cfunc.get_lvars()}
+            renames = []  # (old_name, new_name)
+            for v in cfunc.get_lvars():
+                name = str(v.name)
+                if not _DEFAULT_LVAR_RE.match(name):
+                    continue
+                try:
+                    tstr = str(v.type())
+                except Exception:
+                    tstr = ""
+                new_name = "{}_{}".format(_type_prefix(tstr), name)
+                if new_name in used:
+                    continue
+                used.add(new_name)
+                renames.append((name, new_name))
+            for old_name, new_name in renames:
+                try:
+                    if ida_hexrays.rename_lvar(start, old_name, new_name):
+                        out["renamed"] += 1
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return out
+
+
+_TYPE_CMT_RE = re.compile(
+    r"^(?:"
+    r"(?:unsigned |signed |const |volatile )*"
+    r"(?:__int\d+|int|char|void|bool|long|short|double|float|_DWORD|_QWORD|_BYTE|_WORD|id)"
+    r"(?:\s*\*+)?"                                   # C primitive, optional pointer
+    r"|(?:struct|enum)\b.*"                          # struct/enum X
+    r"|_*[A-Za-z][A-Za-z0-9_]*\s*\*+"               # any identifier + pointer (NSString *)
+    r"|_*[A-Za-z][A-Za-z0-9_]*(?:Ref|_t)\s*\**"     # FooRef / foo_t
+    r")$"
+)
+
+def _is_auto_comment(text: str) -> bool:
+    """Return True if a comment contains only IDA auto-generated text"""
+    s = (text or "").strip()
+    if not s:
+        return True
+    for line in s.splitlines():
+        ls = line.strip()
+        if not ls:
+            continue
+        if ls.startswith("jumptable") or ls.startswith("switch ") or _TYPE_CMT_RE.match(ls):
+            continue
+        return False
+    return True
+
+def _count_user_annotations_core(func_eas) -> dict:
+    """Count persisted user annotations across functions"""
+    res = {"named_lvars": 0, "comments": 0, "functions": 0}
+    for fea in func_eas:
+        try:
+            fea = int(fea)
+        except (ValueError, TypeError):
+            continue
+        f = ida_funcs.get_func(fea)
+        if not f:
+            continue
+        res["functions"] += 1
+        try:
+            ea = f.start_ea
+            while ea < f.end_ea and ea != idc.BADADDR:
+                c = idc.get_cmt(ea, 1) or idc.get_cmt(ea, 0)
+                if c and not _is_auto_comment(c):
+                    res["comments"] += 1
+                ea = idc.next_head(ea, f.end_ea)
+        except Exception:
+            pass
+        try:
+            uv = ida_hexrays.lvar_uservec_t()
+            if ida_hexrays.restore_user_lvar_settings(uv, f.start_ea):
+                for lv in uv.lvvec:
+                    if lv.name:
+                        res["named_lvars"] += 1
+        except Exception:
+            pass
+    return res
+
+
 class DecompilerService(rpyc.Service):
     """Expose IDA Pro's decompilation and analysis features to a remote client over RPC"""
 
@@ -69,13 +211,6 @@ class DecompilerService(rpyc.Service):
             return _run_on_main_thread(_do)
         except Exception as e:
             return f"# ERROR: {e}"
-
-    def exposed_execute_script(self, code: str):
-        def _do():
-            local_env = {}
-            exec(code, globals(), local_env)
-            return local_env.get("res")
-        return _run_on_main_thread(_do)
 
     def exposed_get_xrefs_to(self, address: int) -> list:
         """Finds code cross-references to a given address, transitively following data references
@@ -152,64 +287,6 @@ class DecompilerService(rpyc.Service):
         except Exception as e:
             return [{"error": f"Exception: {str(e)}"}]
 
-    def exposed_list_segments(self) -> list:
-        """Lists the names and boundaries of all segments in the database"""
-        def _do():
-            import idautils
-            import idc
-            segs = []
-            for s_ea in idautils.Segments():
-                segs.append({
-                    "name": str(idc.get_segm_name(s_ea)),
-                    "start": int(s_ea),
-                    "end": int(idc.get_segm_end(s_ea))
-                })
-            return segs
-        try:
-            return _run_on_main_thread(_do)
-        except Exception as e:
-            return [{"error": str(e)}]
-
-    def exposed_scan_pointers(self, target_addr: int) -> list:
-        """Scans pointer-containing segments for absolute or relative references to target_addr"""
-        def _do():
-            import idc
-            import idautils
-
-            matches = []
-            for s_ea in idautils.Segments():
-                name = idc.get_segm_name(s_ea).lower()
-                if any(k in name for k in ["selrefs", "cfstring", "objc", "const", "data", "got"]):
-                    start = s_ea
-                    end = idc.get_segm_end(start)
-                    
-                    for addr in range(start, end - 7, 8):
-                        if idc.get_qword(addr) == target_addr:
-                            matches.append({
-                                "address": int(addr),
-                                "segment": str(idc.get_segm_name(s_ea)),
-                                "type": "absolute"
-                            })
-                            
-                    for addr in range(start, end - 3, 4):
-                        val32 = idc.get_wide_dword(addr)
-                        if val32 & 0x80000000:
-                            offset = val32 - 0x100000000
-                        else:
-                            offset = val32
-                        if addr + offset == target_addr:
-                            matches.append({
-                                "address": int(addr),
-                                "segment": str(idc.get_segm_name(s_ea)),
-                                "type": "relative_32"
-                            })
-            return matches
-        try:
-            return _run_on_main_thread(_do)
-        except Exception as e:
-            print(f"Error in scan_pointers: {e}")
-            return []
-
     def exposed_rename_local_variable(self, func_address: int, old_name: str, new_name: str) -> bool:
         """Renames a local variable within a function's decompilation and commits it to the database"""
         def _do():
@@ -219,14 +296,9 @@ class DecompilerService(rpyc.Service):
             cfunc = ida_hexrays.decompile(f)
             if not cfunc:
                 return False
-            lvars = cfunc.get_lvars()
-            for var in lvars:
-                if var.name == old_name:
-                    renamed = cfunc.rename_lvar(var, new_name, True)
-                    if renamed:
-                        ida_hexrays.save_user_lvar_settings(cfunc)
-                    return renamed
-            return False
+            if not any(str(var.name) == old_name for var in cfunc.get_lvars()):
+                return False
+            return bool(ida_hexrays.rename_lvar(f.start_ea, old_name, new_name))
         try:
             return _run_on_main_thread(_do)
         except Exception:
@@ -260,17 +332,6 @@ class DecompilerService(rpyc.Service):
             print(f"Error in set_comment: {e}")
             return False
 
-    def exposed_get_function_name(self, ea: int):
-        """Gets the name of the function containing the given address"""
-        def _do():
-            name = idc.get_func_name(ea)
-            return name if name else ""
-        try:
-            return _run_on_main_thread(_do)
-        except Exception as e:
-            print(f"Error in get_function_name: {e}")
-            return ""
-
     def exposed_get_function_boundaries(self, ea: int):
         """Gets the start and end addresses of the function containing the given address"""
         def _do():
@@ -294,28 +355,6 @@ class DecompilerService(rpyc.Service):
         except Exception as e:
             print(f"Error in get_segment_name: {e}")
             return ""
-
-    def exposed_get_bytes(self, ea: int, size: int):
-        """Reads raw bytes from the binary"""
-        def _do():
-            import ida_bytes
-            return ida_bytes.get_bytes(ea, size)
-        try:
-            return _run_on_main_thread(_do)
-        except Exception as e:
-            print(f"Error in get_bytes: {e}")
-            return None
-
-    def exposed_get_qword(self, ea: int):
-        """Reads a 64-bit value from the binary"""
-        def _do():
-            val = idc.get_qword(ea)
-            return val if val != idc.BADADDR else 0
-        try:
-            return _run_on_main_thread(_do)
-        except Exception as e:
-            print(f"Error in get_qword: {e}")
-            return 0
 
     def exposed_lookup_symbol(self, symbol_name: str):
         """Looks up the memory address of a given symbol by exact name.
@@ -410,7 +449,7 @@ class DecompilerService(rpyc.Service):
                 import ida_hexrays
                 cfunc = ida_hexrays.decompile(func_ea)
                 if not cfunc: return "error: could not decompile function"
-                # extract the specific pseudocode line 
+                # extract the specific pseudocode line
                 # and surrounding context (provide LLM with exact localized info)
                 lines = []
                 for item in cfunc.get_pseudocode():
@@ -421,7 +460,7 @@ class DecompilerService(rpyc.Service):
                         start = max(0, idx - 5)
                         return "\n".join(lines[start:idx+1])
                 # if exact ea match fails, just return the whole function
-                return "\n".join([ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()])
+                return "\n".join(_pseudocode_lines(cfunc))
             except Exception as e:
                 return f"error: {e}"
         return _run_on_main_thread(_do)
@@ -433,7 +472,7 @@ class DecompilerService(rpyc.Service):
                 import ida_hexrays
                 cfunc = ida_hexrays.decompile(func_ea)
                 if not cfunc: return "error: could not decompile function"
-                lines = [ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()]
+                lines = _pseudocode_lines(cfunc)
                 # extract all lines containing the var_name
                 trace_lines = [l for l in lines if var_name in l]
                 if not trace_lines:
@@ -442,6 +481,23 @@ class DecompilerService(rpyc.Service):
             except Exception as e:
                 return f"error: {e}"
         return _run_on_main_thread(_do)
+
+    def exposed_auto_annotate_function(self, func_ea: int, header_comment: str = "") -> dict:
+        """Apply baseline annotations to a function"""
+        try:
+            return _run_on_main_thread(_auto_annotate_core, func_ea, header_comment)
+        except Exception as e:
+            print(f"Error in auto_annotate_function: {e}")
+            return {"ok": False, "renamed": 0, "commented": 0, "func": int(func_ea)}
+
+    def exposed_count_user_annotations(self, func_eas) -> dict:
+        """Count persisted annotations for verification"""
+        eas = list(func_eas) if func_eas else []
+        try:
+            return _run_on_main_thread(_count_user_annotations_core, eas)
+        except Exception as e:
+            print(f"Error in count_user_annotations: {e}")
+            return {"named_lvars": 0, "comments": 0, "functions": 0}
 
     def exposed_shutdown(self):
         """Remotely shuts down the IDA Pro instance"""

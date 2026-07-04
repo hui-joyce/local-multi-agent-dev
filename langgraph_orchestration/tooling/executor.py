@@ -692,7 +692,13 @@ class IDAToolExecutor(BaseToolExecutor):
             flag = str(artifact)
             normalized_extra = [flag if flag.startswith("--") else f"--{flag}"]
         if not output_dir:
-            output_dir = os.path.join(self.workspace_root, ".ipsw_extracted")
+            # match IpswExtractorAgent's layout so both paths converge on
+            # .ipsw_extracted/<ipsw-stem>/<build>__<device>/ instead of
+            # extracting the dyld_shared_cache a second time at the top level.
+            stem = os.path.basename(str(ipsw_path))
+            if stem.endswith(".ipsw"):
+                stem = stem[: -len(".ipsw")]
+            output_dir = os.path.join(self.workspace_root, ".ipsw_extracted", stem)
 
         args = build_extract_args(
             ipsw_path=str(ipsw_path),

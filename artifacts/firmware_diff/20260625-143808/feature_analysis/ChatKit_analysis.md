@@ -3,6 +3,7 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `- ___73-[CKMovieMediaObject generateThumbnailFillToSize:contentAlignmentInsets:]_block_invoke`
 - **Analysis mode**: decompiled
+- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 4 (4 AI-authored, 0 auto-generated); across 4 function(s); verified persisted in .i64: 0 named variables, 4 comments.
 
 ## What this feature does
 

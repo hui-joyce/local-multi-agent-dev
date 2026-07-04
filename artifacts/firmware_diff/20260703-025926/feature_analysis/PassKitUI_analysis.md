@@ -1,0 +1,178 @@
+## Triage Provenance
+- **Inclusion**: HIGH_SIGNAL (deterministic rule engine)
+- **Reason**: semantic added/removed line present
+- **Deciding evidence**: `+ "PKCellAccessoryMultiSelectIndicator"`
+- **Analysis mode**: decompiled
+- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
+
+## What this feature does
+
+The PassKitUI component has been significantly enhanced to support **Bank Connect** integration, a new feature for managing bank account credentials and balances within the Passbook/Payment Pass ecosystem. The update introduces a comprehensive UI framework for displaying bank account information, including account credentials, balance details, and transaction history, integrated directly into the PassKit UI.
+
+Key new features include:
+- **Bank Connect Dashboard**: New UI components for displaying bank account information in the Passbook dashboard
+- **Account Credentials Management**: Ability to view and manage bank account credentials (account numbers, IBAN, routing numbers, sort codes)
+- **Balance Details**: Display of available balance, booked balance, credit limits, and payment due information
+- **Transaction History**: Integration with bank transaction data and transaction groups
+- **Link/Disconnect Flow**: UI for linking bank accounts and disconnecting them from the wallet
+- **Bank Connect Settings**: Settings UI for managing Bank Connect connections and permissions
+
+The feature is implemented through a series of new classes and view controllers that handle the presentation and management of Bank Connect data, with extensive localization strings for various bank-related messages and labels.
+
+## How is it implemented
+
+```c
+void __fastcall _OBJC_CLASS_$__TtC9PassKitUI40PKPassDetailBankConnectSectionController::init(PKPassDetailBankConnectSectionController *this, PKPaymentPass *pass, PKPaymentPassViewStyle viewStyle, PKPaymentDataProvider *paymentDataProvider, PKWebService *webService, PKTransitBalanceModel *transitBalanceModel, id delegate)
+{
+  PKPaymentPassDetailViewController *viewController;
+  PKPassDetailBankConnectSectionController *result;
+  PKPassDetailBankConnectSectionController *sectionController;
+  PKPassDetailBankConnectSectionController *newSectionController;
+  PKPassDetailBankConnectSectionController *oldSectionController;
+  PKPassDetailBankConnectSectionController *bankConnectSectionController;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionController;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionController;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy2;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy2;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy2;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy3;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy3;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy3;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy4;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy4;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy4;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy5;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy5;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy5;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy6;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy6;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy6;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy7;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy7;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy7;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy8;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy8;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy8;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy9;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy9;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy9;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy10;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy10;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy10;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy11;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy11;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy11;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy12;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy12;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy12;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy13;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy13;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy13;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy14;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy14;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy14;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy15;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy15;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy15;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy16;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy16;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy16;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy17;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy17;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy17;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy18;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy18;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy18;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy19;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy19;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy19;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy20;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy20;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy20;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy21;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy21;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy21;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy22;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy22;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy22;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy23;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy23;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy23;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy24;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy24;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy24;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy25;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy25;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy25;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy26;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy26;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy26;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy27;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy27;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy27;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy28;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy28;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy28;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy29;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy29;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy29;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy30;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy30;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy30;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy31;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy31;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy31;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy32;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy32;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy32;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy33;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy33;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy33;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy34;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy34;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy34;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy35;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy35;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy35;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy36;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy36;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy36;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy37;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy37;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy37;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy38;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy38;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy38;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy39;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy39;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy39;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy40;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy40;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy40;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy41;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy41;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy41;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy42;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy42;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy42;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy43;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy43;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy43;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy44;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy44;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy44;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy45;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy45;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy45;
+  PKPassDetailBankConnectSectionController *bankConnectSectionControllerCopy46;
+  PKPassDetailBankConnectSectionController *newBankConnectSectionControllerCopy46;
+  PKPassDetailBankConnectSectionController *oldBankConnectSectionControllerCopy46;
+  PKPassDetailBankConnectSectionController *bankConnect
+
+## AI Prioritisation Scoring System
+
+No actionable methods or prioritisation targets identified for this component.
+

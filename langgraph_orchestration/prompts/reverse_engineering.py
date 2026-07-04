@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from langgraph_orchestration.prompts import render_prompt
 from langgraph_orchestration.prompts.shared import build_tooling_block
 from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source

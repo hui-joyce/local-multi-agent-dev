@@ -17,7 +17,10 @@ from dotenv import load_dotenv
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
-from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
+from langgraph_orchestration.graphs.reverse_engineering import (
+    build_reverse_engineering_graph,
+    FEATURE_ANALYSIS_RECURSION_LIMIT,
+)
 from langgraph_orchestration.schemas.state import AgentState
 
 @dataclass
@@ -51,8 +54,13 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             # "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
             # "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
             # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
-            "Version 1: iPhone17,1_18.4_22E240_Restore.ipsw\n"
-            "Version 2: iPhone17,1_18.4.1_22E252_Restore.ipsw\n"
+            # "Version 1: iPhone17,1_18.4_22E240_Restore.ipsw\n"
+            # "Version 2: iPhone17,1_18.4.1_22E252_Restore.ipsw\n"
+            # "Version 1: iPhone15,4_17.1_21B80_Restore.ipsw\n"
+            # "Version 2: iPhone15,4_17.1.1_21B91_Restore.ipsw\n"
+            "Version 1: iPhone15,4_17.0.3_21A360_Restore.ipsw\n"
+            "Version 2: iPhone15,4_17.1_21B80_Restore.ipsw\n"
+
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
     )
@@ -61,7 +69,7 @@ def run_ipsw_diff_case(graph: Any, case: IpswDiffCase) -> tuple[IpswDiffResult, 
     state = AgentState(user_input=case.user_input)
 
     start = time.perf_counter()
-    raw_result = graph.invoke(state.model_dump(), config={"recursion_limit": 1000})
+    raw_result = graph.invoke(state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT})
     elapsed = time.perf_counter() - start
 
     final_state = AgentState(**raw_result)
@@ -147,7 +155,7 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFact
     start = time.perf_counter()
 
     re_graph = build_reverse_engineering_graph(factory=factory)
-    raw_result = re_graph.invoke(state.model_dump(), config={"recursion_limit": 1000})
+    raw_result = re_graph.invoke(state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT})
 
     elapsed = time.perf_counter() - start
     final_state = AgentState(**raw_result)
