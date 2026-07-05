@@ -13,7 +13,10 @@ sys.path.insert(0, str(project_root))
 from dotenv import load_dotenv
 
 from langgraph_orchestration.agents.gemini_factory import GeminiAgentFactory
-from langgraph_orchestration.graphs.reverse_engineering import build_reverse_engineering_graph
+from langgraph_orchestration.graphs.reverse_engineering import (
+    build_reverse_engineering_graph,
+    FEATURE_ANALYSIS_RECURSION_LIMIT,
+)
 from langgraph_orchestration.schemas.state import AgentState
 
 # REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
@@ -56,7 +59,7 @@ def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
 
     start = time.perf_counter()
     raw_result = None
-    for chunk in graph.stream(state.model_dump(), config={"recursion_limit": 1000}):
+    for chunk in graph.stream(state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT}):
         print("\n--- GRAPH CHUNK ---")
         for node_name, node_state in chunk.items():
             print(f"Node: {node_name}")
