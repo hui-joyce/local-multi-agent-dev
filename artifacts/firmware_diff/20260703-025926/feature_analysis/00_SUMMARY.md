@@ -7,668 +7,668 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 
 ## 🔴 Apple Security Notes matches — highest priority
 
-| Component | Tier | Sec score | Apple Security Notes | Indicators | Report |
-|---|---|---|---|---|---|
-| Contacts | TIER_1 | 4 | `Contacts` | — | [report](Contacts_analysis.md) |
-| CoreRecents | TIER_1 | 4 | `Core Recents` | — | [report](CoreRecents_analysis.md) |
-| FindMy | TIER_1 | 4 | `Find My` | — | [report](FindMy_analysis.md) |
-| Game Center | TIER_1 | 4 | `Game Center` | — | [report](Game_Center_analysis.md) |
-| ImageIO | TIER_1 | 4 | `ImageIO` | — | [report](ImageIO_analysis.md) |
-| MobileSafari | TIER_1 | 4 | `Safari` | — | [report](MobileSafari_analysis.md) |
-| Photos | TIER_1 | 4 | `Photos` | — | [report](Photos_analysis.md) |
-| Safari | TIER_1 | 4 | `Safari` | — | [report](Safari_analysis.md) |
-| SetupAssistant | TIER_1 | 4 | `Setup Assistant` | — | [report](SetupAssistant_analysis.md) |
-| ShareSheet | TIER_1 | 4 | `Share Sheet` | — | [report](ShareSheet_analysis.md) |
-| Siri | TIER_1 | 4 | `Siri` | — | [report](Siri_analysis.md) |
-| Weather | TIER_1 | 4 | `Weather` | — | [report](Weather_analysis.md) |
-| WebCore | TIER_1 | 4 | `WebKit` | — | [report](WebCore_analysis.md) |
-| WebKitLegacy | TIER_1 | 4 | `WebKit` | — | [report](WebKitLegacy_analysis.md) |
-| com.apple.IOTextEncryptionFamily | TIER_1 | 4 | `IOTextEncryptionFamily` | — | [report](com.apple.IOTextEncryptionFamily_analysis.md) |
-| com.apple.kernel | TIER_1 | 4 | `Kernel` | heap allocation, bounds/stack guard | [report](com.apple.kernel_analysis.md) |
-| com.apple.security.sandbox | TIER_1 | 4 | `Sandbox` | — | [report](com.apple.security.sandbox_analysis.md) |
-| libxpc.dylib | TIER_1 | 4 | `libxpc` | — | [report](libxpc.dylib_analysis.md) |
-| mDNSResponder | TIER_1 | 4 | `mDNSResponder` | — | [report](mDNSResponder_analysis.md) |
+| Component | Tier | Sec score | Apple Security Notes | Report |
+|---|---|---|---|---|
+| Contacts | TIER_1 | 4 | `Contacts` | [report](Contacts_analysis.md) |
+| CoreRecents | TIER_1 | 4 | `Core Recents` | [report](CoreRecents_analysis.md) |
+| FindMy | TIER_1 | 4 | `Find My` | [report](FindMy_analysis.md) |
+| Game Center | TIER_1 | 4 | `Game Center` | [report](Game_Center_analysis.md) |
+| ImageIO | TIER_1 | 4 | `ImageIO` | [report](ImageIO_analysis.md) |
+| MobileSafari | TIER_1 | 4 | `Safari` | [report](MobileSafari_analysis.md) |
+| Photos | TIER_1 | 4 | `Photos` | [report](Photos_analysis.md) |
+| Safari | TIER_1 | 4 | `Safari` | [report](Safari_analysis.md) |
+| SetupAssistant | TIER_1 | 4 | `Setup Assistant` | [report](SetupAssistant_analysis.md) |
+| ShareSheet | TIER_1 | 4 | `Share Sheet` | [report](ShareSheet_analysis.md) |
+| Siri | TIER_1 | 4 | `Siri` | [report](Siri_analysis.md) |
+| Weather | TIER_1 | 4 | `Weather` | [report](Weather_analysis.md) |
+| WebCore | TIER_1 | 4 | `WebKit` | [report](WebCore_analysis.md) |
+| WebKitLegacy | TIER_1 | 4 | `WebKit` | [report](WebKitLegacy_analysis.md) |V
+| com.apple.IOTextEncryptionFamily | TIER_1 | 4 | `IOTextEncryptionFamily` | [report](com.apple.IOTextEncryptionFamily_analysis.md) |
+| com.apple.kernel | TIER_1 | 4 | `Kernel` | [report](com.apple.kernel_analysis.md) |
+| com.apple.security.sandbox | TIER_1 | 4 | `Sandbox` | [report](com.apple.security.sandbox_analysis.md) |
+| libxpc.dylib | TIER_1 | 4 | `libxpc` | [report](libxpc.dylib_analysis.md) |
+| mDNSResponder | TIER_1 | 4 | `mDNSResponder` | [report](mDNSResponder_analysis.md) |
 
 ## Analysed components (reports written)
 
 <details><summary>Show 97 components</summary>
 
-| Component | Tier | Sec score | Apple Security Notes | Indicators | Report |
-|---|---|---|---|---|---|
-| Contacts | TIER_1 | 4 | `Contacts` | — | [report](Contacts_analysis.md) |
-| CoreRecents | TIER_1 | 4 | `Core Recents` | — | [report](CoreRecents_analysis.md) |
-| FindMy | TIER_1 | 4 | `Find My` | — | [report](FindMy_analysis.md) |
-| Game Center | TIER_1 | 4 | `Game Center` | — | [report](Game_Center_analysis.md) |
-| ImageIO | TIER_1 | 4 | `ImageIO` | — | [report](ImageIO_analysis.md) |
-| MobileSafari | TIER_1 | 4 | `Safari` | — | [report](MobileSafari_analysis.md) |
-| Photos | TIER_1 | 4 | `Photos` | — | [report](Photos_analysis.md) |
-| Safari | TIER_1 | 4 | `Safari` | — | [report](Safari_analysis.md) |
-| SetupAssistant | TIER_1 | 4 | `Setup Assistant` | — | [report](SetupAssistant_analysis.md) |
-| ShareSheet | TIER_1 | 4 | `Share Sheet` | — | [report](ShareSheet_analysis.md) |
-| Siri | TIER_1 | 4 | `Siri` | — | [report](Siri_analysis.md) |
-| Weather | TIER_1 | 4 | `Weather` | — | [report](Weather_analysis.md) |
-| WebCore | TIER_1 | 4 | `WebKit` | — | [report](WebCore_analysis.md) |
-| WebKitLegacy | TIER_1 | 4 | `WebKit` | — | [report](WebKitLegacy_analysis.md) |
-| com.apple.IOTextEncryptionFamily | TIER_1 | 4 | `IOTextEncryptionFamily` | — | [report](com.apple.IOTextEncryptionFamily_analysis.md) |
-| com.apple.kernel | TIER_1 | 4 | `Kernel` | heap allocation, bounds/stack guard | [report](com.apple.kernel_analysis.md) |
-| com.apple.security.sandbox | TIER_1 | 4 | `Sandbox` | — | [report](com.apple.security.sandbox_analysis.md) |
-| libxpc.dylib | TIER_1 | 4 | `libxpc` | — | [report](libxpc.dylib_analysis.md) |
-| mDNSResponder | TIER_1 | 4 | `mDNSResponder` | — | [report](mDNSResponder_analysis.md) |
-| ApplePencilDMServicePlugin | TIER_1 | 3 | — | vulnerability class | [report](ApplePencilDMServicePlugin_analysis.md) |
-| BooksUI | TIER_1 | 3 | — | heap allocation | [report](BooksUI_analysis.md) |
-| CloudKit | TIER_1 | 3 | — | security entitlement | [report](CloudKit_analysis.md) |
-| CommCenter | TIER_1 | 3 | — | security entitlement | [report](CommCenter_analysis.md) |
-| ContactsUI | TIER_1 | 3 | — | vulnerability class | [report](ContactsUI_analysis.md) |
-| CoreAudio | TIER_1 | 3 | — | bounds/stack guard | [report](CoreAudio_analysis.md) |
-| CoreCDPInternal | TIER_1 | 3 | — | security entitlement | [report](CoreCDPInternal_analysis.md) |
-| FinanceDaemon | TIER_1 | 3 | — | security entitlement | [report](FinanceDaemon_analysis.md) |
-| Fitness | TIER_1 | 3 | — | vulnerability class | [report](Fitness_analysis.md) |
-| Freeform | TIER_1 | 3 | — | vulnerability class | [report](Freeform_analysis.md) |
-| GameCenterFoundation | TIER_1 | 3 | — | vulnerability class | [report](GameCenterFoundation_analysis.md) |
-| LighthouseBackground | TIER_1 | 3 | — | security entitlement | [report](LighthouseBackground_analysis.md) |
-| MessageProtection | TIER_1 | 3 | — | security entitlement | [report](MessageProtection_analysis.md) |
-| MobileStoreDemoKit | TIER_1 | 3 | — | heap allocation | [report](MobileStoreDemoKit_analysis.md) |
-| MusicApplication | TIER_1 | 3 | — | heap allocation | [report](MusicApplication_analysis.md) |
-| PeopleSuggester | TIER_1 | 3 | — | heap allocation | [report](PeopleSuggester_analysis.md) |
-| Preferences | TIER_1 | 3 | — | security entitlement | [report](Preferences_analysis.md) |
-| QuartzCore | TIER_1 | 3 | — | vulnerability class | [report](QuartzCore_analysis.md) |
-| SoftwareUpdateServices | TIER_1 | 3 | — | heap allocation | [report](SoftwareUpdateServices_analysis.md) |
-| UnifiedAssetFramework | TIER_1 | 3 | — | vulnerability class | [report](UnifiedAssetFramework_analysis.md) |
-| com.apple.driver.AppleAVD | TIER_1 | 3 | — | vulnerability class | [report](com.apple.driver.AppleAVD_analysis.md) |
-| com.apple.driver.AppleH11ANEInterface | TIER_1 | 3 | — | heap allocation | [report](com.apple.driver.AppleH11ANEInterface_analysis.md) |
-| com.apple.filesystems.apfs | TIER_1 | 3 | — | heap allocation | [report](com.apple.filesystems.apfs_analysis.md) |
-| com.apple.iokit.IONetworkingFamily | TIER_1 | 3 | — | heap allocation | [report](com.apple.iokit.IONetworkingFamily_analysis.md) |
-| demod_helper | TIER_1 | 3 | — | heap allocation | [report](demod_helper_analysis.md) |
-| dockaccessoryd | TIER_1 | 3 | — | security entitlement | [report](dockaccessoryd_analysis.md) |
-| identityservicesd | TIER_1 | 3 | — | security entitlement | [report](identityservicesd_analysis.md) |
-| libpcap.A.dylib | TIER_1 | 3 | — | heap allocation | [report](libpcap.A.dylib_analysis.md) |
-| locationd | TIER_1 | 3 | — | heap allocation, security entitlement | [report](locationd_analysis.md) |
-| mediaanalysisd | TIER_1 | 3 | — | entitlement check | [report](mediaanalysisd_analysis.md) |
-| mediaanalysisd-service | TIER_1 | 3 | — | entitlement check | [report](mediaanalysisd-service_analysis.md) |
-| mlhostd | TIER_1 | 3 | — | security entitlement | [report](mlhostd_analysis.md) |
-| nearbyd | TIER_1 | 3 | — | vulnerability class | [report](nearbyd_analysis.md) |
-| softwareupdateservicesd | TIER_1 | 3 | — | heap allocation | [report](softwareupdateservicesd_analysis.md) |
-| spaceattributiond | TIER_1 | 3 | — | heap allocation | [report](spaceattributiond_analysis.md) |
-| watchdogd | TIER_1 | 3 | — | bounds/stack guard | [report](watchdogd_analysis.md) |
-| FinanceKitUI | TIER_1 | 2 | — | — | [report](FinanceKitUI_analysis.md) |
-| HomeKitMatter | TIER_1 | 2 | — | — | [report](HomeKitMatter_analysis.md) |
-| WorkflowKit | TIER_1 | 2 | — | — | [report](WorkflowKit_analysis.md) |
-| com.apple.iokit.IOUserEthernet | TIER_2 | 3 | — | heap allocation | [report](com.apple.iokit.IOUserEthernet_analysis.md) |
-| ActionKit | TIER_2 | 2 | — | — | [report](ActionKit_analysis.md) |
-| AppleMediaServices | TIER_2 | 2 | — | — | [report](AppleMediaServices_analysis.md) |
-| AudioCodecs | TIER_2 | 2 | — | — | [report](AudioCodecs_analysis.md) |
-| AudioToolbox | TIER_2 | 2 | — | — | [report](AudioToolbox_analysis.md) |
-| ChatKit | TIER_2 | 2 | — | — | [report](ChatKit_analysis.md) |
-| CoreGraphics | TIER_2 | 2 | — | — | [report](CoreGraphics_analysis.md) |
-| CoreSpeech | TIER_2 | 2 | — | — | [report](CoreSpeech_analysis.md) |
-| CoreSuggestionsInternals | TIER_2 | 2 | — | — | [report](CoreSuggestionsInternals_analysis.md) |
-| Espresso | TIER_2 | 2 | — | — | [report](Espresso_analysis.md) |
-| FinanceKit | TIER_2 | 2 | — | — | [report](FinanceKit_analysis.md) |
-| GameCenterUI | TIER_2 | 2 | — | — | [report](GameCenterUI_analysis.md) |
-| GeoServices | TIER_2 | 2 | — | — | [report](GeoServices_analysis.md) |
-| HomeKit | TIER_2 | 2 | — | — | [report](HomeKit_analysis.md) |
-| HomeKitDaemon | TIER_2 | 2 | — | — | [report](HomeKitDaemon_analysis.md) |
-| HomeKitDaemonLegacy | TIER_2 | 2 | — | — | [report](HomeKitDaemonLegacy_analysis.md) |
-| MediaPlaybackCore | TIER_2 | 2 | — | — | [report](MediaPlaybackCore_analysis.md) |
-| MediaPlayer | TIER_2 | 2 | — | — | [report](MediaPlayer_analysis.md) |
-| MobileSpotlightIndex | TIER_2 | 2 | — | — | [report](MobileSpotlightIndex_analysis.md) |
-| Network | TIER_2 | 2 | — | — | [report](Network_analysis.md) |
-| PassKitCore | TIER_2 | 2 | — | — | [report](PassKitCore_analysis.md) |
-| PassKitUI | TIER_2 | 2 | — | — | [report](PassKitUI_analysis.md) |
-| PhotoLibraryServices | TIER_2 | 2 | — | — | [report](PhotoLibraryServices_analysis.md) |
-| PhotosGraph | TIER_2 | 2 | — | — | [report](PhotosGraph_analysis.md) |
-| PhotosUICore | TIER_2 | 2 | — | — | [report](PhotosUICore_analysis.md) |
-| PhotosUIPrivate | TIER_2 | 2 | — | — | [report](PhotosUIPrivate_analysis.md) |
-| PowerUI | TIER_2 | 2 | — | — | [report](PowerUI_analysis.md) |
-| PowerlogHelperdOperators | TIER_2 | 2 | — | — | [report](PowerlogHelperdOperators_analysis.md) |
-| SiriInstrumentation | TIER_2 | 2 | — | — | [report](SiriInstrumentation_analysis.md) |
-| SiriKitRuntime | TIER_2 | 2 | — | — | [report](SiriKitRuntime_analysis.md) |
-| SiriTTS | TIER_2 | 2 | — | — | [report](SiriTTS_analysis.md) |
-| UIKitCore | TIER_2 | 2 | — | — | [report](UIKitCore_analysis.md) |
-| VideosUI | TIER_2 | 2 | — | — | [report](VideosUI_analysis.md) |
-| Vision | TIER_2 | 2 | — | — | [report](Vision_analysis.md) |
-| WeatherKit | TIER_2 | 2 | — | — | [report](WeatherKit_analysis.md) |
-| _GroupActivities_UIKit | TIER_2 | 2 | — | — | [report](GroupActivities_UIKit_analysis.md) |
-| libAudioDSP.dylib | TIER_2 | 2 | — | — | [report](libAudioDSP.dylib_analysis.md) |
-| libmobileassetd.dylib | TIER_2 | 2 | — | — | [report](libmobileassetd.dylib_analysis.md) |
-| momentsd | TIER_2 | 2 | — | — | [report](momentsd_analysis.md) |
+| Component | Tier | Sec score | Apple Security Notes | Report |
+|---|---|---|---|---|
+| Contacts | TIER_1 | 4 | `Contacts` | [report](Contacts_analysis.md) |
+| CoreRecents | TIER_1 | 4 | `Core Recents` | [report](CoreRecents_analysis.md) |
+| FindMy | TIER_1 | 4 | `Find My` | [report](FindMy_analysis.md) |
+| Game Center | TIER_1 | 4 | `Game Center` | [report](Game_Center_analysis.md) |
+| ImageIO | TIER_1 | 4 | `ImageIO` | [report](ImageIO_analysis.md) |
+| MobileSafari | TIER_1 | 4 | `Safari` | [report](MobileSafari_analysis.md) |
+| Photos | TIER_1 | 4 | `Photos` | [report](Photos_analysis.md) |
+| Safari | TIER_1 | 4 | `Safari` | [report](Safari_analysis.md) |
+| SetupAssistant | TIER_1 | 4 | `Setup Assistant` | [report](SetupAssistant_analysis.md) |
+| ShareSheet | TIER_1 | 4 | `Share Sheet` | [report](ShareSheet_analysis.md) |
+| Siri | TIER_1 | 4 | `Siri` | [report](Siri_analysis.md) |
+| Weather | TIER_1 | 4 | `Weather` | [report](Weather_analysis.md) |
+| WebCore | TIER_1 | 4 | `WebKit` | [report](WebCore_analysis.md) |
+| WebKitLegacy | TIER_1 | 4 | `WebKit` | [report](WebKitLegacy_analysis.md) |
+| com.apple.IOTextEncryptionFamily | TIER_1 | 4 | `IOTextEncryptionFamily` | [report](com.apple.IOTextEncryptionFamily_analysis.md) |
+| com.apple.kernel | TIER_1 | 4 | `Kernel` | [report](com.apple.kernel_analysis.md) |
+| com.apple.security.sandbox | TIER_1 | 4 | `Sandbox` | [report](com.apple.security.sandbox_analysis.md) |
+| libxpc.dylib | TIER_1 | 4 | `libxpc` | [report](libxpc.dylib_analysis.md) |
+| mDNSResponder | TIER_1 | 4 | `mDNSResponder` | [report](mDNSResponder_analysis.md) |
+| ApplePencilDMServicePlugin | TIER_1 | 3 | — | [report](ApplePencilDMServicePlugin_analysis.md) |
+| BooksUI | TIER_1 | 3 | — | [report](BooksUI_analysis.md) |
+| CloudKit | TIER_1 | 3 | — | [report](CloudKit_analysis.md) |
+| CommCenter | TIER_1 | 3 | — | [report](CommCenter_analysis.md) |
+| ContactsUI | TIER_1 | 3 | — | [report](ContactsUI_analysis.md) |
+| CoreAudio | TIER_1 | 3 | — | [report](CoreAudio_analysis.md) |
+| CoreCDPInternal | TIER_1 | 3 | — | [report](CoreCDPInternal_analysis.md) |
+| FinanceDaemon | TIER_1 | 3 | — | [report](FinanceDaemon_analysis.md) |
+| Fitness | TIER_1 | 3 | — | [report](Fitness_analysis.md) |
+| Freeform | TIER_1 | 3 | — | [report](Freeform_analysis.md) |
+| GameCenterFoundation | TIER_1 | 3 | — | [report](GameCenterFoundation_analysis.md) |
+| LighthouseBackground | TIER_1 | 3 | — | [report](LighthouseBackground_analysis.md) |
+| MessageProtection | TIER_1 | 3 | — | [report](MessageProtection_analysis.md) |
+| MobileStoreDemoKit | TIER_1 | 3 | — | [report](MobileStoreDemoKit_analysis.md) |
+| MusicApplication | TIER_1 | 3 | — | [report](MusicApplication_analysis.md) |
+| PeopleSuggester | TIER_1 | 3 | — | [report](PeopleSuggester_analysis.md) |
+| Preferences | TIER_1 | 3 | — | [report](Preferences_analysis.md) |
+| QuartzCore | TIER_1 | 3 | — | [report](QuartzCore_analysis.md) |
+| SoftwareUpdateServices | TIER_1 | 3 | — | [report](SoftwareUpdateServices_analysis.md) |
+| UnifiedAssetFramework | TIER_1 | 3 | — | [report](UnifiedAssetFramework_analysis.md) |
+| com.apple.driver.AppleAVD | TIER_1 | 3 | — | [report](com.apple.driver.AppleAVD_analysis.md) |
+| com.apple.driver.AppleH11ANEInterface | TIER_1 | 3 | — | [report](com.apple.driver.AppleH11ANEInterface_analysis.md) |
+| com.apple.filesystems.apfs | TIER_1 | 3 | — | [report](com.apple.filesystems.apfs_analysis.md) |
+| com.apple.iokit.IONetworkingFamily | TIER_1 | 3 | — | [report](com.apple.iokit.IONetworkingFamily_analysis.md) |
+| demod_helper | TIER_1 | 3 | — | [report](demod_helper_analysis.md) |
+| dockaccessoryd | TIER_1 | 3 | — | [report](dockaccessoryd_analysis.md) |
+| identityservicesd | TIER_1 | 3 | — | [report](identityservicesd_analysis.md) |
+| libpcap.A.dylib | TIER_1 | 3 | — | [report](libpcap.A.dylib_analysis.md) |
+| locationd | TIER_1 | 3 | — | [report](locationd_analysis.md) |
+| mediaanalysisd | TIER_1 | 3 | — | [report](mediaanalysisd_analysis.md) |
+| mediaanalysisd-service | TIER_1 | 3 | — | [report](mediaanalysisd-service_analysis.md) |
+| mlhostd | TIER_1 | 3 | — | [report](mlhostd_analysis.md) |
+| nearbyd | TIER_1 | 3 | — | [report](nearbyd_analysis.md) |
+| softwareupdateservicesd | TIER_1 | 3 | — | [report](softwareupdateservicesd_analysis.md) |
+| spaceattributiond | TIER_1 | 3 | — | [report](spaceattributiond_analysis.md) |
+| watchdogd | TIER_1 | 3 | — | [report](watchdogd_analysis.md) |
+| FinanceKitUI | TIER_1 | 2 | — | [report](FinanceKitUI_analysis.md) |
+| HomeKitMatter | TIER_1 | 2 | — | [report](HomeKitMatter_analysis.md) |
+| WorkflowKit | TIER_1 | 2 | — | [report](WorkflowKit_analysis.md) |
+| com.apple.iokit.IOUserEthernet | TIER_2 | 3 | — | [report](com.apple.iokit.IOUserEthernet_analysis.md) |
+| ActionKit | TIER_2 | 2 | — | [report](ActionKit_analysis.md) |
+| AppleMediaServices | TIER_2 | 2 | — | [report](AppleMediaServices_analysis.md) |
+| AudioCodecs | TIER_2 | 2 | — | [report](AudioCodecs_analysis.md) |
+| AudioToolbox | TIER_2 | 2 | — | [report](AudioToolbox_analysis.md) |
+| ChatKit | TIER_2 | 2 | — | [report](ChatKit_analysis.md) |
+| CoreGraphics | TIER_2 | 2 | — | [report](CoreGraphics_analysis.md) |
+| CoreSpeech | TIER_2 | 2 | — | [report](CoreSpeech_analysis.md) |
+| CoreSuggestionsInternals | TIER_2 | 2 | — | [report](CoreSuggestionsInternals_analysis.md) |
+| Espresso | TIER_2 | 2 | — | [report](Espresso_analysis.md) |
+| FinanceKit | TIER_2 | 2 | — | [report](FinanceKit_analysis.md) |
+| GameCenterUI | TIER_2 | 2 | — | [report](GameCenterUI_analysis.md) |
+| GeoServices | TIER_2 | 2 | — | [report](GeoServices_analysis.md) |
+| HomeKit | TIER_2 | 2 | — | [report](HomeKit_analysis.md) |
+| HomeKitDaemon | TIER_2 | 2 | — | [report](HomeKitDaemon_analysis.md) |
+| HomeKitDaemonLegacy | TIER_2 | 2 | — | [report](HomeKitDaemonLegacy_analysis.md) |
+| MediaPlaybackCore | TIER_2 | 2 | — | [report](MediaPlaybackCore_analysis.md) |
+| MediaPlayer | TIER_2 | 2 | — | [report](MediaPlayer_analysis.md) |
+| MobileSpotlightIndex | TIER_2 | 2 | — | [report](MobileSpotlightIndex_analysis.md) |
+| Network | TIER_2 | 2 | — | [report](Network_analysis.md) |
+| PassKitCore | TIER_2 | 2 | — | [report](PassKitCore_analysis.md) |
+| PassKitUI | TIER_2 | 2 | — | [report](PassKitUI_analysis.md) |
+| PhotoLibraryServices | TIER_2 | 2 | — | [report](PhotoLibraryServices_analysis.md) |
+| PhotosGraph | TIER_2 | 2 | — | [report](PhotosGraph_analysis.md) |
+| PhotosUICore | TIER_2 | 2 | — | [report](PhotosUICore_analysis.md) |
+| PhotosUIPrivate | TIER_2 | 2 | — | [report](PhotosUIPrivate_analysis.md) |
+| PowerUI | TIER_2 | 2 | — | [report](PowerUI_analysis.md) |
+| PowerlogHelperdOperators | TIER_2 | 2 | — | [report](PowerlogHelperdOperators_analysis.md) |
+| SiriInstrumentation | TIER_2 | 2 | — | [report](SiriInstrumentation_analysis.md) |
+| SiriKitRuntime | TIER_2 | 2 | — | [report](SiriKitRuntime_analysis.md) |
+| SiriTTS | TIER_2 | 2 | — | [report](SiriTTS_analysis.md) |
+| UIKitCore | TIER_2 | 2 | — | [report](UIKitCore_analysis.md) |
+| VideosUI | TIER_2 | 2 | — | [report](VideosUI_analysis.md) |
+| Vision | TIER_2 | 2 | — | [report](Vision_analysis.md) |
+| WeatherKit | TIER_2 | 2 | — | [report](WeatherKit_analysis.md) |
+| _GroupActivities_UIKit | TIER_2 | 2 | — | [report](GroupActivities_UIKit_analysis.md) |
+| libAudioDSP.dylib | TIER_2 | 2 | — | [report](libAudioDSP.dylib_analysis.md) |
+| libmobileassetd.dylib | TIER_2 | 2 | — | [report](libmobileassetd.dylib_analysis.md) |
+| momentsd | TIER_2 | 2 | — | [report](momentsd_analysis.md) |
 
 </details>
 
 ## HIGH_SIGNAL — analysed but suppressed (LLM rated TIER_3)
 
-| Component | Tier | Sec score | Apple Security Notes | Indicators | Report |
-|---|---|---|---|---|---|
-| Measure | TIER_3 | 3 | — | heap allocation | _suppressed (TIER_3)_ |
-| NeutrinoKit | TIER_3 | 2 | — | — | _suppressed (TIER_3)_ |
-| libgraphcompute-rt.dylib | TIER_3 | 2 | — | — | _suppressed (TIER_3)_ |
+| Component | Tier | Sec score | Apple Security Notes | Report |
+|---|---|---|---|---|
+| Measure | TIER_3 | 3 | — | _suppressed (TIER_3)_ |
+| NeutrinoKit | TIER_3 | 2 | — | _suppressed (TIER_3)_ |
+| libgraphcompute-rt.dylib | TIER_3 | 2 | — | _suppressed (TIER_3)_ |
 
 ## HIGH_SIGNAL — flagged security-relevant but not analysed (520, over budget)
 
 <details><summary>Show 520 components</summary>
 
-| Component | Tier | Sec score | Apple Security Notes | Indicators | Report |
-|---|---|---|---|---|---|
-| AAIDMSAccountNotificationPlugin | TIER_2 | 2 | — | — | _not analysed_ |
-| AGXMetalG15 | TIER_2 | 2 | — | — | _not analysed_ |
-| AIMLInstrumentationStreams | TIER_2 | 2 | — | — | _not analysed_ |
-| AMSAccountAuthenticationPlugin | TIER_2 | 2 | — | — | _not analysed_ |
-| ANECompilerService | TIER_2 | 2 | — | — | _not analysed_ |
-| ANEStorageMaintainer | TIER_2 | 2 | — | — | _not analysed_ |
-| APFS | TIER_2 | 2 | — | — | _not analysed_ |
-| ASOctaneSupportXPCService | TIER_2 | 2 | — | — | _not analysed_ |
-| AUDeveloperSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| AVConference | TIER_2 | 2 | — | — | _not analysed_ |
-| AVD.videodecoder | TIER_2 | 2 | — | — | _not analysed_ |
-| AVFAudio | TIER_2 | 2 | — | — | _not analysed_ |
-| AVFCapture | TIER_2 | 2 | — | — | _not analysed_ |
-| AVKit | TIER_2 | 2 | — | — | _not analysed_ |
-| AXCoreUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| AccessibilitySettings | TIER_2 | 2 | — | — | _not analysed_ |
-| AccessibilityUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| AccountsDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| ActionButtonSelector | TIER_2 | 2 | — | — | _not analysed_ |
-| ActivityAchievementsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| ActivityAwardsClient | TIER_2 | 2 | — | — | _not analysed_ |
-| AirPlayReceiver | TIER_2 | 2 | — | — | _not analysed_ |
-| AirPlaySender | TIER_2 | 2 | — | — | _not analysed_ |
-| AirPlaySenderUIApp | TIER_2 | 2 | — | — | _not analysed_ |
-| AirPlaySupport | TIER_2 | 2 | — | — | _not analysed_ |
-| Ambient | TIER_2 | 2 | — | — | _not analysed_ |
-| AmbientSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| Announce | TIER_2 | 2 | — | — | _not analysed_ |
-| AppSSO | TIER_2 | 2 | — | — | _not analysed_ |
-| AppStore | TIER_2 | 2 | — | — | _not analysed_ |
-| AppStoreComponents | TIER_2 | 2 | — | — | _not analysed_ |
-| AppStoreKit | TIER_2 | 2 | — | — | _not analysed_ |
-| AppStoreOverlays | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleAccount | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleAccountUI | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleIDSetup | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleIDSetupUI | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleLockdownMode | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleMIDIUSBDriver | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleMediaServicesUI | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleMediaServicesUIDynamicService | TIER_2 | 2 | — | — | _not analysed_ |
-| AppleNeuralEngine | TIER_2 | 2 | — | — | _not analysed_ |
-| AssetsLibrary | TIER_2 | 2 | — | — | _not analysed_ |
-| AssistantServices | TIER_2 | 2 | — | — | _not analysed_ |
-| AssistantUI | TIER_2 | 2 | — | — | _not analysed_ |
-| AttentionAwareness | TIER_2 | 2 | — | — | _not analysed_ |
-| AudioFlowDelegatePlugin | TIER_2 | 2 | — | — | _not analysed_ |
-| AudioSession | TIER_2 | 2 | — | — | _not analysed_ |
-| AudioSessionServer | TIER_2 | 2 | — | — | _not analysed_ |
-| AuthKit | TIER_2 | 2 | — | — | _not analysed_ |
-| AuthKitUIService | TIER_2 | 2 | — | — | _not analysed_ |
-| AuthenticationServices | TIER_2 | 2 | — | — | _not analysed_ |
-| AuthenticationServicesCore | TIER_2 | 2 | — | — | _not analysed_ |
-| AutoFillCore | TIER_2 | 2 | — | — | _not analysed_ |
-| AutoFillUI | TIER_2 | 2 | — | — | _not analysed_ |
-| BiomeStreams | TIER_2 | 2 | — | — | _not analysed_ |
-| BlastDoor | TIER_2 | 2 | — | — | _not analysed_ |
-| BookStoreUI | TIER_2 | 2 | — | — | _not analysed_ |
-| Books | TIER_2 | 2 | — | — | _not analysed_ |
-| BrailleTranslation | TIER_2 | 2 | — | — | _not analysed_ |
-| CDMFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| CMCapture | TIER_2 | 2 | — | — | _not analysed_ |
-| CMContinuityCaptureCore | TIER_2 | 2 | — | — | _not analysed_ |
-| CMPhoto | TIER_2 | 2 | — | — | _not analysed_ |
-| CPMS | TIER_2 | 2 | — | — | _not analysed_ |
-| CSExattrCrypto | TIER_2 | 2 | — | — | _not analysed_ |
-| CalendarDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| CaptiveNetwork | TIER_2 | 2 | — | — | _not analysed_ |
-| CaptiveNetworkSupport | TIER_2 | 2 | — | — | _not analysed_ |
-| CarouselAppViewSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CarouselLayoutSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CarouselPreferenceServices | TIER_2 | 2 | — | — | _not analysed_ |
-| ChronoKit | TIER_2 | 2 | — | — | _not analysed_ |
-| ChronoServices | TIER_2 | 2 | — | — | _not analysed_ |
-| ChronoUIServices | TIER_2 | 2 | — | — | _not analysed_ |
-| CipherML | TIER_2 | 2 | — | — | _not analysed_ |
-| ClarityBoard | TIER_2 | 2 | — | — | _not analysed_ |
-| ClarityFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| ClockKit | TIER_2 | 2 | — | — | _not analysed_ |
-| ClockPoster | TIER_2 | 2 | — | — | _not analysed_ |
-| CloudAsset | TIER_2 | 2 | — | — | _not analysed_ |
-| CloudDocsDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| CloudKitDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| CloudServices | TIER_2 | 2 | — | — | _not analysed_ |
-| CloudSubscriptionFeatures | TIER_2 | 2 | — | — | _not analysed_ |
-| CommCenterMobileHelper | TIER_2 | 2 | — | — | _not analysed_ |
-| CommunicationsFilter | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionAppBacklightPrivacySettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionAppViewSetup | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionAutoLaunchSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionDockSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionReturnToClockSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionStingSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| CompanionWakeSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| ContactsAutocompleteUI | TIER_2 | 2 | — | — | _not analysed_ |
-| ContainerManagerCommon | TIER_2 | 2 | — | — | _not analysed_ |
-| ContentKit | TIER_2 | 2 | — | — | _not analysed_ |
-| ConversationKit | TIER_2 | 2 | — | — | _not analysed_ |
-| CoordinationCore | TIER_2 | 2 | — | — | _not analysed_ |
-| CopresenceCore | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreAnalytics | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreCDP | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreCDPUI | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreData | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreDuet | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreEmbeddedSpeechRecognition | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreGPSTest | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreHAP | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreHandwriting | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreIDV | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreIDVShared | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreIDVUI | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreImage | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreLocation | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreMedia | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreMediaIO | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreMediaStream | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreMotion | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreNFC | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreNavigation | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreRealityIO | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreRoutine | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreSpeechFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreSpotlight | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreSuggestions | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreSuggestionsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreUARP | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreUtils | TIER_2 | 2 | — | — | _not analysed_ |
-| CoreUtilsSwift | TIER_2 | 2 | — | — | _not analysed_ |
-| CredentialProviderExtensionHelper | TIER_2 | 2 | — | — | _not analysed_ |
-| DADaemonCardDAV | TIER_2 | 2 | — | — | _not analysed_ |
-| DADaemonEAS | TIER_2 | 2 | — | — | _not analysed_ |
-| DMCEnrollmentLibrary | TIER_2 | 2 | — | — | _not analysed_ |
-| DMCEnrollmentProvider | TIER_2 | 2 | — | — | _not analysed_ |
-| DMCUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| DaemonUtils | TIER_2 | 2 | — | — | _not analysed_ |
-| DesktopServicesPriv | TIER_2 | 2 | — | — | _not analysed_ |
-| DeviceActivity | TIER_2 | 2 | — | — | _not analysed_ |
-| DeviceIdentity | TIER_2 | 2 | — | — | _not analysed_ |
-| DiagnosticExtensionsDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| DiagnosticsReporter | TIER_2 | 2 | — | — | _not analysed_ |
-| DockKitCore | TIER_2 | 2 | — | — | _not analysed_ |
-| EmailDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| EmailFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| EmbeddedAcousticRecognition | TIER_2 | 2 | — | — | _not analysed_ |
-| EmojiFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| EventKit | TIER_2 | 2 | — | — | _not analysed_ |
-| EventKitUI | TIER_2 | 2 | — | — | _not analysed_ |
-| FTServices | TIER_2 | 2 | — | — | _not analysed_ |
-| FaceTimeMessageStore | TIER_2 | 2 | — | — | _not analysed_ |
-| FamilyCircle | TIER_2 | 2 | — | — | _not analysed_ |
-| FamilyControlsObjC | TIER_2 | 2 | — | — | _not analysed_ |
-| FeedbackCore | TIER_2 | 2 | — | — | _not analysed_ |
-| FileProvider | TIER_2 | 2 | — | — | _not analysed_ |
-| FileProviderDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| FinanceUIService | TIER_2 | 2 | — | — | _not analysed_ |
-| FindMyLocate | TIER_2 | 2 | — | — | _not analysed_ |
-| FindMyUICore | TIER_2 | 2 | — | — | _not analysed_ |
-| FontPickerUIService | TIER_2 | 2 | — | — | _not analysed_ |
-| Foundation | TIER_2 | 2 | — | — | _not analysed_ |
-| FrontBoard | TIER_2 | 2 | — | — | _not analysed_ |
-| FrontBoardServices | TIER_2 | 2 | — | — | _not analysed_ |
-| GPUToolsCapture | TIER_2 | 2 | — | — | _not analysed_ |
-| GameCenterUICore | TIER_2 | 2 | — | — | _not analysed_ |
-| GameController | TIER_2 | 2 | — | — | _not analysed_ |
-| GroupActivities | TIER_2 | 2 | — | — | _not analysed_ |
-| HMAssistant | TIER_2 | 2 | — | — | _not analysed_ |
-| Haptics | TIER_2 | 2 | — | — | _not analysed_ |
-| HeadphoneConfigs | TIER_2 | 2 | — | — | _not analysed_ |
-| HealthRecordsExtraction | TIER_2 | 2 | — | — | _not analysed_ |
-| HealthRecordsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| HearingCore | TIER_2 | 2 | — | — | _not analysed_ |
-| HearingUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| HelpKit | TIER_2 | 2 | — | — | _not analysed_ |
-| HomeAccessoryControlUI | TIER_2 | 2 | — | — | _not analysed_ |
-| HomeDeviceSetup | TIER_2 | 2 | — | — | _not analysed_ |
-| HomeEnergy | TIER_2 | 2 | — | — | _not analysed_ |
-| HomeEnergyUI | TIER_2 | 2 | — | — | _not analysed_ |
-| HomeKitCore | TIER_2 | 2 | — | — | _not analysed_ |
-| HomeKitMetrics | TIER_2 | 2 | — | — | _not analysed_ |
-| IDS | TIER_2 | 2 | — | — | _not analysed_ |
-| IDSFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| IMDaemonCore | TIER_2 | 2 | — | — | _not analysed_ |
-| IMSharedUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| IMTranscoderAgent | TIER_2 | 2 | — | — | _not analysed_ |
-| IO80211 | TIER_2 | 2 | — | — | _not analysed_ |
-| IOHIDMotionEventSessionFilter | TIER_2 | 2 | — | — | _not analysed_ |
-| IOKit | TIER_2 | 2 | — | — | _not analysed_ |
-| ImageIOXPCService | TIER_2 | 2 | — | — | _not analysed_ |
-| InstalledContentLibrary | TIER_2 | 2 | — | — | _not analysed_ |
-| Intents | TIER_2 | 2 | — | — | _not analysed_ |
-| JSApp | TIER_2 | 2 | — | — | _not analysed_ |
-| JavaScriptCore | TIER_2 | 2 | — | — | _not analysed_ |
-| LanguageModeling | TIER_2 | 2 | — | — | _not analysed_ |
-| LinkMetadata | TIER_2 | 2 | — | — | _not analysed_ |
-| LinkPresentation | TIER_2 | 2 | — | — | _not analysed_ |
-| LinkServices | TIER_2 | 2 | — | — | _not analysed_ |
-| LocalAuthentication | TIER_2 | 2 | — | — | _not analysed_ |
-| MDM | TIER_2 | 2 | — | — | _not analysed_ |
-| MDMClientLibrary | TIER_2 | 2 | — | — | _not analysed_ |
-| MOVStreamIO | TIER_2 | 2 | — | — | _not analysed_ |
-| MPSBenchmarkLoop | TIER_2 | 2 | — | — | _not analysed_ |
-| MTLReplayController | TIER_2 | 2 | — | — | _not analysed_ |
-| MailKit | TIER_2 | 2 | — | — | _not analysed_ |
-| MailSupport | TIER_2 | 2 | — | — | _not analysed_ |
-| MapKit | TIER_2 | 2 | — | — | _not analysed_ |
-| Maps | TIER_2 | 2 | — | — | _not analysed_ |
-| MapsSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| MapsSupport | TIER_2 | 2 | — | — | _not analysed_ |
-| MapsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| MaterialKit | TIER_2 | 2 | — | — | _not analysed_ |
-| Matter | TIER_2 | 2 | — | — | _not analysed_ |
-| MechanismBase | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaAnalysis | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaControls | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaCoreUI | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaExperience | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaMiningKit | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaRemote | TIER_2 | 2 | — | — | _not analysed_ |
-| MediaToolbox | TIER_2 | 2 | — | — | _not analysed_ |
-| Message | TIER_2 | 2 | — | — | _not analysed_ |
-| MessageStoreToolKit | TIER_2 | 2 | — | — | _not analysed_ |
-| Messages | TIER_2 | 2 | — | — | _not analysed_ |
-| MessagesCloudSync | TIER_2 | 2 | — | — | _not analysed_ |
-| MessagesFlowDelegatePlugin | TIER_2 | 2 | — | — | _not analysed_ |
-| MetalTools | TIER_2 | 2 | — | — | _not analysed_ |
-| MobileKeyBag | TIER_2 | 2 | — | — | _not analysed_ |
-| MobileMail | TIER_2 | 2 | — | — | _not analysed_ |
-| MobileMailUI | TIER_2 | 2 | — | — | _not analysed_ |
-| MobileNotes | TIER_2 | 2 | — | — | _not analysed_ |
-| MobileSafariSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| MobileTimerUI | TIER_2 | 2 | — | — | _not analysed_ |
-| MultipeerConnectivity | TIER_2 | 2 | — | — | _not analysed_ |
-| MusicKit | TIER_2 | 2 | — | — | _not analysed_ |
-| MusicKitInternal | TIER_2 | 2 | — | — | _not analysed_ |
-| MusicLibrary | TIER_2 | 2 | — | — | _not analysed_ |
-| MusicScriptUpdateService | TIER_2 | 2 | — | — | _not analysed_ |
-| MusicUI | TIER_2 | 2 | — | — | _not analysed_ |
-| NLPLearner | TIER_2 | 2 | — | — | _not analysed_ |
-| NanoCalendarBridgeSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| NanoCalendarComplicationsCompanion | TIER_2 | 2 | — | — | _not analysed_ |
-| NanoCalendarPingSubscriber | TIER_2 | 2 | — | — | _not analysed_ |
-| NanoMusicSync | TIER_2 | 2 | — | — | _not analysed_ |
-| NanoPassKit | TIER_2 | 2 | — | — | _not analysed_ |
-| NanoTimeKit | TIER_2 | 2 | — | — | _not analysed_ |
-| NearField | TIER_2 | 2 | — | — | _not analysed_ |
-| NetworkExtension | TIER_2 | 2 | — | — | _not analysed_ |
-| NeutrinoCore | TIER_2 | 2 | — | — | _not analysed_ |
-| NotesShared | TIER_2 | 2 | — | — | _not analysed_ |
-| NotesSupport | TIER_2 | 2 | — | — | _not analysed_ |
-| NotesUI | TIER_2 | 2 | — | — | _not analysed_ |
-| OctagonTrust | TIER_2 | 2 | — | — | _not analysed_ |
-| PDSAgent | TIER_2 | 2 | — | — | _not analysed_ |
-| PHASE | TIER_2 | 2 | — | — | _not analysed_ |
-| PairedUnlockSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| PaperBoardUI | TIER_2 | 2 | — | — | _not analysed_ |
-| PaperKit | TIER_2 | 2 | — | — | _not analysed_ |
-| Passbook | TIER_2 | 2 | — | — | _not analysed_ |
-| PassbookSettings | TIER_2 | 2 | — | — | _not analysed_ |
-| PasswordManagerUI | TIER_2 | 2 | — | — | _not analysed_ |
-| PerfPowerMetricMonitor | TIER_2 | 2 | — | — | _not analysed_ |
-| PersonalizationPortraitInternals | TIER_2 | 2 | — | — | _not analysed_ |
-| PhoneCallFlowDelegatePlugin | TIER_2 | 2 | — | — | _not analysed_ |
-| PhotoImaging | TIER_2 | 2 | — | — | _not analysed_ |
-| PhotoLibrary | TIER_2 | 2 | — | — | _not analysed_ |
-| PhotoLibraryServicesCore | TIER_2 | 2 | — | — | _not analysed_ |
-| PhotosFormats | TIER_2 | 2 | — | — | _not analysed_ |
-| PhotosPlayer | TIER_2 | 2 | — | — | _not analysed_ |
-| PhotosUI | TIER_2 | 2 | — | — | _not analysed_ |
-| PlatformSSO | TIER_2 | 2 | — | — | _not analysed_ |
-| Podcasts | TIER_2 | 2 | — | — | _not analysed_ |
-| PodcastsFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| PointerUIServices | TIER_2 | 2 | — | — | _not analysed_ |
-| PosterBoardUIServices | TIER_2 | 2 | — | — | _not analysed_ |
-| PowerlogLiteOperators | TIER_2 | 2 | — | — | _not analysed_ |
-| PreferencesFramework | TIER_2 | 2 | — | — | _not analysed_ |
-| PrivacySettingsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| PrivateFederatedLearning | TIER_2 | 2 | — | — | _not analysed_ |
-| Rapport | TIER_2 | 2 | — | — | _not analysed_ |
-| RemindersUICore | TIER_2 | 2 | — | — | _not analysed_ |
-| RequestDispatcherBridges | TIER_2 | 2 | — | — | _not analysed_ |
-| SEService | TIER_2 | 2 | — | — | _not analysed_ |
-| SMS | TIER_2 | 2 | — | — | _not analysed_ |
-| STSXPCHelper | TIER_2 | 2 | — | — | _not analysed_ |
-| SafariCore | TIER_2 | 2 | — | — | _not analysed_ |
-| SafariFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| SafariServices | TIER_2 | 2 | — | — | _not analysed_ |
-| SafariShared | TIER_2 | 2 | — | — | _not analysed_ |
-| SafetyMonitorApp | TIER_2 | 2 | — | — | _not analysed_ |
-| SceneKit | TIER_2 | 2 | — | — | _not analysed_ |
-| SearchFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| SearchUI | TIER_2 | 2 | — | — | _not analysed_ |
-| SecureTransactionService | TIER_2 | 2 | — | — | _not analysed_ |
-| Security | TIER_2 | 2 | — | — | _not analysed_ |
-| Seeding | TIER_2 | 2 | — | — | _not analysed_ |
-| SessionSQL | TIER_2 | 2 | — | — | _not analysed_ |
-| Setup | TIER_2 | 2 | — | — | _not analysed_ |
-| SharedUtils | TIER_2 | 2 | — | — | _not analysed_ |
-| Sharing | TIER_2 | 2 | — | — | _not analysed_ |
-| ShortcutsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| ShortcutsViewService | TIER_2 | 2 | — | — | _not analysed_ |
-| SidecarCore | TIER_2 | 2 | — | — | _not analysed_ |
-| SidecarRelay | TIER_2 | 2 | — | — | _not analysed_ |
-| SignalCompression | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriAnalytics | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriContactsIntents | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriInformationSearch | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriPlaybackControlIntents | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriPlaybackControlSupport | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriRemembers | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriStates | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriUIFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| SiriVOX | TIER_2 | 2 | — | — | _not analysed_ |
-| SocialLayer | TIER_2 | 2 | — | — | _not analysed_ |
-| SoftPosReader | TIER_2 | 2 | — | — | _not analysed_ |
-| SoftwareUpdateCore | TIER_2 | 2 | — | — | _not analysed_ |
-| SoftwareUpdateSettingsUI | TIER_2 | 2 | — | — | _not analysed_ |
-| SpaceAttribution | TIER_2 | 2 | — | — | _not analysed_ |
-| SpeakerRecognition | TIER_2 | 2 | — | — | _not analysed_ |
-| Speech | TIER_2 | 2 | — | — | _not analysed_ |
-| SpotlightDaemon | TIER_2 | 2 | — | — | _not analysed_ |
-| SpotlightServices | TIER_2 | 2 | — | — | _not analysed_ |
-| SpringBoard | TIER_2 | 2 | — | — | _not analysed_ |
-| SpringBoardFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| SpringBoardHome | TIER_2 | 2 | — | — | _not analysed_ |
-| SpringBoardServices | TIER_2 | 2 | — | — | _not analysed_ |
-| StateReplicator | TIER_2 | 2 | — | — | _not analysed_ |
-| StorageData | TIER_2 | 2 | — | — | _not analysed_ |
-| StoreKit | TIER_2 | 2 | — | — | _not analysed_ |
-| StoreKitUI | TIER_2 | 2 | — | — | _not analysed_ |
-| StoreKitUIService | TIER_2 | 2 | — | — | _not analysed_ |
-| SwiftUI | TIER_2 | 2 | — | — | _not analysed_ |
-| SystemStatusUI | TIER_2 | 2 | — | — | _not analysed_ |
-| TDGSharing | TIER_2 | 2 | — | — | _not analysed_ |
-| TDGSharingViewService | TIER_2 | 2 | — | — | _not analysed_ |
-| TVRemoteUIService | TIER_2 | 2 | — | — | _not analysed_ |
-| TelephonyUI | TIER_2 | 2 | — | — | _not analysed_ |
-| TelephonyUtilities | TIER_2 | 2 | — | — | _not analysed_ |
-| TextInput | TIER_2 | 2 | — | — | _not analysed_ |
-| TextInputCJK | TIER_2 | 2 | — | — | _not analysed_ |
-| TextInputCore | TIER_2 | 2 | — | — | _not analysed_ |
-| TextInputUI | TIER_2 | 2 | — | — | _not analysed_ |
-| TextToSpeech | TIER_2 | 2 | — | — | _not analysed_ |
-| Tips | TIER_2 | 2 | — | — | _not analysed_ |
-| TipsCore | TIER_2 | 2 | — | — | _not analysed_ |
-| TranslationUIServices | TIER_2 | 2 | — | — | _not analysed_ |
-| Transparency | TIER_2 | 2 | — | — | _not analysed_ |
-| TrialServer | TIER_2 | 2 | — | — | _not analysed_ |
-| UARPUpdaterServiceLegacyAudio | TIER_2 | 2 | — | — | _not analysed_ |
-| UIAccessibility | TIER_2 | 2 | — | — | _not analysed_ |
-| UIFoundation | TIER_2 | 2 | — | — | _not analysed_ |
-| UIKit | TIER_2 | 2 | — | — | _not analysed_ |
-| UsageTrackingAgent | TIER_2 | 2 | — | — | _not analysed_ |
-| UserNotificationsUIKit | TIER_2 | 2 | — | — | _not analysed_ |
-| VectorKit | TIER_2 | 2 | — | — | _not analysed_ |
-| VideoSubscriberAccount | TIER_2 | 2 | — | — | _not analysed_ |
-| VideoSubscriberAccountUI | TIER_2 | 2 | — | — | _not analysed_ |
-| VisageHRTF | TIER_2 | 2 | — | — | _not analysed_ |
-| VisionKitCore | TIER_2 | 2 | — | — | _not analysed_ |
-| VoiceMemos | TIER_2 | 2 | — | — | _not analysed_ |
-| VoiceServices | TIER_2 | 2 | — | — | _not analysed_ |
-| VoiceShortcutClient | TIER_2 | 2 | — | — | _not analysed_ |
-| VoiceShortcuts | TIER_2 | 2 | — | — | _not analysed_ |
-| VoiceTrigger | TIER_2 | 2 | — | — | _not analysed_ |
-| WatchListKit | TIER_2 | 2 | — | — | _not analysed_ |
-| WeatherCore | TIER_2 | 2 | — | — | _not analysed_ |
-| WebContentRestrictions | TIER_2 | 2 | — | — | _not analysed_ |
-| WebUI | TIER_2 | 2 | — | — | _not analysed_ |
-| WiFiCloudSyncEngine | TIER_2 | 2 | — | — | _not analysed_ |
-| WiFiKitUI | TIER_2 | 2 | — | — | _not analysed_ |
-| WiFiPolicy | TIER_2 | 2 | — | — | _not analysed_ |
-| WidgetRenderer | TIER_2 | 2 | — | — | _not analysed_ |
-| WorkflowUI | TIER_2 | 2 | — | — | _not analysed_ |
-| WorkflowUIServices | TIER_2 | 2 | — | — | _not analysed_ |
-| WorkoutUI | TIER_2 | 2 | — | — | _not analysed_ |
-| XCTTargetBootstrap | TIER_2 | 2 | — | — | _not analysed_ |
-| XOJIT | TIER_2 | 2 | — | — | _not analysed_ |
-| XOJITExecutor | TIER_2 | 2 | — | — | _not analysed_ |
-| YamahaUSBMIDIDriver | TIER_2 | 2 | — | — | _not analysed_ |
-| _MusicKitInternal_SwiftUI | TIER_2 | 2 | — | — | _not analysed_ |
-| _StoreKit_SwiftUI | TIER_2 | 2 | — | — | _not analysed_ |
-| accessoryd | TIER_2 | 2 | — | — | _not analysed_ |
-| agx_b000 | TIER_2 | 2 | — | — | _not analysed_ |
-| akd | TIER_2 | 2 | — | — | _not analysed_ |
-| amsaccountsd | TIER_2 | 2 | — | — | _not analysed_ |
-| amsengagementd | TIER_2 | 2 | — | — | _not analysed_ |
-| aned | TIER_2 | 2 | — | — | _not analysed_ |
-| anomalydetectiond | TIER_2 | 2 | — | — | _not analysed_ |
-| apfs_vol_converter | TIER_2 | 2 | — | — | _not analysed_ |
-| appleaccountd | TIER_2 | 2 | — | — | _not analysed_ |
-| appstored | TIER_2 | 2 | — | — | _not analysed_ |
-| apsd | TIER_2 | 2 | — | — | _not analysed_ |
-| askpermissiond | TIER_2 | 2 | — | — | _not analysed_ |
-| assistantd | TIER_2 | 2 | — | — | _not analysed_ |
-| audioaccessoryd | TIER_2 | 2 | — | — | _not analysed_ |
-| backgroundassets.user | TIER_2 | 2 | — | — | _not analysed_ |
-| bluetoothd | TIER_2 | 2 | — | — | _not analysed_ |
-| bookdatastored | TIER_2 | 2 | — | — | _not analysed_ |
-| callservicesd | TIER_2 | 2 | — | — | _not analysed_ |
-| captiveagent | TIER_2 | 2 | — | — | _not analysed_ |
-| cloudd | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.AGXG15P | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.DriverKit-AppleBCMWLAN | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.MobileInstallationHelperService | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.SharePlay.NearbyInvitationsService | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.StreamingUnzipService | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.StreamingUnzipService.privileged | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleAVE2 | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleBasebandPCI | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleH13CameraInterface | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleLockdownMode | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleM2ScalerCSCDriver | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleM68Buttons | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleMobileFileIntegrity | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.ApplePhotonDetector | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleSARService | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleSEPCredentialManager | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleSEPKeyStore | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleSMC | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.driver.AppleSPMIPMU | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.filesystems.lifs | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.iokit.IOPCIFamily | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.kec.corecrypto | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.quicklook.ThumbnailsAgent | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.sbd | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.security.AppleImage4 | TIER_2 | 2 | — | — | _not analysed_ |
-| com.apple.telemetry | TIER_2 | 2 | — | — | _not analysed_ |
-| coreidvd | TIER_2 | 2 | — | — | _not analysed_ |
-| corespeechd | TIER_2 | 2 | — | — | _not analysed_ |
-| cryptexd | TIER_2 | 2 | — | — | _not analysed_ |
-| ctkd | TIER_2 | 2 | — | — | _not analysed_ |
-| demod | TIER_2 | 2 | — | — | _not analysed_ |
-| diagnosticd | TIER_2 | 2 | — | — | _not analysed_ |
-| diskarbitrationd | TIER_2 | 2 | — | — | _not analysed_ |
-| driverkitd | TIER_2 | 2 | — | — | _not analysed_ |
-| druid | TIER_2 | 2 | — | — | _not analysed_ |
-| dyld | TIER_2 | 2 | — | — | _not analysed_ |
-| findmylocated | TIER_2 | 2 | — | — | _not analysed_ |
-| fsck_apfs | TIER_2 | 2 | — | — | _not analysed_ |
-| gamed | TIER_2 | 2 | — | — | _not analysed_ |
-| gpsd | TIER_2 | 2 | — | — | _not analysed_ |
-| iCloudDriveCore | TIER_2 | 2 | — | — | _not analysed_ |
-| iCloudQuota | TIER_2 | 2 | — | — | _not analysed_ |
-| iCloudQuotaUI | TIER_2 | 2 | — | — | _not analysed_ |
-| iMessage | TIER_2 | 2 | — | — | _not analysed_ |
-| iTunesCloud | TIER_2 | 2 | — | — | _not analysed_ |
-| icloudmailagent | TIER_2 | 2 | — | — | _not analysed_ |
-| idcredd | TIER_2 | 2 | — | — | _not analysed_ |
-| imagent | TIER_2 | 2 | — | — | _not analysed_ |
-| installcoordination_proxy | TIER_2 | 2 | — | — | _not analysed_ |
-| installcoordinationd | TIER_2 | 2 | — | — | _not analysed_ |
-| itunescloudd | TIER_2 | 2 | — | — | _not analysed_ |
-| keybagd | TIER_2 | 2 | — | — | _not analysed_ |
-| launchd | TIER_2 | 2 | — | — | _not analysed_ |
-| libBasebandManager.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libBasebandManagerICE.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libFDR.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libGPUCompilerImplLazy.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libGPUCompilerUtils.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libIOAccessoryManager.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libSessionUtility.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libchannel.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcorecrypto.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcorecrypto_noasm.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcorecrypto_trace.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcoreroutine.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcryptex.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcryptex_core.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcryptex_interface.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libcryptex_trampoline.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libfire7.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libiconv_std.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libimg4.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| liblog_location.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libmdns.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libnetworkextension.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libsqlite3.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libsystem_c_debug.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libsystem_containermanager.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libsystem_networkextension.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libsystem_sandbox.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| libusd_ms.dylib | TIER_2 | 2 | — | — | _not analysed_ |
-| lifs | TIER_2 | 2 | — | — | _not analysed_ |
-| logd | TIER_2 | 2 | — | — | _not analysed_ |
-| logd_helper | TIER_2 | 2 | — | — | _not analysed_ |
-| maild | TIER_2 | 2 | — | — | _not analysed_ |
-| mediaremoted | TIER_2 | 2 | — | — | _not analysed_ |
-| merchantd | TIER_2 | 2 | — | — | _not analysed_ |
-| mmaintenanced | TIER_2 | 2 | — | — | _not analysed_ |
-| mobileactivationd | TIER_2 | 2 | — | — | _not analysed_ |
-| mstreamd | TIER_2 | 2 | — | — | _not analysed_ |
-| ndoagent | TIER_2 | 2 | — | — | _not analysed_ |
-| nesessionmanager | TIER_2 | 2 | — | — | _not analysed_ |
-| networkserviceproxy | TIER_2 | 2 | — | — | _not analysed_ |
-| nfcd | TIER_2 | 2 | — | — | _not analysed_ |
-| otctl | TIER_2 | 2 | — | — | _not analysed_ |
-| passd | TIER_2 | 2 | — | — | _not analysed_ |
-| promotedcontentd | TIER_2 | 2 | — | — | _not analysed_ |
-| rapportd | TIER_2 | 2 | — | — | _not analysed_ |
-| revisiond | TIER_2 | 2 | — | — | _not analysed_ |
-| safetyalertsd | TIER_2 | 2 | — | — | _not analysed_ |
-| scrod | TIER_2 | 2 | — | — | _not analysed_ |
-| searchpartyd | TIER_2 | 2 | — | — | _not analysed_ |
-| securityd | TIER_2 | 2 | — | — | _not analysed_ |
-| seserviced | TIER_2 | 2 | — | — | _not analysed_ |
-| sharingd | TIER_2 | 2 | — | — | _not analysed_ |
-| shazamd | TIER_2 | 2 | — | — | _not analysed_ |
-| softposreaderd | TIER_2 | 2 | — | — | _not analysed_ |
-| speechmodeltrainingd | TIER_2 | 2 | — | — | _not analysed_ |
-| storekitd | TIER_2 | 2 | — | — | _not analysed_ |
-| tccd | TIER_2 | 2 | — | — | _not analysed_ |
-| transparencyd | TIER_2 | 2 | — | — | _not analysed_ |
-| trustd | TIER_2 | 2 | — | — | _not analysed_ |
-| usermanagerd | TIER_2 | 2 | — | — | _not analysed_ |
-| voicememod | TIER_2 | 2 | — | — | _not analysed_ |
-| wifianalyticsd | TIER_2 | 2 | — | — | _not analysed_ |
-| wifid | TIER_2 | 2 | — | — | _not analysed_ |
-| wifip2pd | TIER_2 | 2 | — | — | _not analysed_ |
-| xpcproxy | TIER_2 | 2 | — | — | _not analysed_ |
+| Component | Tier | Sec score | Apple Security Notes | Report |
+|---|---|---|---|---|
+| AAIDMSAccountNotificationPlugin | TIER_2 | 2 | — | _not analysed_ |
+| AGXMetalG15 | TIER_2 | 2 | — | _not analysed_ |
+| AIMLInstrumentationStreams | TIER_2 | 2 | — | _not analysed_ |
+| AMSAccountAuthenticationPlugin | TIER_2 | 2 | — | _not analysed_ |
+| ANECompilerService | TIER_2 | 2 | — | _not analysed_ |
+| ANEStorageMaintainer | TIER_2 | 2 | — | _not analysed_ |
+| APFS | TIER_2 | 2 | — | _not analysed_ |
+| ASOctaneSupportXPCService | TIER_2 | 2 | — | _not analysed_ |
+| AUDeveloperSettings | TIER_2 | 2 | — | _not analysed_ |
+| AVConference | TIER_2 | 2 | — | _not analysed_ |
+| AVD.videodecoder | TIER_2 | 2 | — | _not analysed_ |
+| AVFAudio | TIER_2 | 2 | — | _not analysed_ |
+| AVFCapture | TIER_2 | 2 | — | _not analysed_ |
+| AVKit | TIER_2 | 2 | — | _not analysed_ |
+| AXCoreUtilities | TIER_2 | 2 | — | _not analysed_ |
+| AccessibilitySettings | TIER_2 | 2 | — | _not analysed_ |
+| AccessibilityUtilities | TIER_2 | 2 | — | _not analysed_ |
+| AccountsDaemon | TIER_2 | 2 | — | _not analysed_ |
+| ActionButtonSelector | TIER_2 | 2 | — | _not analysed_ |
+| ActivityAchievementsUI | TIER_2 | 2 | — | _not analysed_ |
+| ActivityAwardsClient | TIER_2 | 2 | — | _not analysed_ |
+| AirPlayReceiver | TIER_2 | 2 | — | _not analysed_ |
+| AirPlaySender | TIER_2 | 2 | — | _not analysed_ |
+| AirPlaySenderUIApp | TIER_2 | 2 | — | _not analysed_ |
+| AirPlaySupport | TIER_2 | 2 | — | _not analysed_ |
+| Ambient | TIER_2 | 2 | — | _not analysed_ |
+| AmbientSettings | TIER_2 | 2 | — | _not analysed_ |
+| Announce | TIER_2 | 2 | — | _not analysed_ |
+| AppSSO | TIER_2 | 2 | — | _not analysed_ |
+| AppStore | TIER_2 | 2 | — | _not analysed_ |
+| AppStoreComponents | TIER_2 | 2 | — | _not analysed_ |
+| AppStoreKit | TIER_2 | 2 | — | _not analysed_ |
+| AppStoreOverlays | TIER_2 | 2 | — | _not analysed_ |
+| AppleAccount | TIER_2 | 2 | — | _not analysed_ |
+| AppleAccountUI | TIER_2 | 2 | — | _not analysed_ |
+| AppleIDSetup | TIER_2 | 2 | — | _not analysed_ |
+| AppleIDSetupUI | TIER_2 | 2 | — | _not analysed_ |
+| AppleLockdownMode | TIER_2 | 2 | — | _not analysed_ |
+| AppleMIDIUSBDriver | TIER_2 | 2 | — | _not analysed_ |
+| AppleMediaServicesUI | TIER_2 | 2 | — | _not analysed_ |
+| AppleMediaServicesUIDynamicService | TIER_2 | 2 | — | _not analysed_ |
+| AppleNeuralEngine | TIER_2 | 2 | — | _not analysed_ |
+| AssetsLibrary | TIER_2 | 2 | — | _not analysed_ |
+| AssistantServices | TIER_2 | 2 | — | _not analysed_ |
+| AssistantUI | TIER_2 | 2 | — | _not analysed_ |
+| AttentionAwareness | TIER_2 | 2 | — | _not analysed_ |
+| AudioFlowDelegatePlugin | TIER_2 | 2 | — | _not analysed_ |
+| AudioSession | TIER_2 | 2 | — | _not analysed_ |
+| AudioSessionServer | TIER_2 | 2 | — | _not analysed_ |
+| AuthKit | TIER_2 | 2 | — | _not analysed_ |
+| AuthKitUIService | TIER_2 | 2 | — | _not analysed_ |
+| AuthenticationServices | TIER_2 | 2 | — | _not analysed_ |
+| AuthenticationServicesCore | TIER_2 | 2 | — | _not analysed_ |
+| AutoFillCore | TIER_2 | 2 | — | _not analysed_ |
+| AutoFillUI | TIER_2 | 2 | — | _not analysed_ |
+| BiomeStreams | TIER_2 | 2 | — | _not analysed_ |
+| BlastDoor | TIER_2 | 2 | — | _not analysed_ |
+| BookStoreUI | TIER_2 | 2 | — | _not analysed_ |
+| Books | TIER_2 | 2 | — | _not analysed_ |
+| BrailleTranslation | TIER_2 | 2 | — | _not analysed_ |
+| CDMFoundation | TIER_2 | 2 | — | _not analysed_ |
+| CMCapture | TIER_2 | 2 | — | _not analysed_ |
+| CMContinuityCaptureCore | TIER_2 | 2 | — | _not analysed_ |
+| CMPhoto | TIER_2 | 2 | — | _not analysed_ |
+| CPMS | TIER_2 | 2 | — | _not analysed_ |
+| CSExattrCrypto | TIER_2 | 2 | — | _not analysed_ |
+| CalendarDaemon | TIER_2 | 2 | — | _not analysed_ |
+| CaptiveNetwork | TIER_2 | 2 | — | _not analysed_ |
+| CaptiveNetworkSupport | TIER_2 | 2 | — | _not analysed_ |
+| CarouselAppViewSettings | TIER_2 | 2 | — | _not analysed_ |
+| CarouselLayoutSettings | TIER_2 | 2 | — | _not analysed_ |
+| CarouselPreferenceServices | TIER_2 | 2 | — | _not analysed_ |
+| ChronoKit | TIER_2 | 2 | — | _not analysed_ |
+| ChronoServices | TIER_2 | 2 | — | _not analysed_ |
+| ChronoUIServices | TIER_2 | 2 | — | _not analysed_ |
+| CipherML | TIER_2 | 2 | — | _not analysed_ |
+| ClarityBoard | TIER_2 | 2 | — | _not analysed_ |
+| ClarityFoundation | TIER_2 | 2 | — | _not analysed_ |
+| ClockKit | TIER_2 | 2 | — | _not analysed_ |
+| ClockPoster | TIER_2 | 2 | — | _not analysed_ |
+| CloudAsset | TIER_2 | 2 | — | _not analysed_ |
+| CloudDocsDaemon | TIER_2 | 2 | — | _not analysed_ |
+| CloudKitDaemon | TIER_2 | 2 | — | _not analysed_ |
+| CloudServices | TIER_2 | 2 | — | _not analysed_ |
+| CloudSubscriptionFeatures | TIER_2 | 2 | — | _not analysed_ |
+| CommCenterMobileHelper | TIER_2 | 2 | — | _not analysed_ |
+| CommunicationsFilter | TIER_2 | 2 | — | _not analysed_ |
+| CompanionAppBacklightPrivacySettings | TIER_2 | 2 | — | _not analysed_ |
+| CompanionAppViewSetup | TIER_2 | 2 | — | _not analysed_ |
+| CompanionAutoLaunchSettings | TIER_2 | 2 | — | _not analysed_ |
+| CompanionDockSettings | TIER_2 | 2 | — | _not analysed_ |
+| CompanionReturnToClockSettings | TIER_2 | 2 | — | _not analysed_ |
+| CompanionStingSettings | TIER_2 | 2 | — | _not analysed_ |
+| CompanionWakeSettings | TIER_2 | 2 | — | _not analysed_ |
+| ContactsAutocompleteUI | TIER_2 | 2 | — | _not analysed_ |
+| ContainerManagerCommon | TIER_2 | 2 | — | _not analysed_ |
+| ContentKit | TIER_2 | 2 | — | _not analysed_ |
+| ConversationKit | TIER_2 | 2 | — | _not analysed_ |
+| CoordinationCore | TIER_2 | 2 | — | _not analysed_ |
+| CopresenceCore | TIER_2 | 2 | — | _not analysed_ |
+| CoreAnalytics | TIER_2 | 2 | — | _not analysed_ |
+| CoreCDP | TIER_2 | 2 | — | _not analysed_ |
+| CoreCDPUI | TIER_2 | 2 | — | _not analysed_ |
+| CoreData | TIER_2 | 2 | — | _not analysed_ |
+| CoreDuet | TIER_2 | 2 | — | _not analysed_ |
+| CoreEmbeddedSpeechRecognition | TIER_2 | 2 | — | _not analysed_ |
+| CoreGPSTest | TIER_2 | 2 | — | _not analysed_ |
+| CoreHAP | TIER_2 | 2 | — | _not analysed_ |
+| CoreHandwriting | TIER_2 | 2 | — | _not analysed_ |
+| CoreIDV | TIER_2 | 2 | — | _not analysed_ |
+| CoreIDVShared | TIER_2 | 2 | — | _not analysed_ |
+| CoreIDVUI | TIER_2 | 2 | — | _not analysed_ |
+| CoreImage | TIER_2 | 2 | — | _not analysed_ |
+| CoreLocation | TIER_2 | 2 | — | _not analysed_ |
+| CoreMedia | TIER_2 | 2 | — | _not analysed_ |
+| CoreMediaIO | TIER_2 | 2 | — | _not analysed_ |
+| CoreMediaStream | TIER_2 | 2 | — | _not analysed_ |
+| CoreMotion | TIER_2 | 2 | — | _not analysed_ |
+| CoreNFC | TIER_2 | 2 | — | _not analysed_ |
+| CoreNavigation | TIER_2 | 2 | — | _not analysed_ |
+| CoreRealityIO | TIER_2 | 2 | — | _not analysed_ |
+| CoreRoutine | TIER_2 | 2 | — | _not analysed_ |
+| CoreSpeechFoundation | TIER_2 | 2 | — | _not analysed_ |
+| CoreSpotlight | TIER_2 | 2 | — | _not analysed_ |
+| CoreSuggestions | TIER_2 | 2 | — | _not analysed_ |
+| CoreSuggestionsUI | TIER_2 | 2 | — | _not analysed_ |
+| CoreUARP | TIER_2 | 2 | — | _not analysed_ |
+| CoreUtils | TIER_2 | 2 | — | _not analysed_ |
+| CoreUtilsSwift | TIER_2 | 2 | — | _not analysed_ |
+| CredentialProviderExtensionHelper | TIER_2 | 2 | — | _not analysed_ |
+| DADaemonCardDAV | TIER_2 | 2 | — | _not analysed_ |
+| DADaemonEAS | TIER_2 | 2 | — | _not analysed_ |
+| DMCEnrollmentLibrary | TIER_2 | 2 | — | _not analysed_ |
+| DMCEnrollmentProvider | TIER_2 | 2 | — | _not analysed_ |
+| DMCUtilities | TIER_2 | 2 | — | _not analysed_ |
+| DaemonUtils | TIER_2 | 2 | — | _not analysed_ |
+| DesktopServicesPriv | TIER_2 | 2 | — | _not analysed_ |
+| DeviceActivity | TIER_2 | 2 | — | _not analysed_ |
+| DeviceIdentity | TIER_2 | 2 | — | _not analysed_ |
+| DiagnosticExtensionsDaemon | TIER_2 | 2 | — | _not analysed_ |
+| DiagnosticsReporter | TIER_2 | 2 | — | _not analysed_ |
+| DockKitCore | TIER_2 | 2 | — | _not analysed_ |
+| EmailDaemon | TIER_2 | 2 | — | _not analysed_ |
+| EmailFoundation | TIER_2 | 2 | — | _not analysed_ |
+| EmbeddedAcousticRecognition | TIER_2 | 2 | — | _not analysed_ |
+| EmojiFoundation | TIER_2 | 2 | — | _not analysed_ |
+| EventKit | TIER_2 | 2 | — | _not analysed_ |
+| EventKitUI | TIER_2 | 2 | — | _not analysed_ |
+| FTServices | TIER_2 | 2 | — | _not analysed_ |
+| FaceTimeMessageStore | TIER_2 | 2 | — | _not analysed_ |
+| FamilyCircle | TIER_2 | 2 | — | _not analysed_ |
+| FamilyControlsObjC | TIER_2 | 2 | — | _not analysed_ |
+| FeedbackCore | TIER_2 | 2 | — | _not analysed_ |
+| FileProvider | TIER_2 | 2 | — | _not analysed_ |
+| FileProviderDaemon | TIER_2 | 2 | — | _not analysed_ |
+| FinanceUIService | TIER_2 | 2 | — | _not analysed_ |
+| FindMyLocate | TIER_2 | 2 | — | _not analysed_ |
+| FindMyUICore | TIER_2 | 2 | — | _not analysed_ |
+| FontPickerUIService | TIER_2 | 2 | — | _not analysed_ |
+| Foundation | TIER_2 | 2 | — | _not analysed_ |
+| FrontBoard | TIER_2 | 2 | — | _not analysed_ |
+| FrontBoardServices | TIER_2 | 2 | — | _not analysed_ |
+| GPUToolsCapture | TIER_2 | 2 | — | _not analysed_ |
+| GameCenterUICore | TIER_2 | 2 | — | _not analysed_ |
+| GameController | TIER_2 | 2 | — | _not analysed_ |
+| GroupActivities | TIER_2 | 2 | — | _not analysed_ |
+| HMAssistant | TIER_2 | 2 | — | _not analysed_ |
+| Haptics | TIER_2 | 2 | — | _not analysed_ |
+| HeadphoneConfigs | TIER_2 | 2 | — | _not analysed_ |
+| HealthRecordsExtraction | TIER_2 | 2 | — | _not analysed_ |
+| HealthRecordsUI | TIER_2 | 2 | — | _not analysed_ |
+| HearingCore | TIER_2 | 2 | — | _not analysed_ |
+| HearingUtilities | TIER_2 | 2 | — | _not analysed_ |
+| HelpKit | TIER_2 | 2 | — | _not analysed_ |
+| HomeAccessoryControlUI | TIER_2 | 2 | — | _not analysed_ |
+| HomeDeviceSetup | TIER_2 | 2 | — | _not analysed_ |
+| HomeEnergy | TIER_2 | 2 | — | _not analysed_ |
+| HomeEnergyUI | TIER_2 | 2 | — | _not analysed_ |
+| HomeKitCore | TIER_2 | 2 | — | _not analysed_ |
+| HomeKitMetrics | TIER_2 | 2 | — | _not analysed_ |
+| IDS | TIER_2 | 2 | — | _not analysed_ |
+| IDSFoundation | TIER_2 | 2 | — | _not analysed_ |
+| IMDaemonCore | TIER_2 | 2 | — | _not analysed_ |
+| IMSharedUtilities | TIER_2 | 2 | — | _not analysed_ |
+| IMTranscoderAgent | TIER_2 | 2 | — | _not analysed_ |
+| IO80211 | TIER_2 | 2 | — | _not analysed_ |
+| IOHIDMotionEventSessionFilter | TIER_2 | 2 | — | _not analysed_ |
+| IOKit | TIER_2 | 2 | — | _not analysed_ |
+| ImageIOXPCService | TIER_2 | 2 | — | _not analysed_ |
+| InstalledContentLibrary | TIER_2 | 2 | — | _not analysed_ |
+| Intents | TIER_2 | 2 | — | _not analysed_ |
+| JSApp | TIER_2 | 2 | — | _not analysed_ |
+| JavaScriptCore | TIER_2 | 2 | — | _not analysed_ |
+| LanguageModeling | TIER_2 | 2 | — | _not analysed_ |
+| LinkMetadata | TIER_2 | 2 | — | _not analysed_ |
+| LinkPresentation | TIER_2 | 2 | — | _not analysed_ |
+| LinkServices | TIER_2 | 2 | — | _not analysed_ |
+| LocalAuthentication | TIER_2 | 2 | — | _not analysed_ |
+| MDM | TIER_2 | 2 | — | _not analysed_ |
+| MDMClientLibrary | TIER_2 | 2 | — | _not analysed_ |
+| MOVStreamIO | TIER_2 | 2 | — | _not analysed_ |
+| MPSBenchmarkLoop | TIER_2 | 2 | — | _not analysed_ |
+| MTLReplayController | TIER_2 | 2 | — | _not analysed_ |
+| MailKit | TIER_2 | 2 | — | _not analysed_ |
+| MailSupport | TIER_2 | 2 | — | _not analysed_ |
+| MapKit | TIER_2 | 2 | — | _not analysed_ |
+| Maps | TIER_2 | 2 | — | _not analysed_ |
+| MapsSettings | TIER_2 | 2 | — | _not analysed_ |
+| MapsSupport | TIER_2 | 2 | — | _not analysed_ |
+| MapsUI | TIER_2 | 2 | — | _not analysed_ |
+| MaterialKit | TIER_2 | 2 | — | _not analysed_ |
+| Matter | TIER_2 | 2 | — | _not analysed_ |
+| MechanismBase | TIER_2 | 2 | — | _not analysed_ |
+| MediaAnalysis | TIER_2 | 2 | — | _not analysed_ |
+| MediaControls | TIER_2 | 2 | — | _not analysed_ |
+| MediaCoreUI | TIER_2 | 2 | — | _not analysed_ |
+| MediaExperience | TIER_2 | 2 | — | _not analysed_ |
+| MediaMiningKit | TIER_2 | 2 | — | _not analysed_ |
+| MediaRemote | TIER_2 | 2 | — | _not analysed_ |
+| MediaToolbox | TIER_2 | 2 | — | _not analysed_ |
+| Message | TIER_2 | 2 | — | _not analysed_ |
+| MessageStoreToolKit | TIER_2 | 2 | — | _not analysed_ |
+| Messages | TIER_2 | 2 | — | _not analysed_ |
+| MessagesCloudSync | TIER_2 | 2 | — | _not analysed_ |
+| MessagesFlowDelegatePlugin | TIER_2 | 2 | — | _not analysed_ |
+| MetalTools | TIER_2 | 2 | — | _not analysed_ |
+| MobileKeyBag | TIER_2 | 2 | — | _not analysed_ |
+| MobileMail | TIER_2 | 2 | — | _not analysed_ |
+| MobileMailUI | TIER_2 | 2 | — | _not analysed_ |
+| MobileNotes | TIER_2 | 2 | — | _not analysed_ |
+| MobileSafariSettings | TIER_2 | 2 | — | _not analysed_ |
+| MobileTimerUI | TIER_2 | 2 | — | _not analysed_ |
+| MultipeerConnectivity | TIER_2 | 2 | — | _not analysed_ |
+| MusicKit | TIER_2 | 2 | — | _not analysed_ |
+| MusicKitInternal | TIER_2 | 2 | — | _not analysed_ |
+| MusicLibrary | TIER_2 | 2 | — | _not analysed_ |
+| MusicScriptUpdateService | TIER_2 | 2 | — | _not analysed_ |
+| MusicUI | TIER_2 | 2 | — | _not analysed_ |
+| NLPLearner | TIER_2 | 2 | — | _not analysed_ |
+| NanoCalendarBridgeSettings | TIER_2 | 2 | — | _not analysed_ |
+| NanoCalendarComplicationsCompanion | TIER_2 | 2 | — | _not analysed_ |
+| NanoCalendarPingSubscriber | TIER_2 | 2 | — | _not analysed_ |
+| NanoMusicSync | TIER_2 | 2 | — | _not analysed_ |
+| NanoPassKit | TIER_2 | 2 | — | _not analysed_ |
+| NanoTimeKit | TIER_2 | 2 | — | _not analysed_ |
+| NearField | TIER_2 | 2 | — | _not analysed_ |
+| NetworkExtension | TIER_2 | 2 | — | _not analysed_ |
+| NeutrinoCore | TIER_2 | 2 | — | _not analysed_ |
+| NotesShared | TIER_2 | 2 | — | _not analysed_ |
+| NotesSupport | TIER_2 | 2 | — | _not analysed_ |
+| NotesUI | TIER_2 | 2 | — | _not analysed_ |
+| OctagonTrust | TIER_2 | 2 | — | _not analysed_ |
+| PDSAgent | TIER_2 | 2 | — | _not analysed_ |
+| PHASE | TIER_2 | 2 | — | _not analysed_ |
+| PairedUnlockSettings | TIER_2 | 2 | — | _not analysed_ |
+| PaperBoardUI | TIER_2 | 2 | — | _not analysed_ |
+| PaperKit | TIER_2 | 2 | — | _not analysed_ |
+| Passbook | TIER_2 | 2 | — | _not analysed_ |
+| PassbookSettings | TIER_2 | 2 | — | _not analysed_ |
+| PasswordManagerUI | TIER_2 | 2 | — | _not analysed_ |
+| PerfPowerMetricMonitor | TIER_2 | 2 | — | _not analysed_ |
+| PersonalizationPortraitInternals | TIER_2 | 2 | — | _not analysed_ |
+| PhoneCallFlowDelegatePlugin | TIER_2 | 2 | — | _not analysed_ |
+| PhotoImaging | TIER_2 | 2 | — | _not analysed_ |
+| PhotoLibrary | TIER_2 | 2 | — | _not analysed_ |
+| PhotoLibraryServicesCore | TIER_2 | 2 | — | _not analysed_ |
+| PhotosFormats | TIER_2 | 2 | — | _not analysed_ |
+| PhotosPlayer | TIER_2 | 2 | — | _not analysed_ |
+| PhotosUI | TIER_2 | 2 | — | _not analysed_ |
+| PlatformSSO | TIER_2 | 2 | — | _not analysed_ |
+| Podcasts | TIER_2 | 2 | — | _not analysed_ |
+| PodcastsFoundation | TIER_2 | 2 | — | _not analysed_ |
+| PointerUIServices | TIER_2 | 2 | — | _not analysed_ |
+| PosterBoardUIServices | TIER_2 | 2 | — | _not analysed_ |
+| PowerlogLiteOperators | TIER_2 | 2 | — | _not analysed_ |
+| PreferencesFramework | TIER_2 | 2 | — | _not analysed_ |
+| PrivacySettingsUI | TIER_2 | 2 | — | _not analysed_ |
+| PrivateFederatedLearning | TIER_2 | 2 | — | _not analysed_ |
+| Rapport | TIER_2 | 2 | — | _not analysed_ |
+| RemindersUICore | TIER_2 | 2 | — | _not analysed_ |
+| RequestDispatcherBridges | TIER_2 | 2 | — | _not analysed_ |
+| SEService | TIER_2 | 2 | — | _not analysed_ |
+| SMS | TIER_2 | 2 | — | _not analysed_ |
+| STSXPCHelper | TIER_2 | 2 | — | _not analysed_ |
+| SafariCore | TIER_2 | 2 | — | _not analysed_ |
+| SafariFoundation | TIER_2 | 2 | — | _not analysed_ |
+| SafariServices | TIER_2 | 2 | — | _not analysed_ |
+| SafariShared | TIER_2 | 2 | — | _not analysed_ |
+| SafetyMonitorApp | TIER_2 | 2 | — | _not analysed_ |
+| SceneKit | TIER_2 | 2 | — | _not analysed_ |
+| SearchFoundation | TIER_2 | 2 | — | _not analysed_ |
+| SearchUI | TIER_2 | 2 | — | _not analysed_ |
+| SecureTransactionService | TIER_2 | 2 | — | _not analysed_ |
+| Security | TIER_2 | 2 | — | _not analysed_ |
+| Seeding | TIER_2 | 2 | — | _not analysed_ |
+| SessionSQL | TIER_2 | 2 | — | _not analysed_ |
+| Setup | TIER_2 | 2 | — | _not analysed_ |
+| SharedUtils | TIER_2 | 2 | — | _not analysed_ |
+| Sharing | TIER_2 | 2 | — | _not analysed_ |
+| ShortcutsUI | TIER_2 | 2 | — | _not analysed_ |
+| ShortcutsViewService | TIER_2 | 2 | — | _not analysed_ |
+| SidecarCore | TIER_2 | 2 | — | _not analysed_ |
+| SidecarRelay | TIER_2 | 2 | — | _not analysed_ |
+| SignalCompression | TIER_2 | 2 | — | _not analysed_ |
+| SiriAnalytics | TIER_2 | 2 | — | _not analysed_ |
+| SiriContactsIntents | TIER_2 | 2 | — | _not analysed_ |
+| SiriInformationSearch | TIER_2 | 2 | — | _not analysed_ |
+| SiriPlaybackControlIntents | TIER_2 | 2 | — | _not analysed_ |
+| SiriPlaybackControlSupport | TIER_2 | 2 | — | _not analysed_ |
+| SiriRemembers | TIER_2 | 2 | — | _not analysed_ |
+| SiriStates | TIER_2 | 2 | — | _not analysed_ |
+| SiriUIFoundation | TIER_2 | 2 | — | _not analysed_ |
+| SiriUtilities | TIER_2 | 2 | — | _not analysed_ |
+| SiriVOX | TIER_2 | 2 | — | _not analysed_ |
+| SocialLayer | TIER_2 | 2 | — | _not analysed_ |
+| SoftPosReader | TIER_2 | 2 | — | _not analysed_ |
+| SoftwareUpdateCore | TIER_2 | 2 | — | _not analysed_ |
+| SoftwareUpdateSettingsUI | TIER_2 | 2 | — | _not analysed_ |
+| SpaceAttribution | TIER_2 | 2 | — | _not analysed_ |
+| SpeakerRecognition | TIER_2 | 2 | — | _not analysed_ |
+| Speech | TIER_2 | 2 | — | _not analysed_ |
+| SpotlightDaemon | TIER_2 | 2 | — | _not analysed_ |
+| SpotlightServices | TIER_2 | 2 | — | _not analysed_ |
+| SpringBoard | TIER_2 | 2 | — | _not analysed_ |
+| SpringBoardFoundation | TIER_2 | 2 | — | _not analysed_ |
+| SpringBoardHome | TIER_2 | 2 | — | _not analysed_ |
+| SpringBoardServices | TIER_2 | 2 | — | _not analysed_ |
+| StateReplicator | TIER_2 | 2 | — | _not analysed_ |
+| StorageData | TIER_2 | 2 | — | _not analysed_ |
+| StoreKit | TIER_2 | 2 | — | _not analysed_ |
+| StoreKitUI | TIER_2 | 2 | — | _not analysed_ |
+| StoreKitUIService | TIER_2 | 2 | — | _not analysed_ |
+| SwiftUI | TIER_2 | 2 | — | _not analysed_ |
+| SystemStatusUI | TIER_2 | 2 | — | _not analysed_ |
+| TDGSharing | TIER_2 | 2 | — | _not analysed_ |
+| TDGSharingViewService | TIER_2 | 2 | — | _not analysed_ |
+| TVRemoteUIService | TIER_2 | 2 | — | _not analysed_ |
+| TelephonyUI | TIER_2 | 2 | — | _not analysed_ |
+| TelephonyUtilities | TIER_2 | 2 | — | _not analysed_ |
+| TextInput | TIER_2 | 2 | — | _not analysed_ |
+| TextInputCJK | TIER_2 | 2 | — | _not analysed_ |
+| TextInputCore | TIER_2 | 2 | — | _not analysed_ |
+| TextInputUI | TIER_2 | 2 | — | _not analysed_ |
+| TextToSpeech | TIER_2 | 2 | — | _not analysed_ |
+| Tips | TIER_2 | 2 | — | _not analysed_ |
+| TipsCore | TIER_2 | 2 | — | _not analysed_ |
+| TranslationUIServices | TIER_2 | 2 | — | _not analysed_ |
+| Transparency | TIER_2 | 2 | — | _not analysed_ |
+| TrialServer | TIER_2 | 2 | — | _not analysed_ |
+| UARPUpdaterServiceLegacyAudio | TIER_2 | 2 | — | _not analysed_ |
+| UIAccessibility | TIER_2 | 2 | — | _not analysed_ |
+| UIFoundation | TIER_2 | 2 | — | _not analysed_ |
+| UIKit | TIER_2 | 2 | — | _not analysed_ |
+| UsageTrackingAgent | TIER_2 | 2 | — | _not analysed_ |
+| UserNotificationsUIKit | TIER_2 | 2 | — | _not analysed_ |
+| VectorKit | TIER_2 | 2 | — | _not analysed_ |
+| VideoSubscriberAccount | TIER_2 | 2 | — | _not analysed_ |
+| VideoSubscriberAccountUI | TIER_2 | 2 | — | _not analysed_ |
+| VisageHRTF | TIER_2 | 2 | — | _not analysed_ |
+| VisionKitCore | TIER_2 | 2 | — | _not analysed_ |
+| VoiceMemos | TIER_2 | 2 | — | _not analysed_ |
+| VoiceServices | TIER_2 | 2 | — | _not analysed_ |
+| VoiceShortcutClient | TIER_2 | 2 | — | _not analysed_ |
+| VoiceShortcuts | TIER_2 | 2 | — | _not analysed_ |
+| VoiceTrigger | TIER_2 | 2 | — | _not analysed_ |
+| WatchListKit | TIER_2 | 2 | — | _not analysed_ |
+| WeatherCore | TIER_2 | 2 | — | _not analysed_ |
+| WebContentRestrictions | TIER_2 | 2 | — | _not analysed_ |
+| WebUI | TIER_2 | 2 | — | _not analysed_ |
+| WiFiCloudSyncEngine | TIER_2 | 2 | — | _not analysed_ |
+| WiFiKitUI | TIER_2 | 2 | — | _not analysed_ |
+| WiFiPolicy | TIER_2 | 2 | — | _not analysed_ |
+| WidgetRenderer | TIER_2 | 2 | — | _not analysed_ |
+| WorkflowUI | TIER_2 | 2 | — | _not analysed_ |
+| WorkflowUIServices | TIER_2 | 2 | — | _not analysed_ |
+| WorkoutUI | TIER_2 | 2 | — | _not analysed_ |
+| XCTTargetBootstrap | TIER_2 | 2 | — | _not analysed_ |
+| XOJIT | TIER_2 | 2 | — | _not analysed_ |
+| XOJITExecutor | TIER_2 | 2 | — | _not analysed_ |
+| YamahaUSBMIDIDriver | TIER_2 | 2 | — | _not analysed_ |
+| _MusicKitInternal_SwiftUI | TIER_2 | 2 | — | _not analysed_ |
+| _StoreKit_SwiftUI | TIER_2 | 2 | — | _not analysed_ |
+| accessoryd | TIER_2 | 2 | — | _not analysed_ |
+| agx_b000 | TIER_2 | 2 | — | _not analysed_ |
+| akd | TIER_2 | 2 | — | _not analysed_ |
+| amsaccountsd | TIER_2 | 2 | — | _not analysed_ |
+| amsengagementd | TIER_2 | 2 | — | _not analysed_ |
+| aned | TIER_2 | 2 | — | _not analysed_ |
+| anomalydetectiond | TIER_2 | 2 | — | _not analysed_ |
+| apfs_vol_converter | TIER_2 | 2 | — | _not analysed_ |
+| appleaccountd | TIER_2 | 2 | — | _not analysed_ |
+| appstored | TIER_2 | 2 | — | _not analysed_ |
+| apsd | TIER_2 | 2 | — | _not analysed_ |
+| askpermissiond | TIER_2 | 2 | — | _not analysed_ |
+| assistantd | TIER_2 | 2 | — | _not analysed_ |
+| audioaccessoryd | TIER_2 | 2 | — | _not analysed_ |
+| backgroundassets.user | TIER_2 | 2 | — | _not analysed_ |
+| bluetoothd | TIER_2 | 2 | — | _not analysed_ |
+| bookdatastored | TIER_2 | 2 | — | _not analysed_ |
+| callservicesd | TIER_2 | 2 | — | _not analysed_ |
+| captiveagent | TIER_2 | 2 | — | _not analysed_ |
+| cloudd | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.AGXG15P | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.DriverKit-AppleBCMWLAN | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.MobileInstallationHelperService | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.SharePlay.NearbyInvitationsService | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.StreamingUnzipService | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.StreamingUnzipService.privileged | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleAVE2 | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleBasebandPCI | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleH13CameraInterface | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleLockdownMode | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleM2ScalerCSCDriver | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleM68Buttons | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleMobileFileIntegrity | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.ApplePhotonDetector | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleSARService | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleSEPCredentialManager | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleSEPKeyStore | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleSMC | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.driver.AppleSPMIPMU | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.filesystems.lifs | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.iokit.IOPCIFamily | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.kec.corecrypto | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.quicklook.ThumbnailsAgent | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.sbd | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.security.AppleImage4 | TIER_2 | 2 | — | _not analysed_ |
+| com.apple.telemetry | TIER_2 | 2 | — | _not analysed_ |
+| coreidvd | TIER_2 | 2 | — | _not analysed_ |
+| corespeechd | TIER_2 | 2 | — | _not analysed_ |
+| cryptexd | TIER_2 | 2 | — | _not analysed_ |
+| ctkd | TIER_2 | 2 | — | _not analysed_ |
+| demod | TIER_2 | 2 | — | _not analysed_ |
+| diagnosticd | TIER_2 | 2 | — | _not analysed_ |
+| diskarbitrationd | TIER_2 | 2 | — | _not analysed_ |
+| driverkitd | TIER_2 | 2 | — | _not analysed_ |
+| druid | TIER_2 | 2 | — | _not analysed_ |
+| dyld | TIER_2 | 2 | — | _not analysed_ |
+| findmylocated | TIER_2 | 2 | — | _not analysed_ |
+| fsck_apfs | TIER_2 | 2 | — | _not analysed_ |
+| gamed | TIER_2 | 2 | — | _not analysed_ |
+| gpsd | TIER_2 | 2 | — | _not analysed_ |
+| iCloudDriveCore | TIER_2 | 2 | — | _not analysed_ |
+| iCloudQuota | TIER_2 | 2 | — | _not analysed_ |
+| iCloudQuotaUI | TIER_2 | 2 | — | _not analysed_ |
+| iMessage | TIER_2 | 2 | — | _not analysed_ |
+| iTunesCloud | TIER_2 | 2 | — | _not analysed_ |
+| icloudmailagent | TIER_2 | 2 | — | _not analysed_ |
+| idcredd | TIER_2 | 2 | — | _not analysed_ |
+| imagent | TIER_2 | 2 | — | _not analysed_ |
+| installcoordination_proxy | TIER_2 | 2 | — | _not analysed_ |
+| installcoordinationd | TIER_2 | 2 | — | _not analysed_ |
+| itunescloudd | TIER_2 | 2 | — | _not analysed_ |
+| keybagd | TIER_2 | 2 | — | _not analysed_ |
+| launchd | TIER_2 | 2 | — | _not analysed_ |
+| libBasebandManager.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libBasebandManagerICE.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libFDR.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libGPUCompilerImplLazy.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libGPUCompilerUtils.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libIOAccessoryManager.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libSessionUtility.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libchannel.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcorecrypto.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcorecrypto_noasm.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcorecrypto_trace.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcoreroutine.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcryptex.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcryptex_core.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcryptex_interface.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libcryptex_trampoline.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libfire7.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libiconv_std.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libimg4.dylib | TIER_2 | 2 | — | _not analysed_ |
+| liblog_location.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libmdns.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libnetworkextension.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libsqlite3.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libsystem_c_debug.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libsystem_containermanager.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libsystem_networkextension.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libsystem_sandbox.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libusd_ms.dylib | TIER_2 | 2 | — | _not analysed_ |
+| lifs | TIER_2 | 2 | — | _not analysed_ |
+| logd | TIER_2 | 2 | — | _not analysed_ |
+| logd_helper | TIER_2 | 2 | — | _not analysed_ |
+| maild | TIER_2 | 2 | — | _not analysed_ |
+| mediaremoted | TIER_2 | 2 | — | _not analysed_ |
+| merchantd | TIER_2 | 2 | — | _not analysed_ |
+| mmaintenanced | TIER_2 | 2 | — | _not analysed_ |
+| mobileactivationd | TIER_2 | 2 | — | _not analysed_ |
+| mstreamd | TIER_2 | 2 | — | _not analysed_ |
+| ndoagent | TIER_2 | 2 | — | _not analysed_ |
+| nesessionmanager | TIER_2 | 2 | — | _not analysed_ |
+| networkserviceproxy | TIER_2 | 2 | — | _not analysed_ |
+| nfcd | TIER_2 | 2 | — | _not analysed_ |
+| otctl | TIER_2 | 2 | — | _not analysed_ |
+| passd | TIER_2 | 2 | — | _not analysed_ |
+| promotedcontentd | TIER_2 | 2 | — | _not analysed_ |
+| rapportd | TIER_2 | 2 | — | _not analysed_ |
+| revisiond | TIER_2 | 2 | — | _not analysed_ |
+| safetyalertsd | TIER_2 | 2 | — | _not analysed_ |
+| scrod | TIER_2 | 2 | — | _not analysed_ |
+| searchpartyd | TIER_2 | 2 | — | _not analysed_ |
+| securityd | TIER_2 | 2 | — | _not analysed_ |
+| seserviced | TIER_2 | 2 | — | _not analysed_ |
+| sharingd | TIER_2 | 2 | — | _not analysed_ |
+| shazamd | TIER_2 | 2 | — | _not analysed_ |
+| softposreaderd | TIER_2 | 2 | — | _not analysed_ |
+| speechmodeltrainingd | TIER_2 | 2 | — | _not analysed_ |
+| storekitd | TIER_2 | 2 | — | _not analysed_ |
+| tccd | TIER_2 | 2 | — | _not analysed_ |
+| transparencyd | TIER_2 | 2 | — | _not analysed_ |
+| trustd | TIER_2 | 2 | — | _not analysed_ |
+| usermanagerd | TIER_2 | 2 | — | _not analysed_ |
+| voicememod | TIER_2 | 2 | — | _not analysed_ |
+| wifianalyticsd | TIER_2 | 2 | — | _not analysed_ |
+| wifid | TIER_2 | 2 | — | _not analysed_ |
+| wifip2pd | TIER_2 | 2 | — | _not analysed_ |
+| xpcproxy | TIER_2 | 2 | — | _not analysed_ |
 
 </details>
 
