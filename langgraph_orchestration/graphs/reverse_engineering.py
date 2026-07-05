@@ -68,20 +68,21 @@ def render_triage_summary(index: list[dict], version: str = "") -> str:
         score = r.get("security_score")
         score_s = str(score) if score is not None else "—"
         notes_s = f"`{r['security_notes_match']}`" if r.get("security_notes_match") else "—"
-        inds = r.get("security_indicators") or []
-        inds_s = ", ".join(inds) if inds else "—"
         if r.get("saved") and r.get("report_path"):
             link = f"[report]({os.path.basename(r['report_path'])})"
         elif r.get("selected") and not r.get("saved"):
             link = "_suppressed (TIER_3)_"
         else:
             link = "_not analysed_"
-        return f"| {r.get('name', '?')} | {eff_tier(r)} | {score_s} | {notes_s} | {inds_s} | {link} |"
+        return f"| {r.get('name', '?')} | {eff_tier(r)} | {score_s} | {notes_s} | {link} |"
 
     def table(rows: list[dict]) -> list[str]:
         rows = sorted(rows, key=lambda r: (tier_rank(eff_tier(r)), -(r.get("security_score") or 0), r.get("name", "")))
-        out = ["| Component | Tier | Sec score | Apple Security Notes | Indicators | Report |",
-               "|---|---|---|---|---|---|"]
+        # security indicators still drive the security score (3 = hard indicator);
+        # they're intentionally not a summary column — almost always empty and
+        # already reflected in the score.
+        out = ["| Component | Tier | Sec score | Apple Security Notes | Report |",
+               "|---|---|---|---|---|"]
         out += [row_md(r) for r in rows]
         return out
 
@@ -217,7 +218,7 @@ def _security_score(target: dict) -> int:
 
 def _pretier_from_score(score: int) -> str:
     """Deterministic tier estimate from the security score, used in the summary
-    for HIGH_SIGNAL components that were not fully analysed by the LLM."""
+    for HIGH_SIGNAL components that were not fully analysed by the LLM"""
     if score >= 3:
         return "TIER_1"
     if score == 2:
@@ -284,6 +285,33 @@ def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[st
                 evidence_map[name] = {"cstrings": [], "symbols": []}
             evidence_map[name]["symbols"].append(parts[1].strip())
 
+    _ALLOWED_TOOL_NAMES = [
+        "find_address",
+        "decompile_function",
+        "get_xrefs_to",
+        "rename_local_variable",
+        "get_local_variables",
+        "set_comment",
+        "get_entitlements",
+        "resolve_objc_dispatch",
+        "trace_variable_source",
+        "save_ida_database",
+    ]
+
+    def _make_target(name: str, evidence: str) -> dict:
+        binary_info = binary_map.get(name, {})
+        source = binary_info.get("source", "component")
+        entry = {
+            "name": name,
+            "feature_type": _infer_feature_type(name, source),
+            "source": source,
+            "evidence": evidence,
+            "allowed_tool_names": list(_ALLOWED_TOOL_NAMES),
+        }
+        if binary_info.get("path"):
+            entry["binary_path"] = binary_info["path"]
+        return entry
+
     targets: list[dict[str, str]] = []
     for name, ev_dict in evidence_map.items():
         ev_lines = []
@@ -295,33 +323,16 @@ def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[st
                 ev_lines.append("")
             ev_lines.append("Symbols:")
             ev_lines.extend(ev_dict["symbols"])
+        targets.append(_make_target(name, "\n".join(ev_lines)))
 
-        evidence = "\n".join(ev_lines)
-        binary_info = binary_map.get(name, {})
-        source = binary_info.get("source", "component")
-
-        target_entry = {
-            "name": name,
-            "feature_type": _infer_feature_type(name, source),
-            "source": source,
-            "evidence": evidence,
-            "allowed_tool_names": [
-                "find_address",
-                "decompile_function",
-                "get_xrefs_to",
-                "rename_local_variable",
-                "get_local_variables",
-                "set_comment",
-                "get_entitlements",
-                "resolve_objc_dispatch",
-                "trace_variable_source",
-                "save_ida_database",
-            ]
-        }
-        if binary_info.get("path"):
-            target_entry["binary_path"] = binary_info["path"]
-
-        targets.append(target_entry)
+    # Changed binaries with NO cstring/symbol delta still get a target (empty
+    # evidence). A content-light fix — e.g. a logging-redaction change that adds
+    # no strings/symbols — otherwise lands in the changed list but never becomes a
+    # target, so it can't be matched to an Apple advisory component. These are
+    # LOW_SIGNAL by default and only surface if promoted by a Security Notes match.
+    for name in binary_map:
+        if name not in evidence_map:
+            targets.append(_make_target(name, ""))
 
     # attach the deterministic triage signal to every target; filtering happens in
     # feature_analysis_select_node after Apple Security Notes matching, so an
@@ -748,31 +759,37 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             payload["note"] = "No confirmed local artifacts available; extraction skipped."
         return StateManager.add_intermediate_output(state, "ipsw_extractor", json.dumps(payload, ensure_ascii=True, indent=2))
 
-    def _find_dsc_for_ipsw(ipsw_path: str, workspace_root: str | None) -> str | None:
-        """Scan .ipsw_extracted/<stem>/ for the base dyld_shared_cache_arm64e file"""
+    def _extracted_artifact_for_ipsw(
+        ipsw_path: str, workspace_root: str | None, leaf_glob: str,
+        select=lambda p: True,
+    ) -> str | None:
         import glob as _glob
         stem = os.path.basename(ipsw_path).replace(".ipsw", "")
         extracted_root = os.path.join(workspace_root or os.getcwd(), ".ipsw_extracted")
-        pattern = os.path.join(extracted_root, stem, "**", "dyld_shared_cache_arm64e")
-        matches = sorted(_glob.glob(pattern, recursive=True))
-        if matches:
-            return matches[0]
-        # fallback: any subdirectory whose name starts with the build ID
-        build_id = stem.split("_")[0] if "_" in stem else stem
-        pattern2 = os.path.join(extracted_root, f"*{build_id}*", "**", "dyld_shared_cache_arm64e")
-        matches2 = sorted(_glob.glob(pattern2, recursive=True))
-        return matches2[0] if matches2 else None
+
+        def _first(pattern: str) -> str | None:
+            hits = sorted(p for p in _glob.glob(pattern, recursive=True) if select(p))
+            return hits[0] if hits else None
+
+        # 1. exact IPSW-stem directory
+        found = _first(os.path.join(extracted_root, stem, "**", leaf_glob))
+        if found:
+            return found
+        # 2. any directory for this build id (e.g. bare "23E254__iPhone18,1/")
+        m = _IPSW_NAME_RE.search(os.path.basename(ipsw_path))
+        build_id = m.group(3) if m else None
+        if build_id:
+            return _first(os.path.join(extracted_root, f"*{build_id}*", "**", leaf_glob))
+        return None
+
+    def _find_dsc_for_ipsw(ipsw_path: str, workspace_root: str | None) -> str | None:
+        return _extracted_artifact_for_ipsw(ipsw_path, workspace_root, "dyld_shared_cache_arm64e")
 
     def _find_kernelcache_for_ipsw(ipsw_path: str, workspace_root: str | None) -> str | None:
-        """Scan .ipsw_extracted/<stem>/ for the kernelcache release file"""
-        import glob as _glob
-        stem = os.path.basename(ipsw_path).replace(".ipsw", "")
-        extracted_root = os.path.join(workspace_root or os.getcwd(), ".ipsw_extracted")
-        pattern = os.path.join(extracted_root, stem, "**", "kernelcache*")
-        matches = sorted(p for p in _glob.glob(pattern, recursive=True) if "release" in os.path.basename(p))
-        if matches:
-            return matches[0]
-        return None
+        return _extracted_artifact_for_ipsw(
+            ipsw_path, workspace_root, "kernelcache*",
+            select=lambda p: "release" in os.path.basename(p),
+        )
 
     def firmware_diff_service_node(state: AgentState) -> AgentState:
         local_ipsws = _collect_confirmed_local_artifacts(state)
@@ -797,7 +814,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             except Exception:
                 pass
 
-        # fallback: Scan .ipsw_extracted/ directly if extractor state missed DSC/kernel paths
+        # scan .ipsw_extracted/ directly if extractor state missed DSC/kernel paths
         workspace_root = state.workspace_root
         for ipsw_path in (old_ipsw, new_ipsw):
             if not dyld_map.get(ipsw_path):
@@ -808,6 +825,23 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 found = _find_kernelcache_for_ipsw(ipsw_path, workspace_root)
                 if found:
                     kernel_map[ipsw_path] = found
+
+        # surface any gap that would silently drop a whole cache's changes
+        # a. if resolution collapsed old and new to the same file, 
+        # b. if the old cache is simply absent, note that this diff is skipped
+        def _check_diff_inputs(mapping: dict[str, str | None], label: str) -> None:
+            old_p, new_p = mapping.get(old_ipsw), mapping.get(new_ipsw)
+            if old_p and new_p and os.path.realpath(old_p) == os.path.realpath(new_p):
+                mapping[old_ipsw] = None
+                old_p = None
+            if new_p and not old_p:
+                state.record_analysis_note(
+                    f"firmware_diff: old {label} missing from .ipsw_extracted — the "
+                    f"{label} diff is SKIPPED (no coverage for changes in that cache, "
+                    f"e.g. dyld_shared_cache dylibs). Re-extract the old IPSW's {label}."
+                )
+        _check_diff_inputs(dyld_map, "dyld_shared_cache")
+        _check_diff_inputs(kernel_map, "kernelcache")
 
         request = FirmwareDiffRequest(
             old_ipsw=old_ipsw,
@@ -845,9 +879,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
 
     def _diff_report_has_evidence(report_json_str: str) -> bool:
-        """True when the report JSON carries the per-component evidence that feature
-        targets are built from. A diff that was skipped emits a status stub with no evidence 
-        and must not be treated as a usable report"""
+        """True when the report JSON carries something feature targets can be built from"""
         if not report_json_str:
             return False
         try:
@@ -856,7 +888,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return False
         if not isinstance(data, dict):
             return False
-        return bool(data.get("cstring_context") or data.get("symbol_context"))
+        if data.get("cstring_context") or data.get("symbol_context"):
+            return True
+        uc = data.get("userland_changes", {})
+        return bool(isinstance(uc, dict) and (uc.get("frameworks") or uc.get("standard_binaries")))
 
     def _find_report_json_on_disk(state: AgentState) -> str:
         """Recover the structured report.json from disk when the in-graph payload is

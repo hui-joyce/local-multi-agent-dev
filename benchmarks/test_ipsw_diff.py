@@ -39,7 +39,6 @@ class IpswDiffResult:
     latency_seconds: float
     output_chars: int
     output_text: str
-    output_preview: str
 
 def build_ipsw_diff_case() -> IpswDiffCase:
     return IpswDiffCase(
@@ -50,16 +49,16 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             "1) Download Version 1 and Version 2 firmware artifacts.\n"
             "2) Extract dyld_shared_cache and kernelcache from both artifacts.\n"
             "Perform baseline comparison and feature inference.\n\n"
-            # "Version 1: iPhone17,1_18.2_22C152_Restore.ipsw\n"
-            # "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
+            "Version 1: iPhone17,1_18.2_22C152_Restore.ipsw\n"
+            "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
             # "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
             # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
             # "Version 1: iPhone17,1_18.4_22E240_Restore.ipsw\n"
             # "Version 2: iPhone17,1_18.4.1_22E252_Restore.ipsw\n"
             # "Version 1: iPhone15,4_17.1_21B80_Restore.ipsw\n"
             # "Version 2: iPhone15,4_17.1.1_21B91_Restore.ipsw\n"
-            "Version 1: iPhone15,4_17.0.3_21A360_Restore.ipsw\n"
-            "Version 2: iPhone15,4_17.1_21B80_Restore.ipsw\n"
+            # "Version 1: iPhone15,4_17.0.3_21A360_Restore.ipsw\n"
+            # "Version 2: iPhone15,4_17.1_21B80_Restore.ipsw\n"
 
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
@@ -84,7 +83,6 @@ def run_ipsw_diff_case(graph: Any, case: IpswDiffCase) -> tuple[IpswDiffResult, 
             latency_seconds=round(elapsed, 3),
             output_chars=len(final_output),
             output_text=final_output,
-            output_preview=final_output[:800],
     ), final_state
 
 def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
@@ -102,32 +100,47 @@ def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
     with json_path.open("w", encoding="utf-8") as file_handle:
         json.dump(payload, file_handle, indent=2)
 
-    markdown = f"""# IPSW Diff Test
-    ## Case
-    - ID: {result.case_id}
-    - Description: {result.description}
+    execution_domains = ', '.join(result.execution_domains) if result.execution_domains else 'n/a'
+    agent_chain = ', '.join(result.agent_chain) if result.agent_chain else 'n/a'
 
-    ## Execution
-    - Selected domain: {result.selected_domain}
-    - Execution domains: {', '.join(result.execution_domains) if result.execution_domains else 'n/a'}
-    - Agent chain: {', '.join(result.agent_chain) if result.agent_chain else 'n/a'}
-    - Latency: {result.latency_seconds}s
-    - Output chars: {result.output_chars}
-
-    ## Output Preview
-    ```text
-    {result.output_preview}
-    ```
-
-    ## Full Output
-    ```text
-    {result.output_text}
-    ```
-    """
+    markdown = (
+        "# IPSW Diff Test\n\n"
+        "## Case\n"
+        f"- ID: {result.case_id}\n"
+        f"- Description: {result.description}\n\n"
+        "## Execution\n"
+        f"- Selected domain: {result.selected_domain}\n"
+        f"- Execution domains: {execution_domains}\n"
+        f"- Agent chain: {agent_chain}\n"
+        f"- Latency: {result.latency_seconds}s\n"
+        f"- Output chars: {result.output_chars}\n\n"
+        "## Full Output\n"
+        f"```json\n{result.output_text}\n```\n"
+    )
     with md_path.open("w", encoding="utf-8") as file_handle:
         file_handle.write(markdown)
 
     return json_path, md_path
+
+def resolve_artifact_output_dir(final_state: AgentState, base_dir: Path) -> Path:
+    """Nest results under the firmware_diff artifact id, mirroring artifacts/firmware_diff/<id>/.
+
+    Returns e.g. benchmarks/results/test_ipsw_diff/20260705-095834; falls back to base_dir
+    when no firmware_diff artifact path is present in the run state.
+    """
+    candidates = (
+        final_state.intermediate_outputs.get("firmware_raw_diff_dir"),
+        final_state.intermediate_outputs.get("firmware_diff_report_path"),
+    )
+    for raw in candidates:
+        if not raw:
+            continue
+        parts = os.path.normpath(str(raw)).split(os.sep)
+        if "firmware_diff" in parts:
+            idx = parts.index("firmware_diff")
+            if idx + 1 < len(parts):
+                return base_dir / parts[idx + 1]
+    return base_dir
 
 def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFactory) -> dict[str, str]:
     diff_report_path = Path(diff_report_path)
@@ -178,7 +191,8 @@ def main() -> None:
     case = build_ipsw_diff_case()
     result, final_state_from_run = run_ipsw_diff_case(graph, case)
 
-    output_dir = Path("benchmarks/results/test_ipsw_diff")
+    base_output_dir = Path("benchmarks/results/test_ipsw_diff")
+    output_dir = resolve_artifact_output_dir(final_state_from_run, base_output_dir)
     json_path, md_path = write_result(result, output_dir)
 
     print(f"Case: {result.case_id}")

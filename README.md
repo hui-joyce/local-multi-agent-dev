@@ -65,9 +65,9 @@ The reverse engineering domain includes a dedicated, stage-gated firmware analys
 - Applies `IGNORE_PATTERNS` to exclude non-analyzable artifacts (e.g. Metal shaders, microcode).
 - Suppresses metadata-only diffs (e.g. UUID, `LC_*`, `__LINKEDIT`) to reduce noise.
 
-**Artifact layout for a run (e.g. `20260617-065805`):**
+**Artifact layout for a run (e.g. `20260705-095834`, iOS 26.4.1 → 26.4.2):**
 ```
-artifacts/firmware_diff/<timestamp>/
+artifacts/firmware_diff/20260705-095834/
 ├── report.json                        ← structured diff payload (fed to LLM)
 ├── artifacts/
 │   ├── dyld_diff.txt                  ← raw ipsw dyld diff output + parsed items
@@ -75,11 +75,12 @@ artifacts/firmware_diff/<timestamp>/
 │   ├── launchd_diff.txt
 │   ├── kext_diff.txt
 │   └── sandbox_diff.txt
-├── diff/<old_vs_new>/
+├── diff/26_4_1_23E254_vs_26_4_2_23E261/
 │   └── README.md                      ← raw ipsw diff markdown (30KB+, not fed to LLM)
 ├── entitlements/
-│   └── <old_vs_new>.idiff
+│   └── entitlements.idiff
 └── feature_analysis/
+    ├── 00_SUMMARY.md                  ← security-tiered summary of all analyzed components
     ├── iMessage_analysis.md
     ├── IMSharedUtilities_analysis.md
     └── <component>_analysis.md        ← one file per analyzed component
@@ -405,4 +406,4 @@ LangGraph local dev server with tracing UI:
 - MLX: https://ml-explore.github.io/mlx/
 - FastAPI: https://fastapi.tiangolo.com/
 
-Last updated: June 2026
+Last updated: July 2026
