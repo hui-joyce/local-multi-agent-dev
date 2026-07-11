@@ -132,7 +132,6 @@ The feature analysis pipeline connects to IDA Pro 9.1 via a headless RPyC RPC se
 ```
 .ipsw_features/
 └── iPhone18,1__26_4_1_23E254_vs_26_4_2_23E261/   ← one folder per firmware comparison
-    ├── MANIFEST.md             ← comparison metadata + list of .i64 databases
     ├── IMSharedUtilities       ← extracted Mach-O binary (from the NEW build)
     ├── IMSharedUtilities.i64   ← saved IDA database (written by cleanup_decompiler_node)
     ├── AppPredictionClient

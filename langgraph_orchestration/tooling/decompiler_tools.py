@@ -1,6 +1,20 @@
-"""using remote IDA Pro service"""
+"""Agent-facing tools for a remote IDA Pro instance via rpyc.
+
+Groups: lookup (find_address, get_xrefs_to), decompilation (decompile_function,
+get_local_variables), annotation (rename_local_variable, set_comment,
+save_ida_database), ObjC/data-flow (resolve_objc_dispatch, trace_variable_source),
+server lifecycle (start/stop_ida_server), and metadata (get_entitlements).
+
+Non-@tool helpers (auto_annotate_function, count_user_annotations) are called
+deterministically by the RE graph, not exposed to the model.
+
+Client half of the injection pipeline: the RE graph pastes decompile_function's
+output verbatim into reports, so it filters degenerate Hex-Rays thunks
+(_is_degenerate_decompilation) here."""
+
 from __future__ import annotations
 import os
+import re
 import subprocess
 import time
 import rpyc
@@ -33,6 +47,18 @@ def _get_connection_error_msg() -> str:
         pass
     return "error: Connection to decompiler refused. IDA Pro is NOT running."
 
+
+_DEGENERATE_THUNK_RE = re.compile(r"__(?:swift|fast)call\d+\s*\(\s*void \*")
+
+
+def _is_degenerate_decompilation(pseudocode: str) -> bool:
+    """True when Hex-Rays emits a runaway void*-thunk instead of real code.
+    Head-based matching catches wrapped prototypes too"""
+    if not pseudocode or pseudocode.lstrip().startswith("#"):
+        return False
+    head = pseudocode[:4000]
+    return head.count("void *") >= 24 or bool(_DEGENERATE_THUNK_RE.search(head))
+
 @tool
 def decompile_function(address: Union[int, str]) -> str:
     """Decompiles the function at the given address"""
@@ -43,7 +69,15 @@ def decompile_function(address: Union[int, str]) -> str:
         conn = None
         try:
             conn = _connect()
-            result = conn.root.exposed_decompile_function(address)
+            result = str(conn.root.exposed_decompile_function(address))
+            if _is_degenerate_decompilation(result):
+                return (
+                    f"# ERROR: Decompiler could not recover a usable prototype for "
+                    f"0x{address:x} (it produced a degenerate void*-parameter thunk, "
+                    f"typically a Swift dispatch stub). This address is not meaningfully "
+                    f"decompilable — do NOT paste this output. Use get_xrefs_to on the "
+                    f"address to find real callers instead."
+                )
             return result
         except ConnectionRefusedError:
             return _get_connection_error_msg()
@@ -100,12 +134,63 @@ def get_xrefs_to(address: Union[int, str]) -> list[dict]:
     return [{"error": f"Stream closed after 3 attempts: {last_error}"}]
 
 
+def _resolve_func_and_segment(conn, addr: int) -> tuple[bool, int, str]:
+    """Classify an address: return (is_func, func_start, seg_name).
+
+    func_start falls back to addr when function boundaries are unavailable and
+    seg_name is "" if it can't be read; both server calls are best-effort."""
+    is_func = False
+    func_start = addr
+    try:
+        boundaries = conn.root.exposed_get_function_boundaries(addr)
+        if boundaries and boundaries[0] != 0:
+            is_func = True
+            func_start = boundaries[0]
+    except Exception:
+        pass
+    seg_name = ""
+    try:
+        seg_name = conn.root.exposed_get_segment_name(addr)
+    except Exception:
+        pass
+    return is_func, func_start, seg_name
+
+
+def _resolve_objc_method_impl(conn, selector: str, original_query: str):
+    """Find the address of the real method that implements an ObjC selector.
+
+    Turns a bare selector (e.g. "scene:willConnectToSession:options:") into the
+    function IDA labels "-[Class scene:willConnectToSession:options:]", skipping
+    objc_msgSend call thunks. Returns a find_address-style symbol dict, or None
+    if no implementation is found"""
+    try:
+        results = conn.root.exposed_find_objc_method_impl(selector)
+    except Exception:
+        # RPC call failed as older IDA server doesn't expose exposed_find_objc_method_impl
+        # return None so find_address falls back to normal symbol and string lookups 
+        return None
+    for r in results or []:
+        addr = r.get("address")
+        if not addr:
+            continue
+        name = r.get("name", "")
+        _, func_start, seg_name = _resolve_func_and_segment(conn, addr)
+        if seg_name.endswith("_stubs"):  # objc_msgSend thunk, not the implementation
+            continue
+        return {
+            "type": "symbol",
+            "query": name,
+            "original": original_query,
+            "address": hex(int(func_start)),
+            "segment": seg_name,
+        }
+    return None
+
+
 @tool
 def find_address(query: str) -> Union[dict, str]:
     """Finds an address in the binary by symbol name, C-string, or ObjC selector.
     Accepts diff-report kebab-case names, raw symbol names, ObjC method syntax, and plain strings."""
-    import re
-
     original_query = query
     query = re.sub(r'^[-+]\s+', '', query).strip()  # strip diff markers (+/-)
     query = re.sub(r'^"|"$', '', query)              # strip surrounding quotes
@@ -204,29 +289,22 @@ def find_address(query: str) -> Union[dict, str]:
         try:
             conn = _connect()
 
-            # part a - Exact symbol lookup for each variant (non-ObjC only)
+            # resolve ObjC method implementations first so we return real code,
+            # not the objc_msgSend thunk/selector string
+            if is_objc_selector or (" " not in query and '"' not in query):
+                impl = _resolve_objc_method_impl(conn, canonical, original_query)
+                if impl:
+                    return impl
+
+            # part a - exact symbol lookup for each variant (non-ObjC only)
             if symbol_variants:
                 for variant in symbol_variants:
                     addr = conn.root.exposed_lookup_symbol(variant)
                     if addr and addr != 0:
                         # determine if this is a function or data
-                        is_func = False
-                        func_start = addr
-                        try:
-                            boundaries = conn.root.exposed_get_function_boundaries(addr)
-                            if boundaries and boundaries[0] != 0:
-                                is_func = True
-                                func_start = boundaries[0]
-                        except Exception:
-                            pass
-                        
-                        seg_name = ""
-                        try:
-                            seg_name = conn.root.exposed_get_segment_name(addr)
-                        except Exception:
-                            pass
+                        is_func, func_start, seg_name = _resolve_func_and_segment(conn, addr)
 
-                        if is_func and seg_name != "__stubs":
+                        if is_func and not seg_name.endswith("_stubs"):
                             return {
                                 "type": "symbol",
                                 "query": variant,
@@ -260,25 +338,18 @@ def find_address(query: str) -> Union[dict, str]:
             if fuzzy_results:
                 best = fuzzy_results[0]
                 best_addr = best["address"]
-                is_func = False
-                func_start = best_addr
-                try:
-                    boundaries = conn.root.exposed_get_function_boundaries(best_addr)
-                    if boundaries and boundaries[0] != 0:
-                        is_func = True
-                        func_start = boundaries[0]
-                except Exception:
-                    pass
-                
-                seg_name = ""
-                try:
-                    seg_name = conn.root.exposed_get_segment_name(best_addr)
-                except Exception:
-                    pass
+                is_func, func_start, seg_name = _resolve_func_and_segment(conn, best_addr)
 
-                if is_func and seg_name != "__stubs":
+                _fuzzy_warning = (
+                    f"FUZZY MATCH — no exact symbol or string matched '{original_query}'. "
+                    f"This is a best-guess by name similarity and may be a DIFFERENT function. "
+                    f"Before decompiling or labelling it as '{original_query}', confirm the "
+                    f"resolved name '{best['name']}' actually corresponds to your target."
+                )
+                if is_func and not seg_name.endswith("_stubs"):
                     return {
                         "type": "symbol_fuzzy",
+                        "warning": _fuzzy_warning,
                         "query": best["name"],
                         "original": original_query,
                         "address": hex(int(func_start)),
@@ -291,6 +362,7 @@ def find_address(query: str) -> Union[dict, str]:
                 else:
                     return {
                         "type": "data_symbol_fuzzy",
+                        "warning": _fuzzy_warning,
                         "query": best["name"],
                         "original": original_query,
                         "address": hex(int(best_addr)),

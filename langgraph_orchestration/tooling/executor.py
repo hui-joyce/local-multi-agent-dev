@@ -1,3 +1,9 @@
+"""Tool-call executor for the agent tool loop.
+
+Dispatches each ToolRequest to its handler and records the ToolResult. For
+decompile_function it also tags the result with metadata["decompile_address"] so
+the RE graph can inject that pseudocode into the report deterministically."""
+
 from __future__ import annotations
 
 import json
@@ -892,6 +898,12 @@ def tool_executor_node(state: AgentState) -> AgentState:
                     output="",
                     source="executor",
                 )
+
+        # tag decompilations with their address so the report compiler can inject
+        # the real pseudocode deterministically (the model must never hand-write it)
+        if tool_request.tool_name == "decompile_function" and result.success and result.output:
+            result.metadata = dict(result.metadata or {})
+            result.metadata["decompile_address"] = tool_request.arguments.get("address")
 
         tool_request.status = "executed" if result.success else "failed"
         state.register_tool_request(tool_request)

@@ -1,8 +1,14 @@
+"""Prompt builders for the reverse-engineering graph.
+
+build_unified_feature_analysis_prompt embeds a read-only "ground truth"
+decompilation block (_format_ground_truth_decompilation): the model describes that
+code in prose, while the graph pastes real code into the report."""
+
 from __future__ import annotations
 
 from langgraph_orchestration.prompts import render_prompt
 from langgraph_orchestration.prompts.shared import build_tooling_block
-from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source
+from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source, _truncate
 
 REVERSE_ENGINEERING_TASKS = ["planning", "firmware_analysis", "code_analysis", "vulnerability_detection", "firmware_categorization"]
 ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
@@ -158,6 +164,33 @@ def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str
         body=body,
     )
 
+def _format_ground_truth_decompilation(
+    decompilations: list[dict] | None, per_cap: int = 3000
+) -> str:
+    """Render real IDA output as a ground-truth block for the model.
+    Returns "" when there is nothing to ground on"""
+    if not decompilations:
+        return ""
+    blocks: list[str] = []
+    for d in decompilations:
+        code = (d.get("code") or "").strip()
+        if not code:
+            continue
+        header = d.get("symbol") or d.get("address") or "function"
+        blocks.append(f"// {header}  ({d.get('address', '?')})\n{_truncate(code, per_cap)}")
+    if not blocks:
+        return ""
+    return (
+        "\n### Verified Decompilation (ground truth — real IDA output)\n"
+        "This is the ACTUAL decompiled code for this component's most security-relevant "
+        "functions. Base `## How is it implemented` and `## Vulnerability Assessment` on THIS "
+        "code — its control flow, calls, and data handling — not on guesses from symbol names. "
+        "Do NOT paste it into the report (the system re-inserts the full output for you) and do "
+        "NOT state anything that contradicts it.\n"
+        "```c\n" + "\n\n".join(blocks) + "\n```\n"
+    )
+
+
 def build_unified_feature_analysis_prompt(
     user_input: str,
     component_evidence: str,
@@ -166,6 +199,7 @@ def build_unified_feature_analysis_prompt(
     at_limit: bool = False,
     security_notes_match: str | None = None,
     security_indicators: list[str] | None = None,
+    decompilations: list[dict] | None = None,
 ) -> str:
     notes_block = ""
     if security_notes_match:
@@ -219,9 +253,10 @@ def build_unified_feature_analysis_prompt(
     *Database Annotation (MANDATORY):* For each binary opened, you MUST utilize the `set_comment` tool to document data flow, call traces, and important entry points. Rename variables with `rename_local_variable` when you decipher them, and call `save_ida_database` to persist annotations.
 
     **STAGE 3: REPORTING & CORRELATION**
+    If a `### Verified Decompilation (ground truth)` block is provided above, it is the AUTHORITATIVE source for this component's implementation — ground your `How is it implemented` and `Vulnerability Assessment` claims in that real code and never contradict it.
     Synthesize findings into these sections:
     *   `## What this feature does`: High-level summary based on evidence.
-    *   `## How is it implemented`: Detailed code logic if decompiled. CRITICAL: You MUST NEVER hallucinate or infer pseudocode. If `decompile_function` was called, you MUST paste the raw pseudocode output verbatim in a fenced \`\`\`c block at the start of this section, then follow with your prose explanation. Any pseudocode in this section MUST come directly from the `decompile_function` tool output — never paraphrase or omit it. If IDA was unavailable, describe the implementation from binary-level diff evidence (section size changes, removed dylib dependencies, symbol/function count changes) and string evidence.
+    *   `## How is it implemented`: Explain the implementation logic in PROSE. CRITICAL: do NOT write, paste, paraphrase, or invent any `c`/pseudocode code block here — the system automatically inserts the real `decompile_function` output into this section for you, so hand-written code is never needed and will be discarded. Your job is: (1) during Stage 2, actually call `decompile_function` on the key addresses; (2) here, describe in words what that decompiled code does (control flow, key calls, data handling). If you did NOT call `decompile_function`, say so plainly and describe the implementation from binary-level diff evidence (section size changes, removed dylib dependencies, symbol/function count changes) and string evidence. NEVER fabricate a function body or a decompilation.
     *   `## How to trigger this feature`: Infer trigger conditions.
     *   `## Vulnerability Assessment`: Analyze structural changes (new bounds checks, locking mechanisms, changed parameter types, memory management) to determine if this is a security patch. If it is a potential vulnerability fix, identify the likely vulnerability class (e.g., Use-After-Free, Out-of-Bounds, Privilege Escalation, Race Condition), how the old code was exploitable, how the new code mitigates it, and the potential impact if left unpatched. Be highly accurate and base this strictly on the evidence.
     *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements, binary diff).
@@ -271,7 +306,7 @@ def build_unified_feature_analysis_prompt(
 
         Your response MUST be a single markdown document. You MUST start your response EXACTLY with `## What this feature does`. DO NOT include any `<tool_call>` tags. End your report with `---AI_PRIORITISATION_SCORE---` and the JSON score. No conversational filler.
 
-        **PSEUDOCODE REQUIREMENT**: If `decompile_function` was called during this analysis, you MUST paste every decompiled function's raw output verbatim in a fenced \`\`\`c block inside `## How is it implemented`, before your prose explanation. Do not summarise or paraphrase the pseudocode — include it in full.
+        **PSEUDOCODE RULE**: Do NOT paste, paraphrase, or invent any code block in `## How is it implemented` — the system inserts the real `decompile_function` output there for you, and any code you write will be discarded. Write only a prose explanation of what the decompiled code does. Never fabricate a function body.
         """
     else:
         output_format_instructions = """
@@ -295,7 +330,7 @@ def build_unified_feature_analysis_prompt(
 
         If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting EXACTLY with `## What this feature does` and concluding with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": true`.
 
-        **PSEUDOCODE REQUIREMENT**: In `## How is it implemented`, paste every decompiled function's raw pseudocode verbatim in a fenced \`\`\`c block before your prose explanation. Do not summarise or omit the raw output.
+        **PSEUDOCODE RULE**: In `## How is it implemented`, write only a prose explanation — do NOT paste or invent any code block. The system automatically inserts the real `decompile_function` output for you. Never fabricate a function body.
         """
     if security_notes_match:
         workflow += (
@@ -316,6 +351,7 @@ def build_unified_feature_analysis_prompt(
         output_format_instructions=output_format_instructions,
         component_name=component_name,
         component_evidence=component_evidence,
+        ground_truth_decompilation=_format_ground_truth_decompilation(decompilations),
         user_input=user_input,
     )
     return _prepend_tooling_block(

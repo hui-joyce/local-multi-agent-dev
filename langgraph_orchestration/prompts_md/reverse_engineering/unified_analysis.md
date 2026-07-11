@@ -14,7 +14,7 @@ tools: find_address, get_xrefs_to, decompile_function, rename_local_variable, se
 ```diff
 {component_evidence}
 ```
-
+{ground_truth_decompilation}
 ## Your Task
 
 User Request: {user_input}
