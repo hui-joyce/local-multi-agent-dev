@@ -9,9 +9,6 @@ tools: read_file, read_many_files, get_errors, create_file, edit_file
 Create unit tests for:
 {code_target}
 
-Attempt:
-{attempt}
-
 # WORKFLOW: PLAN → IMPLEMENT (INTERNAL TOOL CALLS) → REPORT
 
 You MUST complete all three phases. Do NOT stop after planning—users need actual tests (Phase 2) and clear explanation (Phase 3).
@@ -127,8 +124,6 @@ Protocol Guidance:
 - IF test file creation requirements not met: Do NOT proceed to Phase 3; emit missing tool calls first
 
 # FINAL OUTPUT FORMAT
-
-Reference: [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules) — follow Mandatory Output Rules for user-facing output and concealment requirements.
 
 Provide:
 

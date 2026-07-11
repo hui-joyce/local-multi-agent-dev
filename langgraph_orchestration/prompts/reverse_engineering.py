@@ -8,21 +8,7 @@ from __future__ import annotations
 
 from langgraph_orchestration.prompts import render_prompt
 from langgraph_orchestration.prompts.shared import build_tooling_block
-from langgraph_orchestration.prompts.ipsw_skill import load_ipsw_skill_context, get_ipsw_skill_source, _truncate
-
-REVERSE_ENGINEERING_TASKS = ["planning", "firmware_analysis", "code_analysis", "vulnerability_detection", "firmware_categorization"]
-ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
-    "reverse_engineering/task_router.md",
-    user_input="",
-)
-
-def build_re_task_router_prompt(user_input: str) -> str:
-    """Build routing prompt for selecting the reverse engineering plan"""
-    _, body = render_prompt(
-        "reverse_engineering/task_router.md",
-        user_input=user_input,
-    )
-    return body
+from langgraph_orchestration.prompts.utils import _truncate
 
 def _prepend_tooling_block(user_input: str, task_focus: str, body: str) -> str:
     tooling_block = build_tooling_block(
@@ -37,11 +23,7 @@ def build_planning_prompt(user_input: str) -> str:
         "reverse_engineering/planning.md",
         user_input=user_input,
     )
-    return _prepend_tooling_block(
-        user_input=user_input,
-        task_focus="Plan an evidence-driven analysis and request missing decompilation, disassembly, or metadata before deeper work.",
-        body=body,
-    )
+    return body
 
 def build_code_analysis_prompt(user_input: str, planning_output: str = "", generated_code: str = "") -> str:
     if generated_code and planning_output:
@@ -77,11 +59,7 @@ def build_code_analysis_prompt(user_input: str, planning_output: str = "", gener
         analysis_block=analysis_block,
         user_input=user_input,
     )
-    return _prepend_tooling_block(
-        user_input=user_input,
-        task_focus="Trace control flow, data flow, and surrounding evidence before finalizing conclusions.",
-        body=body,
-    )
+    return body
 
 def build_vulnerability_detection_prompt(user_input: str, analysis_output: str = "") -> str:
     if analysis_output:
@@ -103,61 +81,15 @@ def build_vulnerability_detection_prompt(user_input: str, analysis_output: str =
         analysis_block=analysis_block,
         user_input=user_input,
     )
-    return _prepend_tooling_block(
-        user_input=user_input,
-        task_focus="Validate exploitability with direct evidence and request additional binary context when needed.",
-        body=body,
-    )
-
-def build_firmware_analysis_prompt(user_input: str, planning_output: str = "") -> str:
-    planning_block = f"Structured Plan:\n{planning_output}\n\n" if planning_output else ""
-    ipsw_skill_block = load_ipsw_skill_context()
-    ipsw_skill_source = get_ipsw_skill_source()
-    _, body = render_prompt(
-        "reverse_engineering/firmware_analysis.md",
-        user_input=user_input,
-        planning_block=planning_block,
-    )
-    if ipsw_skill_block:
-        body = (
-            f"{body}\n\n"
-            "## IPSW Skill Pack (Loaded)\n"
-            "Use the following instructions and references as canonical command guidance.\n\n"
-            f"Source: {ipsw_skill_source or 'unknown'}\n\n"
-            f"{ipsw_skill_block}"
-        )
-    return _prepend_tooling_block(
-        user_input=user_input,
-        task_focus=(
-            "Use ipsw tools to collect concrete firmware evidence (download/extract/diff), "
-            "then prioritize IDA disassembly targets before concluding."
-        ),
-        body=body,
-    )
+    return body
 
 def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str = "") -> str:
-    intro = (
-        "You are an expert iOS Reverse Engineer. Analyze the provided firmware diff evidence for a specific component and categorize its reverse-engineering priority.\n\n"
-        "Assess research interest based on behavioural changes in binary metadata and strings.\n\n"
-        "First, assign a Behavioural Class based on the evidence (especially CStrings):\n"
-        "1. SECURITY/PRIVACY: Changes involving credentials, entitlements, Sandbox, or PII. Look for framework removals (Accounts/Contacts), OIDs, or sensitive logging masks (e.g., '%{sensitive}').\n"
-        "2. DATA/IPC/SYNC: Changes involving XPC, serialization, data syncing logic, databases, or file parsing.\n"
-        "3. UI/LOGGING: Purely UI text updates, standard non-sensitive logging, or version bumps.\n"
-        "4. METADATA: Minimal metadata changes (only UUID/size changes with no semantic strings).\n\n"
-        "Second, assign an AI Prioritisation Score (Interest Score):\n"
-        "- TIER_1: Critical/High Interest. Strong indicators of security boundaries, privacy-sensitive framework changes, or IPC protocol updates.\n"
-        "- TIER_2: Medium Interest. Core logic updates, data sync changes, or new internal logging for complex features.\n"
-        "- TIER_3: Low Interest/Noise. Proceed only if investigating a specific UI/logging bug.\n\n"
-        "OUTPUT INSTRUCTIONS: You MUST output a JSON array containing EXACTLY ONE object representing the component provided. Do NOT output an empty array. No conversational filler.\n"
-        "Schema:\n"
-        "[\n"
-        '  {"method": "<component_name_or_summary>", "category": "<SECURITY/AUTH|DATA/IPC|UI/BOILERPLATE|IGNORE>", "tier": "<TIER_1|TIER_2|TIER_3>", "confidence": <0-100>, "decompile": <true|false>, "reason": "<brief justification based on strings/evidence>"}\n'
-        "]\n\n"
-        "Important: If there are changes to CStrings related to data syncing or privacy masks (e.g., '%{sensitive}'), do NOT ignore them; categorize as TIER_2 or higher. Only TIER_1 should default to decompile=true unless you specifically require deep code analysis."
-    )
     method_block = f"Diff Evidence to Analyze:\n{retrieved_methods}\n\n" if retrieved_methods else ""
-    
-    body = f"{intro}\n\n{method_block}\n\nUser Request: {user_input}"
+    _, body = render_prompt(
+        "reverse_engineering/firmware_categorization.md",
+        method_block=method_block,
+        user_input=user_input,
+    )
     return _prepend_tooling_block(
         user_input=user_input,
         task_focus="Analyze the provided diff evidence and prioritize the component strictly into JSON format.",
@@ -260,7 +192,7 @@ def build_unified_feature_analysis_prompt(
     *   `## How to trigger this feature`: Infer trigger conditions.
     *   `## Vulnerability Assessment`: Analyze structural changes (new bounds checks, locking mechanisms, changed parameter types, memory management) to determine if this is a security patch. If it is a potential vulnerability fix, identify the likely vulnerability class (e.g., Use-After-Free, Out-of-Bounds, Privilege Escalation, Race Condition), how the old code was exploitable, how the new code mitigates it, and the potential impact if left unpatched. Be highly accurate and base this strictly on the evidence.
     *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements, binary diff).
-    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, `confidence`, `decompile`, and `reason`. Use this rubric to assign `tier` — the value MUST be exactly one of these three strings, no substitutions:
+    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, and `reason`. Use this rubric to assign `tier` — the value MUST be exactly one of these three strings, no substitutions:
         - `TIER_1`: Critical/high interest. Security boundaries, privilege changes, crypto/auth logic, IPC protocol updates, entitlement changes, privacy-sensitive framework changes, or any memory-safety fix (UAF, OOB, race).
         - `TIER_2`: Medium interest. Core business-logic updates, data-sync or serialisation changes, new internal subsystem logging, daemon lifecycle changes (e.g. observer registration/removal), or refactors with clear functional impact.
         - `TIER_3`: Low interest/noise. Pure UI text, version bumps, asset-table expansions with no code logic change, or telemetry jitter with no privacy implication.
@@ -280,7 +212,7 @@ def build_unified_feature_analysis_prompt(
 
         Your response MUST be a single markdown document starting EXACTLY with `## What this feature does`.
         DO NOT include any `<tool_call>` tags.
-        End with `---AI_PRIORITISATION_SCORE---` and the JSON score using `"decompile": false`.
+        End with `---AI_PRIORITISATION_SCORE---` and the JSON score.
         In `## How is it implemented`, describe what the binary diff reveals about the change — removed classes, dropped dependencies, text section shrinkage, etc.
         No conversational filler. No skipping sections.
         """
@@ -328,7 +260,7 @@ def build_unified_feature_analysis_prompt(
 
         **CRITICAL INSTRUCTION FOR TOOL CALLS**: Output a fully valid JSON object wrapped exactly in `<tool_call>...</tool_call>` tags. Do not output conversational text.
 
-        If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting EXACTLY with `## What this feature does` and concluding with the `---AI_PRIORITISATION_SCORE---` JSON object with `"decompile": true`.
+        If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting EXACTLY with `## What this feature does` and concluding with the `---AI_PRIORITISATION_SCORE---` JSON object.
 
         **PSEUDOCODE RULE**: In `## How is it implemented`, write only a prose explanation — do NOT paste or invent any code block. The system automatically inserts the real `decompile_function` output for you. Never fabricate a function body.
         """
@@ -341,7 +273,7 @@ def build_unified_feature_analysis_prompt(
             f"    2. **Patch mechanism**: Explain exactly how the decompiled/diff code achieves it "
             f"(e.g., added size check before memcpy, introduced lock around shared state access).\n"
             f"    3. **Evidence**: Justify your conclusion with specific evidence from the decompiled output. "
-            f"If you cannot find a security-relevant change, say so and assign a lower confidence score.\n"
+            f"If you cannot find a security-relevant change, say so and assign a lower tier.\n"
         )
 
     _, body = render_prompt(

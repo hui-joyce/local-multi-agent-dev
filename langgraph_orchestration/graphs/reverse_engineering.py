@@ -1,17 +1,16 @@
 """
 Reverse-engineering graph for IPSW firmware-diff analysis.
 
-Home of the decompilation-injection pipeline: report code blocks are filled with
-real IDA output, never model-written pseudocode. The flow runs across four nodes:
-
-  prepare_decompiler_node       -> _auto_decompile_top_symbols decompiles the top
-                                   security-relevant added functions up front, into
+Decompilation-injection pipeline: report code blocks are filled with actual IDA output, avoiding model-written pseudocode. 
+The flow runs across four nodes:
+  prepare_decompiler_node       - _auto_decompile_top_symbols decompiles the top
+                                   security-relevant added functions into
                                    feature["_auto_decompilations"].
-  unified_feature_analysis_node -> passes that code to the model as read-only ground
-                                   truth; the model writes PROSE only, no code.
-  cleanup_decompiler_node       -> re-decompiles after the annotation floor runs, into
+  unified_feature_analysis_node -  passes that code to the model as read-only ground
+                                   truth; the model writes PROSE only.
+  cleanup_decompiler_node       -  re-decompiles after the annotation floor runs, into
                                    feature["_final_decompilations"] (annotated version).
-  feature_analysis_compile_node -> _inject_real_decompilation places the code into the
+  feature_analysis_compile_node -  _inject_real_decompilation places the code into the
                                    "## How is it implemented" section (final over auto).
 
 The actual pseudocode is produced by decompiler_tools.decompile_function.
@@ -27,7 +26,7 @@ from langgraph.graph import END, StateGraph
 
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
-from langgraph_orchestration.prompts.shared import get_allowed_tools
+from langgraph_orchestration.prompts.shared import get_allowed_tools, RE_IDA_ANALYSIS_TOOLS
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.triage.rules import triage_evidence_explained
@@ -213,6 +212,12 @@ def _evidence_sections(evidence: str) -> tuple[list[str], list[str]]:
     return cstrings, symbols
 
 
+def _usable_decompilation(code) -> bool:
+    """True when decompile_function returned real pseudocode, not an empty string
+    or a '# ERROR' sentinel (its contract for un-decompilable addresses)."""
+    return isinstance(code, str) and bool(code.strip()) and not code.startswith("# ERROR")
+
+
 def _component_change_volume(evidence: str) -> int:
     cstrings, symbols = _evidence_sections(evidence)
     return len(cstrings) + len(symbols)
@@ -311,18 +316,7 @@ def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[st
                 evidence_map[name] = {"cstrings": [], "symbols": []}
             evidence_map[name]["symbols"].append(parts[1].strip())
 
-    _ALLOWED_TOOL_NAMES = [
-        "find_address",
-        "decompile_function",
-        "get_xrefs_to",
-        "rename_local_variable",
-        "get_local_variables",
-        "set_comment",
-        "get_entitlements",
-        "resolve_objc_dispatch",
-        "trace_variable_source",
-        "save_ida_database",
-    ]
+    _ALLOWED_TOOL_NAMES = list(RE_IDA_ANALYSIS_TOOLS)
 
     def _make_target(name: str, evidence: str) -> dict:
         binary_info = binary_map.get(name, {})
@@ -372,6 +366,195 @@ def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[st
     return targets
 
 
+# cap for a single fenced code block in a report
+_MAX_CODE_BLOCK_CHARS = 6000
+_MAX_LINE_REPEAT = 3
+
+def _collapse_repeats(body: str) -> str:
+    """Collapse any run of the same non-blank line to at most _MAX_LINE_REPEAT
+    occurrences — a deterministic guard against model repetition-loop
+    degeneration (e.g. the same `if (...) return;` block emitted hundreds of times)."""
+    out: list[str] = []
+    prev: str | None = None
+    run = 0
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped and stripped == prev:
+            run += 1
+            if run >= _MAX_LINE_REPEAT:
+                continue
+        else:
+            prev, run = stripped, 0
+        out.append(line)
+    return "\n".join(out)
+
+def _sanitize_code_blocks(text: str) -> str:
+    """Neutralise degenerate or truncated pseudocode: collapse repeated lines,
+    cap oversized blocks, and close any unbalanced code fence"""
+    from langgraph_orchestration.tooling.decompiler_tools import _is_degenerate_decompilation
+
+    parts = text.split("```")
+    # odd indices are inside a fenced block
+    for i in range(1, len(parts), 2):
+        block = parts[i]
+        nl = block.find("\n")
+        lang = block[: nl + 1] if nl != -1 else ""
+        body = block[nl + 1:] if nl != -1 else block
+        if _is_degenerate_decompilation(body):
+            # degenerate Hex-Rays void*-thunk dump (no usable logic)
+            body = "// [removed: decompiler produced a degenerate void*-parameter thunk with no usable logic]\n"
+        else:
+            body = _collapse_repeats(body)
+            # cap any single runaway line 
+            body = "\n".join(
+                (ln[:2000] + " /* …truncated… */") if len(ln) > 2000 else ln
+                for ln in body.split("\n")
+            )
+            if len(body) > _MAX_CODE_BLOCK_CHARS:
+                body = (
+                    body[:_MAX_CODE_BLOCK_CHARS].rstrip()
+                    + "\n// [truncated: decompiler/model output too long or degenerate]\n"
+                )
+        parts[i] = lang + body
+    result = "```".join(parts)
+    if result.count("```") % 2 == 1:  # an opened fence was never closed
+        result += "\n```"
+    return result
+
+def _sanitize_model_output(text: str) -> str:
+    if not isinstance(text, str):
+        try:
+            text = str(text)
+        except Exception:
+            return ""
+    return _sanitize_code_blocks(text).strip()
+
+def _inject_real_decompilation(markdown: str, tool_results, auto_decomps=None) -> str:
+    """Insert sanitized tool output from two sources deduped by address: 
+    (1) auto_decomps — deterministic top-symbol decompilations done in prepare_decompiler; 
+    (2) decompile_function - model's calls captured during the tool loop.
+    State if nothing is produced"""
+    seen: set = set()
+    blocks: list[str] = []
+
+    def _add(addr, code: str) -> None:
+        code = (code or "").strip()
+        if not _usable_decompilation(code):
+            return
+        key = str(addr) if addr else code[:80]
+        if key in seen:
+            return
+        seen.add(key)
+        label = f"### Decompilation at `{addr}`\n\n" if addr else "### Decompilation\n\n"
+        blocks.append(label + _sanitize_code_blocks("```c\n" + code + "\n```"))
+
+    # (1) deterministic auto-decompilations first, then (2) model's own
+    for d in auto_decomps or []:
+        _add(d.get("address"), d.get("code", ""))
+    for r in tool_results or []:
+        if getattr(r, "tool_name", "") == "decompile_function" and getattr(r, "success", False):
+            _add((getattr(r, "metadata", None) or {}).get("decompile_address"), getattr(r, "output", ""))
+
+    m = re.search(r"(##\s*How is it implemented[^\n]*\n)(.*?)(?=\n##\s|\Z)", markdown, re.S | re.I)
+    if not m:
+        return markdown
+    header, body = m.group(1), m.group(2)
+    # discard model-authored code fences and fabricated "Decompile Output" headers
+    prose = re.sub(r"```.*?```", "", body, flags=re.S)
+    prose = re.sub(r"#{2,4}\s*Decompile Output:[^\n]*", "", prose).strip()
+
+    if blocks:
+        new_body = "\n\n" + "\n\n".join(blocks)
+        if prose:
+            new_body += "\n\n" + prose
+    else:
+        note = (
+            "_No decompilation was captured for this component (the analyzer did not "
+            "call `decompile_function`); the description below is derived from the "
+            "symbol-level diff evidence, not from decompiled code._"
+        )
+        new_body = "\n\n" + note + (("\n\n" + prose) if prose else "")
+
+    return markdown[: m.start()] + header + new_body.rstrip() + "\n\n" + markdown[m.end():].lstrip()
+
+def _symbol_importance(sym: str) -> int:
+    """Rank a candidate function by likely security relevance so the bounded
+    auto-decompile budget targets interesting code. Reuses the
+    same security vocabulary the component-level triage uses"""
+    score = 0
+    if _SECURITY_VOCAB_RE.search(sym):
+        score += 5
+    for _pat, _label in _SECURITY_INDICATOR_RES:
+        if _pat.search(sym):
+            score += 3
+    m = re.search(r"\[[^\]]*\s+([^\]]+)\]", sym)  # ObjC selector, else bare name
+    sel = m.group(1) if m else sym.lstrip("_")
+    low = sel.lower()
+    if ".cxx_destruct" in sym or "_block_invoke" in sym or low in ("dealloc", "init"):
+        score -= 5
+    if low.startswith("set") and sel.count(":") == 1:
+        score -= 2                       # trivial setter
+    score += min(sel.count(":"), 3)      # more args -> more logic
+    score += min(len(sel) // 14, 2)      # more specific name
+    return score
+
+
+def _build_readme_diff_index(readme_lines: list[str], max_lines: int = 200) -> dict[str, str]:
+    """One-pass map of component name -> its README diff block (capped at
+    max_lines), reproducing the old per-component extractor for every
+    '#### <name>' section in a single scan.
+
+    A cross-major diff README can be hundreds of MB / millions of lines with
+    thousands of component sections; re-splitting and rescanning it once per
+    component was O(components x lines) and dominated startup (observed: ~40min
+    of 100% CPU in PyUnicode_Splitlines before analysis even began). This is
+    O(lines), scanned once, then O(1) lookup per component.
+    """
+    index: dict[str, str] = {}
+    name = None            # current section: first token after '#### '
+    in_code_block = False
+    collecting = False     # still accumulating lines for the current section
+    result: list[str] = []
+
+    def _flush() -> None:
+        # first occurrence wins, matching the old scanner's break-at-first
+        if name is not None and name not in index:
+            index[name] = "\n".join(result)
+
+    for line in readme_lines:
+        stripped = line.strip()
+        if stripped.startswith("#### "):
+            _flush()
+            name = stripped[5:].split(" ", 1)[0]  # component name; ignore trailing text
+            in_code_block = False
+            collecting = True
+            result = []
+            continue
+        if name is None or not collecting:
+            continue
+        if stripped.startswith("### ") or stripped.startswith("## "):
+            _flush()
+            name = None
+            collecting = False
+            continue
+        if stripped == "```diff":
+            in_code_block = True
+            result.append(line)
+            continue
+        if in_code_block and stripped == "```":
+            result.append(line)
+            collecting = False           # matches the old 'break' at code-block end
+            continue
+        if in_code_block or stripped.startswith(">"):
+            result.append(line)
+            if len(result) >= max_lines:
+                result.append("... (truncated)")
+                collecting = False
+    _flush()
+    return index
+
+
+
 def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
@@ -393,138 +576,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             }
             _re_agents[kind] = creators[kind]()
         return _re_agents[kind]
-
-    # cap for a single fenced code block in a report
-    _MAX_CODE_BLOCK_CHARS = 6000
-    _MAX_LINE_REPEAT = 3
-
-    def _collapse_repeats(body: str) -> str:
-        """Collapse any run of the same non-blank line to at most _MAX_LINE_REPEAT
-        occurrences — a deterministic guard against model repetition-loop
-        degeneration (e.g. the same `if (...) return;` block emitted hundreds of times)."""
-        out: list[str] = []
-        prev: str | None = None
-        run = 0
-        for line in body.split("\n"):
-            stripped = line.strip()
-            if stripped and stripped == prev:
-                run += 1
-                if run >= _MAX_LINE_REPEAT:
-                    continue
-            else:
-                prev, run = stripped, 0
-            out.append(line)
-        return "\n".join(out)
-
-    def _sanitize_code_blocks(text: str) -> str:
-        """Neutralise degenerate or truncated pseudocode: collapse repeated lines,
-        cap oversized blocks, and close any unbalanced code fence"""
-        from langgraph_orchestration.tooling.decompiler_tools import _is_degenerate_decompilation
-
-        parts = text.split("```")
-        # odd indices are inside a fenced block
-        for i in range(1, len(parts), 2):
-            block = parts[i]
-            nl = block.find("\n")
-            lang = block[: nl + 1] if nl != -1 else ""
-            body = block[nl + 1:] if nl != -1 else block
-            if _is_degenerate_decompilation(body):
-                # degenerate Hex-Rays void*-thunk dump (no usable logic)
-                body = "// [removed: decompiler produced a degenerate void*-parameter thunk with no usable logic]\n"
-            else:
-                body = _collapse_repeats(body)
-                # cap any single runaway line 
-                body = "\n".join(
-                    (ln[:2000] + " /* …truncated… */") if len(ln) > 2000 else ln
-                    for ln in body.split("\n")
-                )
-                if len(body) > _MAX_CODE_BLOCK_CHARS:
-                    body = (
-                        body[:_MAX_CODE_BLOCK_CHARS].rstrip()
-                        + "\n// [truncated: decompiler/model output too long or degenerate]\n"
-                    )
-            parts[i] = lang + body
-        result = "```".join(parts)
-        if result.count("```") % 2 == 1:  # an opened fence was never closed
-            result += "\n```"
-        return result
-
-    def _sanitize_model_output(text: str) -> str:
-        if not isinstance(text, str):
-            try:
-                text = str(text)
-            except Exception:
-                return ""
-        return _sanitize_code_blocks(text).strip()
-
-    def _inject_real_decompilation(markdown: str, tool_results, auto_decomps=None) -> str:
-        """Insert sanitized tool output from two sources deduped by address: 
-        (1) auto_decomps — deterministic top-symbol decompilations done in prepare_decompiler; 
-        (2) decompile_function - model's calls captured during the tool loop.
-        State if nothing is produced"""
-        seen: set = set()
-        blocks: list[str] = []
-
-        def _add(addr, code: str) -> None:
-            code = (code or "").strip()
-            if not code or code.startswith("# ERROR"):
-                return
-            key = str(addr) if addr else code[:80]
-            if key in seen:
-                return
-            seen.add(key)
-            label = f"### Decompilation at `{addr}`\n\n" if addr else "### Decompilation\n\n"
-            blocks.append(label + _sanitize_code_blocks("```c\n" + code + "\n```"))
-
-        # (1) deterministic auto-decompilations first, then (2) model's own
-        for d in auto_decomps or []:
-            _add(d.get("address"), d.get("code", ""))
-        for r in tool_results or []:
-            if getattr(r, "tool_name", "") == "decompile_function" and getattr(r, "success", False):
-                _add((getattr(r, "metadata", None) or {}).get("decompile_address"), getattr(r, "output", ""))
-
-        m = re.search(r"(##\s*How is it implemented[^\n]*\n)(.*?)(?=\n##\s|\Z)", markdown, re.S | re.I)
-        if not m:
-            return markdown
-        header, body = m.group(1), m.group(2)
-        # discard model-authored code fences and fabricated "Decompile Output" headers
-        prose = re.sub(r"```.*?```", "", body, flags=re.S)
-        prose = re.sub(r"#{2,4}\s*Decompile Output:[^\n]*", "", prose).strip()
-
-        if blocks:
-            new_body = "\n\n" + "\n\n".join(blocks)
-            if prose:
-                new_body += "\n\n" + prose
-        else:
-            note = (
-                "_No decompilation was captured for this component (the analyzer did not "
-                "call `decompile_function`); the description below is derived from the "
-                "symbol-level diff evidence, not from decompiled code._"
-            )
-            new_body = "\n\n" + note + (("\n\n" + prose) if prose else "")
-
-        return markdown[: m.start()] + header + new_body.rstrip() + "\n\n" + markdown[m.end():].lstrip()
-
-    def _symbol_importance(sym: str) -> int:
-        """Rank a candidate function by likely security relevance so the bounded
-        auto-decompile budget targets interesting code. Reuses the
-        same security vocabulary the component-level triage uses"""
-        score = 0
-        if _SECURITY_VOCAB_RE.search(sym):
-            score += 5
-        for _pat, _label in _SECURITY_INDICATOR_RES:
-            if _pat.search(sym):
-                score += 3
-        m = re.search(r"\[[^\]]*\s+([^\]]+)\]", sym)  # ObjC selector, else bare name
-        sel = m.group(1) if m else sym.lstrip("_")
-        low = sel.lower()
-        if ".cxx_destruct" in sym or "_block_invoke" in sym or low in ("dealloc", "init"):
-            score -= 5
-        if low.startswith("set") and sel.count(":") == 1:
-            score -= 2                       # trivial setter
-        score += min(sel.count(":"), 3)      # more args -> more logic
-        score += min(len(sel) // 14, 2)      # more specific name
-        return score
 
     def _auto_decompile_top_symbols(feature: dict, max_funcs: int = 3) -> None:
         """Deterministically decompile the most security-relevant functions from
@@ -593,7 +644,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             except Exception as e:
                 _log(f"  EXC {sym!r}: {type(e).__name__}: {e}")
                 continue
-            if isinstance(code, str) and code.strip() and not code.startswith("# ERROR"):
+            if _usable_decompilation(code):
                 decomps.append({"address": addr, "code": code, "symbol": sym})
 
         _log(f"[{feature.get('name')}] -> injected {len(decomps)}")
@@ -1181,60 +1232,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return recovered
         return inline
 
-    def _build_readme_diff_index(readme_lines: list[str], max_lines: int = 200) -> dict[str, str]:
-        """One-pass map of component name -> its README diff block (capped at
-        max_lines), reproducing the old per-component extractor for every
-        '#### <name>' section in a single scan.
-
-        A cross-major diff README can be hundreds of MB / millions of lines with
-        thousands of component sections; re-splitting and rescanning it once per
-        component was O(components x lines) and dominated startup (observed: ~40min
-        of 100% CPU in PyUnicode_Splitlines before analysis even began). This is
-        O(lines), scanned once, then O(1) lookup per component.
-        """
-        index: dict[str, str] = {}
-        name = None            # current section: first token after '#### '
-        in_code_block = False
-        collecting = False     # still accumulating lines for the current section
-        result: list[str] = []
-
-        def _flush() -> None:
-            # first occurrence wins, matching the old scanner's break-at-first
-            if name is not None and name not in index:
-                index[name] = "\n".join(result)
-
-        for line in readme_lines:
-            stripped = line.strip()
-            if stripped.startswith("#### "):
-                _flush()
-                name = stripped[5:].split(" ", 1)[0]  # component name; ignore trailing text
-                in_code_block = False
-                collecting = True
-                result = []
-                continue
-            if name is None or not collecting:
-                continue
-            if stripped.startswith("### ") or stripped.startswith("## "):
-                _flush()
-                name = None
-                collecting = False
-                continue
-            if stripped == "```diff":
-                in_code_block = True
-                result.append(line)
-                continue
-            if in_code_block and stripped == "```":
-                result.append(line)
-                collecting = False           # matches the old 'break' at code-block end
-                continue
-            if in_code_block or stripped.startswith(">"):
-                result.append(line)
-                if len(result) >= max_lines:
-                    result.append("... (truncated)")
-                    collecting = False
-        _flush()
-        return index
-
     def _find_readme_for_state(state: AgentState) -> str:
         """Return README text from the diff artifact directory, or '' if not found"""
         report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
@@ -1662,7 +1659,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         func_addr_args = {
             "decompile_function": "address",
             "rename_local_variable": "func_address",
-            "get_local_variables": "func_address",
             "trace_variable_source": "func_ea",
             "resolve_objc_dispatch": "func_ea",
         }
@@ -1758,7 +1754,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     if not addr:
                         continue
                     code = _decompile.invoke({"address": addr})
-                    if isinstance(code, str) and code.strip() and not code.startswith("# ERROR"):
+                    if _usable_decompilation(code):
                         final.append({"address": addr, "code": code, "symbol": d.get("symbol")})
                 if final:
                     feature["_final_decompilations"] = final
@@ -2149,7 +2145,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         # prepend auditable provenance header so every report explains why it exists
         triage_reason = feature.get("_triage_reason", "passed HIGH_SIGNAL triage")
         triage_line = feature.get("_triage_evidence_line", "")
-        analysis_mode = "decompiled" if feature.get("decompiler_available", False) else "evidence_only"
+        _auto_decomps = feature.get("_final_decompilations") or feature.get("_auto_decompilations") or []
+        _decompilation_captured = any(
+            _usable_decompilation((d or {}).get("code", "")) for d in _auto_decomps
+        ) or any(
+            getattr(r, "tool_name", "") == "decompile_function"
+            and getattr(r, "success", False)
+            and _usable_decompilation(getattr(r, "output", ""))
+            for r in (state.tool_results or [])
+        )
+        analysis_mode = "decompiled" if _decompilation_captured else "evidence_only"
         provenance = (
             "## Triage Provenance\n"
             f"- **Inclusion**: HIGH_SIGNAL (deterministic rule engine)\n"

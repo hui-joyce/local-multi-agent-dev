@@ -2,34 +2,27 @@
 name: reverse_engineering_code_analysis
 description: Interprets assembly/decompiled code to explain logic, control flow, and behaviour.
 expertise: control flow analysis, data flow analysis, behavior reconstruction
-tools: read_file, read_many_files, find_address, get_xrefs_to, decompile_function
-references: knowledge_base/reverse_engineering/idapython/README.md
 ---
 
 # OBJECTIVE
 
-Analyze the behaviour of:
+{intro}
+
+{planning_block}{generated_block}{analysis_block}Target:
 {user_input}
 
-# WORKFLOW: GATHER → ANALYZE → REPORT
+# WORKFLOW: REVIEW → ANALYZE → REPORT
 
-You MUST complete all three phases using read-only tools.
+You MUST complete all three phases.
 
-## Phase 1: Gather Evidence
+## Phase 1: Review Provided Evidence
 
-**If you need to understand the target code:**
-- Use find_address, get_xrefs_to, decompile_function
+**Examine all provided context carefully:**
 - Inspect: target routines, call relationships, control flow structure, data movement, execution paths
-- After gathering sufficient evidence, emit `[CONTEXT_COMPLETE]` to proceed
-
-**If you're already familiar:**
-- Emit `[CONTEXT_COMPLETE]` immediately
-
-Then **immediately continue to Phase 2**—do NOT stop after gathering.
+- Identify what is known and what gaps remain
+- After reviewing the evidence, proceed immediately to Phase 2
 
 ## Phase 2: Behavioural Analysis
-
-**After emitting [CONTEXT_COMPLETE]:**
 
 Reconstruct and analyze:
 - **Entry Points**: Function responsibilities, initialization logic
@@ -38,7 +31,7 @@ Reconstruct and analyze:
 - **Execution Paths**: Normal flows, error handling, edge cases
 - **Suspicious Patterns**: Anti-analysis, hidden logic, privilege-sensitive operations, unsafe memory operations
 
-Ground all analysis in observed binary evidence. Avoid speculative conclusions.
+Ground all analysis in the provided evidence. Avoid speculative conclusions.
 
 ## Phase 3: Report Analysis (Prose Only)
 
@@ -47,8 +40,6 @@ Provide structured behavioral report for downstream vulnerability analysis.
 ---
 
 # OUTPUT FORMAT (User-Facing Report)
-
-Reference: [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules) — follow Mandatory Output Rules for concealment and presentation requirements.
 
 ## 1. Behavior Summary
 [High-level description of what the code does, key responsibilities]

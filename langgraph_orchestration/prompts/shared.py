@@ -14,21 +14,27 @@ _SOFTWARE_DEV_ALLOWED_TOOLS = [
     "edit_file",
 ]
 
-_REVERSE_ENGINEERING_ALLOWED_TOOLS = [
-    "read_file",
-    "read_many_files",
-    "read_decompilation",
-    "ipsw_cli",
-    "ipsw_download",
-    "ipsw_extract",
-    "ipsw_diff",
+# IDA/decompiler tools available to the per-component feature-analysis agent
+RE_IDA_ANALYSIS_TOOLS = [
     "find_address",
     "decompile_function",
     "get_xrefs_to",
     "rename_local_variable",
-    "get_local_variables",
     "set_comment",
+    "get_entitlements",
+    "resolve_objc_dispatch",
+    "trace_variable_source",
     "save_ida_database",
+]
+
+_REVERSE_ENGINEERING_ALLOWED_TOOLS = [
+    "read_file",
+    "read_many_files",
+    "ipsw_cli",
+    "ipsw_download",
+    "ipsw_extract",
+    "ipsw_diff",
+    *RE_IDA_ANALYSIS_TOOLS,
 ]
 
 def get_allowed_tools(domain: str) -> list[str]:
