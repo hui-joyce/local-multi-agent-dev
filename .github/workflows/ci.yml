@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, langgraph]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Dependency consistency (pip check)
+        run: pip check
+
+      - name: Syntax check (whole package)
+        run: python -m compileall -q langgraph_orchestration ipsw_service
+
+      - name: Lint tests
+        run: ruff check tests/
+
+      - name: Unit tests
+        run: pytest
+
+      - name: Dependency vulnerability audit (informational)
+        continue-on-error: true
+        run: pip-audit
