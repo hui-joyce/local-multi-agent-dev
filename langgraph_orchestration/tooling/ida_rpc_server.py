@@ -1,9 +1,20 @@
-"""Queue-based main-thread execution for headless mode"""
+"""Runs inside a headless IDA Pro and answers decompiler requests from the rest
+of the app.
+
+decompiler_tools.py is the client: it calls the exposed_* methods here over rpyc
+(decompilation, symbol/ObjC lookup, xrefs). IDA's API is not thread-safe, so every
+call is queued onto IDA's main thread. This module also runs the annotation floor
+(_auto_annotate_core + semantic variable renaming) — a deterministic pass that
+renames opaque locals and adds comments before the RE graph re-decompiles a
+function for the report."""
+
+import os
 import re
 import rpyc
 from rpyc.utils.server import ThreadedServer
 import ida_hexrays
 import ida_funcs
+import ida_lines
 import idc
 import idaapi
 import threading
@@ -42,8 +53,13 @@ def _run_on_main_thread(func, *args, timeout=120):
     return result_container["value"]
 
 
-# ida default variable names that deterministic annotation floor rewrites 
+# ida default variable names that deterministic annotation floor rewrites
 _DEFAULT_LVAR_RE = re.compile(r"^(?:v\d+|a\d+|x\d+|var_[0-9A-Fa-f]+|arg_[0-9A-Fa-f]+)$")
+# also treat this floor's own past output (e.g. void_v5, n_a2, uiview_v6) as still
+# re-nameable, so a semantic upgrade applies even on a .i64 the floor already touched
+_RENAMEABLE_LVAR_RE = re.compile(
+    r"^(?:[a-z][a-z0-9]{0,11}_)?(?:v\d+|a\d+|x\d+|var_[0-9A-Fa-f]+|arg_[0-9A-Fa-f]+)$"
+)
 
 def _type_prefix(type_str: str) -> str:
     """Derive a type-based prefix for deterministic variable renaming"""
@@ -68,7 +84,65 @@ def _type_prefix(type_str: str) -> str:
 
 def _pseudocode_lines(cfunc) -> list:
     """Return the tag-stripped pseudocode lines for a decompiled function"""
-    return [ida_hexrays.tag_remove(i.line) for i in cfunc.get_pseudocode()]
+    return [ida_lines.tag_remove(i.line) for i in cfunc.get_pseudocode()]
+
+
+def _semantic_name_from_assignment(rhs: str) -> str:
+    """Derive a useful variable name from the right-hand side.
+
+    Prefer the ObjC selector, method, or ivar it comes from. Returns '' when
+    nothing useful can be derived"""
+    if not rhs:
+        return ""
+    sel = ""
+    m = re.search(r'objc_msgSend[A-Za-z0-9_]*\s*\([^,"]*,\s*"([^"]+)"', rhs)  # objc_msgSend(recv, "sel")
+    if m:
+        sel = m.group(1)
+    if not sel:
+        m = re.search(r'objc_msgSend\$([A-Za-z_][A-Za-z0-9_:]*)', rhs)          # objc_msgSend$sel
+        if m:
+            sel = m.group(1)
+    if not sel:
+        m = re.search(r'[-+]\[[^\]]*\s+([A-Za-z_][A-Za-z0-9_:]*)\]', rhs)       # +[Class sel] / -[obj sel]
+        if m:
+            sel = m.group(1)
+    if not sel:
+        m = re.search(r'->\s*_?([A-Za-z_][A-Za-z0-9_]*)', rhs)                  # x->_field
+        if m:
+            sel = m.group(1)
+    if not sel:
+        return ""
+    first = re.sub(r'[^A-Za-z0-9]', '', sel.split(":")[0].lstrip("_"))          # first selector keyword
+    if not first or not first[0].isalpha() or first.lower() in (
+        "alloc", "init", "class", "self", "super", "id", "new", "type"
+    ):
+        return ""
+    return first[0].lower() + first[1:]
+
+
+def _lvar_semantic_renames(cfunc) -> dict:
+    """Map each default-named local variable to a semantic name derived from its
+    first assignment. Wrapped pseudocode lines are rejoined into statements first."""
+    stmts, buf = [], ""
+    for ln in _pseudocode_lines(cfunc):
+        buf += ((" " if buf else "") + ln.strip())
+        if ln.rstrip().endswith((";", "{", "}")):
+            stmts.append(buf)
+            buf = ""
+    if buf:
+        stmts.append(buf)
+    out = {}
+    for s in stmts:
+        m = re.match(r'^\s*([A-Za-z_]\w*)\s*=\s*(.+?);\s*$', s)
+        if not m:
+            continue
+        lhs, rhs = m.group(1), m.group(2)
+        if not _RENAMEABLE_LVAR_RE.match(lhs) or lhs in out:
+            continue
+        name = _semantic_name_from_assignment(rhs)
+        if name:
+            out[lhs] = name
+    return out
 
 def _auto_annotate_core(func_ea: int, header_comment: str = "") -> dict:
     out = {"ok": False, "renamed": 0, "commented": 0, "func": int(func_ea)}
@@ -95,23 +169,32 @@ def _auto_annotate_core(func_ea: int, header_comment: str = "") -> dict:
     except Exception:
         pass
 
-    # rename opaque locals using their decompiler type via ida_hexrays.rename_lvar
+    # rename opaque locals: prefer a semantic name derived from the assignment
+    # (v5 -> ccTopViewLabel), fall back to a type prefix (v5 -> void_v5) when the
+    # value has no name to borrow. Both via ida_hexrays.rename_lvar
     try:
         cfunc = ida_hexrays.decompile(f)
         if cfunc:
+            semantic = _lvar_semantic_renames(cfunc)
             used = {str(v.name) for v in cfunc.get_lvars()}
             renames = []  # (old_name, new_name)
             for v in cfunc.get_lvars():
                 name = str(v.name)
-                if not _DEFAULT_LVAR_RE.match(name):
+                if not _RENAMEABLE_LVAR_RE.match(name):
                     continue
-                try:
-                    tstr = str(v.type())
-                except Exception:
-                    tstr = ""
-                new_name = "{}_{}".format(_type_prefix(tstr), name)
-                if new_name in used:
-                    continue
+                new_name = semantic.get(name, "")
+                if not new_name:
+                    if not _DEFAULT_LVAR_RE.match(name):
+                        continue  # already type-prefixed and no semantic name -> leave it
+                    try:
+                        tstr = str(v.type())
+                    except Exception:
+                        tstr = ""
+                    new_name = "{}_{}".format(_type_prefix(tstr), name)
+                base, n = new_name, 2
+                while new_name in used:          # dedup collisions deterministically
+                    new_name = "{}_{}".format(base, n)
+                    n += 1
                 used.add(new_name)
                 renames.append((name, new_name))
             for old_name, new_name in renames:
@@ -120,8 +203,21 @@ def _auto_annotate_core(func_ea: int, header_comment: str = "") -> dict:
                         out["renamed"] += 1
                 except Exception:
                     pass
-    except Exception:
-        pass
+            if os.environ.get("RE_ANNOT_DEBUG") == "1":
+                try:
+                    with open("/tmp/annot_debug.log", "a") as _fh:
+                        _fh.write("func=%s lvars=%d semantic=%s planned=%s renamed=%d\n" % (
+                            hex(int(func_ea)), len(list(cfunc.get_lvars())),
+                            dict(list(semantic.items())[:8]), renames[:8], out["renamed"]))
+                except Exception:
+                    pass
+    except Exception as _e:
+        if os.environ.get("RE_ANNOT_DEBUG") == "1":
+            try:
+                with open("/tmp/annot_debug.log", "a") as _fh:
+                    _fh.write("func=%s EXC %s: %s\n" % (hex(int(func_ea)), type(_e).__name__, str(_e)[:200]))
+            except Exception:
+                pass
 
     return out
 
@@ -410,6 +506,30 @@ class DecompilerService(rpyc.Service):
             print(f"Error in lookup_symbol_fuzzy: {e}")
             return []
 
+    def exposed_find_objc_method_impl(self, selector: str):
+        """Find the real ObjC method for an exact selector.
+
+        On stripped binaries, the selector may only exist as text, so scan Names()
+        for an exact `-[Class selector]` / `+[Class selector]` match and skip
+        objc_msgSend thunks"""
+        print(f"[DecompilerService] ObjC method-impl lookup for: {selector}")
+        want = selector.lstrip("_")  # ObjC private methods keep a leading _; match either way
+        def _do():
+            import idautils
+            out = []
+            for ea, name in idautils.Names():
+                if not (name.startswith("-[") or name.startswith("+[")) or not name.endswith("]"):
+                    continue
+                inner = name[2:-1].split(" ", 1)  # ["Class", "selector..."]
+                if len(inner) == 2 and inner[1].lstrip("_") == want:
+                    out.append({"name": name, "address": int(ea)})
+            return out
+        try:
+            return _run_on_main_thread(_do, timeout=120)
+        except Exception as e:
+            print(f"Error in find_objc_method_impl: {e}")
+            return []
+
     def exposed_search_string(self, target_string: str):
         def _do():
             found = []
@@ -453,7 +573,7 @@ class DecompilerService(rpyc.Service):
                 # and surrounding context (provide LLM with exact localized info)
                 lines = []
                 for item in cfunc.get_pseudocode():
-                    clean_line = ida_hexrays.tag_remove(item.line)
+                    clean_line = ida_lines.tag_remove(item.line)
                     lines.append(clean_line)
                     if f"{call_ea:X}" in item.line or f"{call_ea:x}" in item.line or hex(call_ea) in clean_line:
                         idx = len(lines) - 1

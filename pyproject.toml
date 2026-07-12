@@ -1,0 +1,14 @@
+[tool.pytest.ini_options]
+# only collect the real unit suite
+# scripts under benchmarks/ are manual runners (load MLX models / need IDA + firmware) and excluded
+
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

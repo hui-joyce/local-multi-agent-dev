@@ -49,8 +49,8 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             "1) Download Version 1 and Version 2 firmware artifacts.\n"
             "2) Extract dyld_shared_cache and kernelcache from both artifacts.\n"
             "Perform baseline comparison and feature inference.\n\n"
-            "Version 1: iPhone17,1_18.2_22C152_Restore.ipsw\n"
-            "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
+            # "Version 1: iPhone17,1_18.2_22C152_Restore.ipsw\n"
+            # "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
             # "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
             # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
             # "Version 1: iPhone17,1_18.4_22E240_Restore.ipsw\n"
@@ -59,7 +59,8 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             # "Version 2: iPhone15,4_17.1.1_21B91_Restore.ipsw\n"
             # "Version 1: iPhone15,4_17.0.3_21A360_Restore.ipsw\n"
             # "Version 2: iPhone15,4_17.1_21B80_Restore.ipsw\n"
-
+            "Version 1: iPhone17,1_18.6.2_22G100_Restore.ipsw\n"
+            "Version 2: iPhone17,1_26.0_23A341_Restore.ipsw\n"
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
     )

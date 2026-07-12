@@ -1,5 +1,19 @@
 """
-Reverse-engineering graph for handling IPSW analysis tasks
+Reverse-engineering graph for IPSW firmware-diff analysis.
+
+Decompilation-injection pipeline: report code blocks are filled with actual IDA output, avoiding model-written pseudocode. 
+The flow runs across four nodes:
+  prepare_decompiler_node       - _auto_decompile_top_symbols decompiles the top
+                                   security-relevant added functions into
+                                   feature["_auto_decompilations"].
+  unified_feature_analysis_node -  passes that code to the model as read-only ground
+                                   truth; the model writes PROSE only.
+  cleanup_decompiler_node       -  re-decompiles after the annotation floor runs, into
+                                   feature["_final_decompilations"] (annotated version).
+  feature_analysis_compile_node -  _inject_real_decompilation places the code into the
+                                   "## How is it implemented" section (final over auto).
+
+The actual pseudocode is produced by decompiler_tools.decompile_function.
 """
 
 from __future__ import annotations
@@ -12,7 +26,7 @@ from langgraph.graph import END, StateGraph
 
 from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
-from langgraph_orchestration.prompts.shared import get_allowed_tools
+from langgraph_orchestration.prompts.shared import get_allowed_tools, RE_IDA_ANALYSIS_TOOLS
 from langgraph_orchestration.retrievers.config import RAGConfigManager
 from langgraph_orchestration.schemas.state import AgentState
 from langgraph_orchestration.triage.rules import triage_evidence_explained
@@ -29,11 +43,20 @@ from ipsw_service.firmware_catalog import FirmwareCatalogService
 
 
 FEATURE_ANALYSIS_BUDGET = 100
-FEATURE_ANALYSIS_RECURSION_LIMIT = FEATURE_ANALYSIS_BUDGET * 40  
+FEATURE_ANALYSIS_RECURSION_LIMIT = FEATURE_ANALYSIS_BUDGET * 40
+
+# Per-component tool-loop ceiling
+# tool_iteration bumps 2 interations (request + result iterations) per tool call 
+# about 15 tool calls for a complete stage (find_address → xrefs/decompile → rename/comment/save)
+FEATURE_ANALYSIS_MAX_TOOL_ITERATIONS = 30
+
+ANNOTATION_FAILURE_LIMIT = 5
 
 FEATURE_EVIDENCE_CHAR_BUDGET = 120_000       # ~30k tokens
 FEATURE_TOOL_CONTEXT_CHAR_BUDGET = 400_000   # ~100k tokens
 
+# RE_DEBUG=1 opts into verbose per-iteration prompt dumps; off by default 
+_RE_DEBUG = os.getenv("RE_DEBUG") == "1"
 
 def _truncate_for_prompt(text: str, max_chars: int, label: str) -> str:
     if not text or len(text) <= max_chars:
@@ -78,9 +101,6 @@ def render_triage_summary(index: list[dict], version: str = "") -> str:
 
     def table(rows: list[dict]) -> list[str]:
         rows = sorted(rows, key=lambda r: (tier_rank(eff_tier(r)), -(r.get("security_score") or 0), r.get("name", "")))
-        # security indicators still drive the security score (3 = hard indicator);
-        # they're intentionally not a summary column — almost always empty and
-        # already reflected in the score.
         out = ["| Component | Tier | Sec score | Apple Security Notes | Report |",
                "|---|---|---|---|---|"]
         out += [row_md(r) for r in rows]
@@ -154,6 +174,11 @@ _SECURITY_VOCAB_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Scan both CStrings and Symbols: stripped ObjC method names surface in
+# __objc_methname cstrings
+_OBJC_METHOD_LITERAL_RE = re.compile(r"^[-+]\[[A-Za-z_]\w* [A-Za-z_][\w:]*\]$")
+_OBJC_SELECTOR_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?::(?:[A-Za-z_][A-Za-z0-9_]*)?)*$")
+
 
 def _extract_security_indicators(evidence: str) -> list[str]:
     """Scan diff evidence for memory-safety and security-boundary patterns"""
@@ -185,6 +210,12 @@ def _evidence_sections(evidence: str) -> tuple[list[str], list[str]]:
         if bucket is not None and stripped.startswith(("+", "-")):
             bucket.append(stripped)
     return cstrings, symbols
+
+
+def _usable_decompilation(code) -> bool:
+    """True when decompile_function returned real pseudocode, not an empty string
+    or a '# ERROR' sentinel (its contract for un-decompilable addresses)."""
+    return isinstance(code, str) and bool(code.strip()) and not code.startswith("# ERROR")
 
 
 def _component_change_volume(evidence: str) -> int:
@@ -285,18 +316,7 @@ def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[st
                 evidence_map[name] = {"cstrings": [], "symbols": []}
             evidence_map[name]["symbols"].append(parts[1].strip())
 
-    _ALLOWED_TOOL_NAMES = [
-        "find_address",
-        "decompile_function",
-        "get_xrefs_to",
-        "rename_local_variable",
-        "get_local_variables",
-        "set_comment",
-        "get_entitlements",
-        "resolve_objc_dispatch",
-        "trace_variable_source",
-        "save_ida_database",
-    ]
+    _ALLOWED_TOOL_NAMES = list(RE_IDA_ANALYSIS_TOOLS)
 
     def _make_target(name: str, evidence: str) -> dict:
         binary_info = binary_map.get(name, {})
@@ -346,6 +366,195 @@ def _build_feature_targets(report_json_str: str, limit: int = 6) -> list[dict[st
     return targets
 
 
+# cap for a single fenced code block in a report
+_MAX_CODE_BLOCK_CHARS = 6000
+_MAX_LINE_REPEAT = 3
+
+def _collapse_repeats(body: str) -> str:
+    """Collapse any run of the same non-blank line to at most _MAX_LINE_REPEAT
+    occurrences — a deterministic guard against model repetition-loop
+    degeneration (e.g. the same `if (...) return;` block emitted hundreds of times)."""
+    out: list[str] = []
+    prev: str | None = None
+    run = 0
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped and stripped == prev:
+            run += 1
+            if run >= _MAX_LINE_REPEAT:
+                continue
+        else:
+            prev, run = stripped, 0
+        out.append(line)
+    return "\n".join(out)
+
+def _sanitize_code_blocks(text: str) -> str:
+    """Neutralise degenerate or truncated pseudocode: collapse repeated lines,
+    cap oversized blocks, and close any unbalanced code fence"""
+    from langgraph_orchestration.tooling.decompiler_tools import _is_degenerate_decompilation
+
+    parts = text.split("```")
+    # odd indices are inside a fenced block
+    for i in range(1, len(parts), 2):
+        block = parts[i]
+        nl = block.find("\n")
+        lang = block[: nl + 1] if nl != -1 else ""
+        body = block[nl + 1:] if nl != -1 else block
+        if _is_degenerate_decompilation(body):
+            # degenerate Hex-Rays void*-thunk dump (no usable logic)
+            body = "// [removed: decompiler produced a degenerate void*-parameter thunk with no usable logic]\n"
+        else:
+            body = _collapse_repeats(body)
+            # cap any single runaway line 
+            body = "\n".join(
+                (ln[:2000] + " /* …truncated… */") if len(ln) > 2000 else ln
+                for ln in body.split("\n")
+            )
+            if len(body) > _MAX_CODE_BLOCK_CHARS:
+                body = (
+                    body[:_MAX_CODE_BLOCK_CHARS].rstrip()
+                    + "\n// [truncated: decompiler/model output too long or degenerate]\n"
+                )
+        parts[i] = lang + body
+    result = "```".join(parts)
+    if result.count("```") % 2 == 1:  # an opened fence was never closed
+        result += "\n```"
+    return result
+
+def _sanitize_model_output(text: str) -> str:
+    if not isinstance(text, str):
+        try:
+            text = str(text)
+        except Exception:
+            return ""
+    return _sanitize_code_blocks(text).strip()
+
+def _inject_real_decompilation(markdown: str, tool_results, auto_decomps=None) -> str:
+    """Insert sanitized tool output from two sources deduped by address: 
+    (1) auto_decomps — deterministic top-symbol decompilations done in prepare_decompiler; 
+    (2) decompile_function - model's calls captured during the tool loop.
+    State if nothing is produced"""
+    seen: set = set()
+    blocks: list[str] = []
+
+    def _add(addr, code: str) -> None:
+        code = (code or "").strip()
+        if not _usable_decompilation(code):
+            return
+        key = str(addr) if addr else code[:80]
+        if key in seen:
+            return
+        seen.add(key)
+        label = f"### Decompilation at `{addr}`\n\n" if addr else "### Decompilation\n\n"
+        blocks.append(label + _sanitize_code_blocks("```c\n" + code + "\n```"))
+
+    # (1) deterministic auto-decompilations first, then (2) model's own
+    for d in auto_decomps or []:
+        _add(d.get("address"), d.get("code", ""))
+    for r in tool_results or []:
+        if getattr(r, "tool_name", "") == "decompile_function" and getattr(r, "success", False):
+            _add((getattr(r, "metadata", None) or {}).get("decompile_address"), getattr(r, "output", ""))
+
+    m = re.search(r"(##\s*How is it implemented[^\n]*\n)(.*?)(?=\n##\s|\Z)", markdown, re.S | re.I)
+    if not m:
+        return markdown
+    header, body = m.group(1), m.group(2)
+    # discard model-authored code fences and fabricated "Decompile Output" headers
+    prose = re.sub(r"```.*?```", "", body, flags=re.S)
+    prose = re.sub(r"#{2,4}\s*Decompile Output:[^\n]*", "", prose).strip()
+
+    if blocks:
+        new_body = "\n\n" + "\n\n".join(blocks)
+        if prose:
+            new_body += "\n\n" + prose
+    else:
+        note = (
+            "_No decompilation was captured for this component (the analyzer did not "
+            "call `decompile_function`); the description below is derived from the "
+            "symbol-level diff evidence, not from decompiled code._"
+        )
+        new_body = "\n\n" + note + (("\n\n" + prose) if prose else "")
+
+    return markdown[: m.start()] + header + new_body.rstrip() + "\n\n" + markdown[m.end():].lstrip()
+
+def _symbol_importance(sym: str) -> int:
+    """Rank a candidate function by likely security relevance so the bounded
+    auto-decompile budget targets interesting code. Reuses the
+    same security vocabulary the component-level triage uses"""
+    score = 0
+    if _SECURITY_VOCAB_RE.search(sym):
+        score += 5
+    for _pat, _label in _SECURITY_INDICATOR_RES:
+        if _pat.search(sym):
+            score += 3
+    m = re.search(r"\[[^\]]*\s+([^\]]+)\]", sym)  # ObjC selector, else bare name
+    sel = m.group(1) if m else sym.lstrip("_")
+    low = sel.lower()
+    if ".cxx_destruct" in sym or "_block_invoke" in sym or low in ("dealloc", "init"):
+        score -= 5
+    if low.startswith("set") and sel.count(":") == 1:
+        score -= 2                       # trivial setter
+    score += min(sel.count(":"), 3)      # more args -> more logic
+    score += min(len(sel) // 14, 2)      # more specific name
+    return score
+
+
+def _build_readme_diff_index(readme_lines: list[str], max_lines: int = 200) -> dict[str, str]:
+    """One-pass map of component name -> its README diff block (capped at
+    max_lines), reproducing the old per-component extractor for every
+    '#### <name>' section in a single scan.
+
+    A cross-major diff README can be hundreds of MB / millions of lines with
+    thousands of component sections; re-splitting and rescanning it once per
+    component was O(components x lines) and dominated startup (observed: ~40min
+    of 100% CPU in PyUnicode_Splitlines before analysis even began). This is
+    O(lines), scanned once, then O(1) lookup per component.
+    """
+    index: dict[str, str] = {}
+    name = None            # current section: first token after '#### '
+    in_code_block = False
+    collecting = False     # still accumulating lines for the current section
+    result: list[str] = []
+
+    def _flush() -> None:
+        # first occurrence wins, matching the old scanner's break-at-first
+        if name is not None and name not in index:
+            index[name] = "\n".join(result)
+
+    for line in readme_lines:
+        stripped = line.strip()
+        if stripped.startswith("#### "):
+            _flush()
+            name = stripped[5:].split(" ", 1)[0]  # component name; ignore trailing text
+            in_code_block = False
+            collecting = True
+            result = []
+            continue
+        if name is None or not collecting:
+            continue
+        if stripped.startswith("### ") or stripped.startswith("## "):
+            _flush()
+            name = None
+            collecting = False
+            continue
+        if stripped == "```diff":
+            in_code_block = True
+            result.append(line)
+            continue
+        if in_code_block and stripped == "```":
+            result.append(line)
+            collecting = False           # matches the old 'break' at code-block end
+            continue
+        if in_code_block or stripped.startswith(">"):
+            result.append(line)
+            if len(result) >= max_lines:
+                result.append("... (truncated)")
+                collecting = False
+    _flush()
+    return index
+
+
+
 def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
     if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
@@ -368,13 +577,79 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             _re_agents[kind] = creators[kind]()
         return _re_agents[kind]
 
-    def _sanitize_model_output(text: str) -> str:
-        if not isinstance(text, str):
+    def _auto_decompile_top_symbols(feature: dict, max_funcs: int = 3) -> None:
+        """Deterministically decompile the most security-relevant functions from
+        the diff, using the same find_address -> decompile_function chain and
+        guards as the model"""
+        from langgraph_orchestration.tooling.decompiler_tools import find_address, decompile_function
+
+        _dbg = os.environ.get("RE_AUTODECOMP_DEBUG") == "1"
+        def _log(msg: str) -> None:
+            if _dbg:
+                try:
+                    with open("/tmp/autodecomp_debug.log", "a") as fh:
+                        fh.write(msg + "\n")
+                except Exception:
+                    pass
+
+        cstrings, symbols = _evidence_sections(feature.get("evidence", ""))
+        _skip = ("_OBJC_CLASS_$", "_OBJC_METACLASS_$", "_OBJC_IVAR_$", "__OBJC_",
+                 "__swift_FORCE_LOAD", "_objc_msgSend$")
+
+        def _accept(tok: str) -> bool:
+            if tok.startswith(("-[", "+[")):
+                return bool(_OBJC_METHOD_LITERAL_RE.match(tok))
+            if tok.startswith(_skip) or tok.startswith(("T@", '@"')):
+                return False
+            if "_block_invoke" in tok or not _OBJC_SELECTOR_RE.match(tok):
+                return False
+            return (":" in tok) or tok.startswith("_")
+
+        candidates: list[str] = []
+        seen_tok: set[str] = set()
+        for bucket in (symbols, cstrings):
+            for line in bucket:
+                if not line.startswith("+"):  # added code only
+                    continue
+                tok = line[1:].strip().strip('"')
+                if not tok or tok in seen_tok:
+                    continue
+                if _accept(tok):
+                    seen_tok.add(tok)
+                    candidates.append(tok)
+        # most security-relevant first, so the bounded budget isn't spent on boilerplate
+        candidates.sort(key=_symbol_importance, reverse=True)
+        _log(f"[{feature.get('name')}] symbols={len(symbols)} cstrings={len(cstrings)} "
+             f"candidates={len(candidates)} top={candidates[:6]}")
+
+        # Keep checking more names, not just the first few
+        _probe_budget = 30
+        decomps: list[dict] = []
+        seen_addr: set[str] = set()
+        for sym in candidates:
+            if len(decomps) >= max_funcs or _probe_budget <= 0:
+                break
+            _probe_budget -= 1
             try:
-                text = str(text)
-            except Exception:
-                return ""
-        return text.strip()
+                res = find_address.invoke({"query": sym})
+                _log(f"  find_address({sym!r}) -> {res if not isinstance(res, dict) else {k: res.get(k) for k in ('type', 'address')}}")
+                if not isinstance(res, dict) or res.get("type") != "symbol":
+                    continue
+                addr = res.get("address")
+                if not addr or addr in seen_addr:
+                    continue
+                seen_addr.add(addr)
+                code = decompile_function.invoke({"address": addr})
+                _log(f"  decompile({addr}) -> {('ERROR:'+code[:50]) if isinstance(code, str) and code.startswith('# ERROR') else (str(len(code))+' chars')}")
+            except Exception as e:
+                _log(f"  EXC {sym!r}: {type(e).__name__}: {e}")
+                continue
+            if _usable_decompilation(code):
+                decomps.append({"address": addr, "code": code, "symbol": sym})
+
+        _log(f"[{feature.get('name')}] -> injected {len(decomps)}")
+        if decomps:
+            feature["_auto_decompilations"] = decomps
 
     full_download_timeout = 4 * 60 * 60
 
@@ -596,6 +871,24 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         state.intermediate_outputs["diff_pair_new"] = new or ""
         return old, new
 
+    def _is_cross_major_diff(state: AgentState) -> bool:
+        """True when the diff spans different iOS major versions.
+
+        A cross-major jump folds many releases of change into each single
+        component, so the per-component evidence explodes and the model shouldn't
+        spend its bounded output budget on a <think> trace.
+        """
+        path = state.intermediate_outputs.get("firmware_diff_report_path", "") or ""
+        m = _DIFF_DIR_PAIR_RE.search(path)
+        if not m:
+            return False  # unknown pair -> preserve current behaviour (thinking on)
+        try:
+            old_major = int(m.group(1).split("_")[0])
+            new_major = int(m.group(3).split("_")[0])
+        except (ValueError, IndexError):
+            return False
+        return old_major != new_major
+
     def _format_version_from_ipsw(path: str) -> str | None:
         name = os.path.basename(path)
         match = re.search(r"_(\d+\.\d+(?:\.\d+)?)_([A-Za-z0-9]+)_Restore\.ipsw", name)
@@ -667,7 +960,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             state.re_task_plan = ["feature_analysis"]
             state.split_tasks = {}
             state.tool_policy.allowed_tools = get_allowed_tools("reverse_engineering")
-            state.max_tool_iterations = state.tool_policy.max_iterations
+            state.max_tool_iterations = FEATURE_ANALYSIS_MAX_TOOL_ITERATIONS
             return state
 
         RAGConfigManager.initialize()
@@ -939,36 +1232,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return recovered
         return inline
 
-    def _extract_readme_diff_for_component(component_name: str, readme_text: str, max_lines: int = 200) -> str:
-        """Return the diff block for component_name from the README, capped at max_lines"""
-        if not readme_text or not component_name:
-            return ""
-        lines = readme_text.splitlines()
-        in_section = False
-        in_code_block = False
-        result: list[str] = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped == f"#### {component_name}" or stripped.startswith(f"#### {component_name} "):
-                in_section = True
-                continue
-            if in_section:
-                if stripped.startswith("#### ") or stripped.startswith("### ") or stripped.startswith("## "):
-                    break
-                if stripped == "```diff":
-                    in_code_block = True
-                    result.append(line)
-                    continue
-                if in_code_block and stripped == "```":
-                    result.append(line)
-                    break
-                if in_code_block or stripped.startswith(">"):
-                    result.append(line)
-                    if len(result) >= max_lines:
-                        result.append("... (truncated)")
-                        break
-        return "\n".join(result)
-
     def _find_readme_for_state(state: AgentState) -> str:
         """Return README text from the diff artifact directory, or '' if not found"""
         report_path = state.intermediate_outputs.get("firmware_diff_report_path", "")
@@ -1059,8 +1322,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
             readme_text = _find_readme_for_state(state)
             if readme_text:
+                # split + scan the README ONCE, then O(1) lookup per component
+                readme_index = _build_readme_diff_index(readme_text.splitlines())
                 for t in targets:
-                    readme_diff = _extract_readme_diff_for_component(t["name"], readme_text)
+                    readme_diff = readme_index.get(t["name"], "")
                     if readme_diff:
                         t["evidence"] = t["evidence"] + "\n\nBinary diff (from README):\n" + readme_diff
 
@@ -1354,6 +1619,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             state.record_analysis_note(f"Decompiler target: {extracted_binary}")
             result = start_ida_server_for_binary.invoke({"binary_path": extracted_binary})
             state.record_analysis_note(f"Decompiler prepare: {result}")
+            # deterministically decompile the top added CODE symbols so the report
+            # carries real pseudocode even if the model later skips decompile_function
+            if isinstance(result, str) and "Successfully started" in result:
+                try:
+                    _auto_decompile_top_symbols(feature)
+                    n = len(feature.get("_auto_decompilations", []))
+                    if n:
+                        state.record_analysis_note(f"Auto-decompiled {n} top CODE symbol(s) for injection.")
+                except Exception as e:
+                    state.record_analysis_note(f"Auto-decompile skipped ({type(e).__name__}: {str(e)[:100]}).")
         else:
             feature["decompiler_available"] = False
             state.record_analysis_note(f"Could not locate Mach-O binary for {component_name}. Decompiler unavailable for this component.")
@@ -1384,7 +1659,6 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         func_addr_args = {
             "decompile_function": "address",
             "rename_local_variable": "func_address",
-            "get_local_variables": "func_address",
             "trace_variable_source": "func_ea",
             "resolve_objc_dispatch": "func_ea",
         }
@@ -1400,6 +1674,12 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     continue
                 if data.get("type") in ("symbol", "symbol_fuzzy") and data.get("address"):
                     _add(data["address"])
+        # deterministic auto-decompiled functions never pass through the model's tool
+        # loop, so include them explicitly — otherwise the annotation floor (and its
+        # semantic renames) never reaches the very functions the report injects
+        feature = state.feature_analysis_current or {}
+        for d in feature.get("_auto_decompilations") or []:
+            _add(d.get("address"))
         return addrs
 
     def _build_review_header_comment(feature: dict) -> str:
@@ -1454,6 +1734,33 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                 f"auto-generated renames+={audit['auto_renames']} comments+={audit['auto_comments']}."
             )
 
+        # Re-decompile the injected functions now that the annotation floor has run,
+        # so the report shows the annotated code (semantic renames + comments) instead
+        # of the raw pre-analysis snapshot. The IDA server is still up at this point.
+        if ida_available:
+            try:
+                from langgraph_orchestration.tooling.decompiler_tools import decompile_function as _decompile
+                injected = list(feature.get("_auto_decompilations") or [])
+                seen_addr = {str(d.get("address")) for d in injected}
+                for r in state.tool_results:  # include functions the model decompiled itself
+                    if r.tool_name == "decompile_function" and r.success:
+                        a = (getattr(r, "metadata", None) or {}).get("decompile_address")
+                        if a and str(a) not in seen_addr:
+                            injected.append({"address": a, "symbol": None})
+                            seen_addr.add(str(a))
+                final = []
+                for d in injected:
+                    addr = d.get("address")
+                    if not addr:
+                        continue
+                    code = _decompile.invoke({"address": addr})
+                    if _usable_decompilation(code):
+                        final.append({"address": addr, "code": code, "symbol": d.get("symbol")})
+                if final:
+                    feature["_final_decompilations"] = final
+            except Exception as exc:
+                state.record_analysis_note(f"Post-annotation re-decompile skipped (non-fatal): {exc}")
+
         # retry save up to 3 times to guarantee .i64 is written before shutdown
         save_result = "Not attempted"
         for attempt in range(3):
@@ -1500,9 +1807,30 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         has_stage1_results = bool(used_tool_names & stage1_tools)
         has_stage2_results = bool(used_tool_names & stage2_tools)
         hard_at_limit = state.tool_iteration >= state.max_tool_iterations
+
+        # Stop retrying failed annotation calls once they cross the limit; cleanup
+        # still writes baseline renames and comments to the .i64
+        comp_renames = sum(1 for r in state.tool_results if r.tool_name == "rename_local_variable" and r.success)
+        comp_comments = sum(1 for r in state.tool_results if r.tool_name == "set_comment" and r.success)
+        annotations_met = comp_renames >= 1 and comp_comments >= 1
+        annot_failures = sum(
+            1 for r in state.tool_results
+            if r.tool_name in ("rename_local_variable", "set_comment") and not r.success
+        )
+        annotation_stalled = annot_failures >= ANNOTATION_FAILURE_LIMIT and not annotations_met
+        if annotation_stalled and not feature.get("_annotation_stalled"):
+            feature["_annotation_stalled"] = True
+            state.record_analysis_note(
+                f"{feature.get('name', 'component')}: {annot_failures} failed annotation "
+                "attempt(s) with the rename+comment floor unmet — forcing the report and "
+                "relying on the deterministic annotation floor in cleanup."
+            )
+
+        # force the report at the hard tool ceiling OR on an annotation stall
+        force_finish = hard_at_limit or annotation_stalled
         # stage 1 (find_address) is always allowed, doesn't require IDA
         # stage 2 (decompile_function, get_xrefs_to) requires IDA to be loaded
-        ida_at_limit = hard_at_limit or not ida_available
+        ida_at_limit = force_finish or not ida_available
 
         prompt = build_unified_feature_analysis_prompt(
             user_input=state.user_input,
@@ -1514,6 +1842,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             at_limit=ida_at_limit,
             security_notes_match=feature.get("security_notes_match"),
             security_indicators=feature.get("security_indicators"),
+            # ground the model's prose in the deterministically decompiled top functions
+            decompilations=feature.get("_auto_decompilations"),
         )
         context_blocks = []
         if state.tool_results:
@@ -1525,10 +1855,10 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             )
             prompt += "\n\n=== RECENT TOOL EXECUTION CONTEXT ===\n" + tool_context + "\n=====================================\n"
 
-            if hard_at_limit:
-                # tool budget fully exhausted
+            if force_finish:
+                # tool budget exhausted, or annotation attempts stalled — stop tools
                 prompt += (
-                    "\n**CRITICAL FINAL INSTRUCTION**: You have reached the absolute tool call limit. "
+                    "\n**CRITICAL FINAL INSTRUCTION**: Stop calling tools. "
                     "You MUST NOT output any more `<tool_call>` blocks. "
                     "Output the final report NOW starting EXACTLY with `## What this feature does`."
                 )
@@ -1579,7 +1909,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "Run `save_ida_database` to persist your annotations. "
                     "If you need to trace more code, use `get_xrefs_to` or `decompile_function`. "
                     "If you have fully analyzed and annotated the feature, transition to STAGE 3 and write the final report. "
-                    "To write the report, start EXACTLY with `## What this feature does`. Include decompiled pseudocode and caller chains in `## How is it implemented`. "
+                    "To write the report, start EXACTLY with `## What this feature does`. In `## How is it implemented`, write PROSE only and describe the caller chains — do NOT paste or invent code; the system inserts the real decompilation for you. "
                     "End with `---AI_PRIORITISATION_SCORE---` and the JSON score."
                 )
             else:
@@ -1589,12 +1919,18 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     "Do NOT write the final report until Stage 2 decompilation is complete."
                 )
 
-        print(f"\n\n[DEBUG STATE] tool_iteration={state.tool_iteration}/{state.max_tool_iterations} "
-              f"stage1={has_stage1_results} stage2={has_stage2_results} hard_at_limit={hard_at_limit}")
-        print(f"\n\n[DEBUG PROMPT]\n{prompt}\n[END DEBUG PROMPT]\n\n")
+        if _RE_DEBUG:
+            print(f"\n\n[DEBUG STATE] tool_iteration={state.tool_iteration}/{state.max_tool_iterations} "
+                  f"stage1={has_stage1_results} stage2={has_stage2_results} hard_at_limit={hard_at_limit}")
+            print(f"\n\n[DEBUG PROMPT]\n{prompt}\n[END DEBUG PROMPT]\n\n")
 
         engine = _get_feature_engine()
-        chat_prompt = engine.build_prompt(user_input=prompt, system_prompt="")
+        # disable thinking for cross-major diffs so the full output budget goes to the report
+        # keep it for same-major point releases
+        report_thinking = not _is_cross_major_diff(state)
+        if _RE_DEBUG:
+            print(f"[DEBUG THINKING] report generation enable_thinking={report_thinking}")
+        chat_prompt = engine.build_prompt(user_input=prompt, system_prompt="", enable_thinking=report_thinking)
         try:
             output = engine.generate(
                 chat_prompt,
@@ -1628,7 +1964,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         from langgraph_orchestration.tooling.parser import parse_agent_output
         parsed = parse_agent_output(output)
         
-        is_forcing_report = hard_at_limit or not ida_available
+        is_forcing_report = force_finish or not ida_available
         output_has_report = "## What this feature does" in output
         output_has_tools = parsed.has_tool_calls() or "<tool_call>" in output
         needs_retry = False
@@ -1636,11 +1972,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
 
         # annotation gate: the model must annotate decompiled code (rename opaque
         # variables & comment data flow) before it is allowed to finish a
-        # component. 
-        # have cap on attemp + tool budget so it never loop forever
-        comp_renames = sum(1 for r in state.tool_results if r.tool_name == "rename_local_variable" and r.success)
-        comp_comments = sum(1 for r in state.tool_results if r.tool_name == "set_comment" and r.success)
-        annotations_met = comp_renames >= 1 and comp_comments >= 1
+        # component. comp_renames/comp_comments/annotations_met were computed above;
+        # have cap on attempts + tool budget so it never loops forever
         enforce_attempts = int(feature.get("_annot_enforce_attempts", 0))
 
         if is_forcing_report:
@@ -1690,7 +2023,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             
         if needs_retry:
             prompt += f"\n\n{output}\n\n{error_msg}"
-            chat_prompt_retry = engine.build_prompt(user_input=prompt, system_prompt="")
+            chat_prompt_retry = engine.build_prompt(user_input=prompt, system_prompt="", enable_thinking=report_thinking)
             try:
                 output = engine.generate(
                     chat_prompt_retry,
@@ -1705,10 +2038,56 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
                     f"({type(gen_err).__name__}); keeping prior output."
                 )
 
+        # ungrounded fallback: if the model's final report is invalid 
+        report_ok = ("## What this feature does" in output) and ("<think>" not in output) and ("</think>" not in output)
+        if is_forcing_report and not report_ok and feature.get("_auto_decompilations"):
+            fb_prompt = build_unified_feature_analysis_prompt(
+                user_input=state.user_input,
+                component_evidence=_truncate_for_prompt(
+                    feature.get("evidence", ""), FEATURE_EVIDENCE_CHAR_BUDGET, "component evidence"
+                ),
+                component_name=feature.get("name", "Unknown Component"),
+                has_tool_results=bool(state.tool_results),
+                at_limit=True,
+                security_notes_match=feature.get("security_notes_match"),
+                security_indicators=feature.get("security_indicators"),
+                decompilations=None,  # drop grounding for the fallback
+            )
+            if context_blocks:
+                fb_prompt += "\n\n=== RECENT TOOL EXECUTION CONTEXT ===\n" + tool_context + "\n=====================================\n"
+            fb_prompt += (
+                "\n**CRITICAL FINAL INSTRUCTION**: Output the final report NOW, starting EXACTLY with "
+                "`## What this feature does`. Do NOT output any `<tool_call>` or `<think>` blocks."
+            )
+            try:
+                alt = engine.generate(
+                    engine.build_prompt(user_input=fb_prompt, system_prompt="", enable_thinking=False),
+                    config=GenerationConfig(max_tokens=3000, temperature=0.0),
+                    stream=False,
+                )
+                if ("## What this feature does" in alt) and ("<think>" not in alt) and ("</think>" not in alt):
+                    output = alt
+                    state.record_analysis_note(
+                        f"{feature.get('name', 'component')}: grounded report invalid; ungrounded fallback succeeded."
+                    )
+                else:
+                    state.record_analysis_note(
+                        f"{feature.get('name', 'component')}: ungrounded fallback still invalid; keeping best output."
+                    )
+            except Exception as _fb_err:
+                state.record_analysis_note(
+                    f"{feature.get('name', 'component')}: ungrounded fallback error ({type(_fb_err).__name__})."
+                )
+
         output = _sanitize_model_output(output)
         return StateManager.add_intermediate_output(state, "unified_feature_analysis", output)
 
     def route_after_unified_analysis(state: AgentState) -> str:
+        # annotation loop stalled — go straight to cleanup (which runs the
+        # deterministic annotation floor) instead of continuing on failing tools
+        feature = state.feature_analysis_current
+        if feature and feature.get("_annotation_stalled"):
+            return "cleanup_decompiler"
         if should_continue_tool_loop(state):
             return "execute_tools"
         return "cleanup_decompiler"
@@ -1719,7 +2098,8 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             return state
 
         raw_output = state.intermediate_outputs.get("unified_feature_analysis", "")
-        print(f"\n\n[DEBUG RAW OUTPUT]\n{raw_output}\n[END DEBUG RAW OUTPUT]\n\n")
+        if _RE_DEBUG:
+            print(f"\n\n[DEBUG RAW OUTPUT]\n{raw_output}\n[END DEBUG RAW OUTPUT]\n\n")
         parts = raw_output.split("---AI_PRIORITISATION_SCORE---")
         
         markdown_report = StateManager.sanitize_output(parts[0].strip())
@@ -1736,9 +2116,21 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         markdown_report = re.sub(r'<tool_call>[\s\S]*?(?:</tool_call>|(?=' + _anchor + '))', '', markdown_report, flags=re.IGNORECASE)
         
         markdown_report = markdown_report.strip()
-        
-        # if the report is completely empty after stripping (e.g. model only hallucinated an unclosed tool call)
-        if not markdown_report:
+
+        # deterministic decompilation injection
+        markdown_report = _inject_real_decompilation(
+            markdown_report,
+            state.tool_results,
+            feature.get("_final_decompilations") or feature.get("_auto_decompilations"),
+        )
+
+        report_failed = (
+            not markdown_report
+            or "## What this feature does" not in markdown_report
+            or "<think>" in markdown_report
+            or "</think>" in markdown_report
+        )
+        if report_failed:
             markdown_report = (
                 "## What this feature does\n(Model failed to generate report content)\n\n"
                 "## How is it implemented\n(No data)\n\n"
@@ -1753,7 +2145,16 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         # prepend auditable provenance header so every report explains why it exists
         triage_reason = feature.get("_triage_reason", "passed HIGH_SIGNAL triage")
         triage_line = feature.get("_triage_evidence_line", "")
-        analysis_mode = "decompiled" if feature.get("decompiler_available", False) else "evidence_only"
+        _auto_decomps = feature.get("_final_decompilations") or feature.get("_auto_decompilations") or []
+        _decompilation_captured = any(
+            _usable_decompilation((d or {}).get("code", "")) for d in _auto_decomps
+        ) or any(
+            getattr(r, "tool_name", "") == "decompile_function"
+            and getattr(r, "success", False)
+            and _usable_decompilation(getattr(r, "output", ""))
+            for r in (state.tool_results or [])
+        )
+        analysis_mode = "decompiled" if _decompilation_captured else "evidence_only"
         provenance = (
             "## Triage Provenance\n"
             f"- **Inclusion**: HIGH_SIGNAL (deterministic rule engine)\n"

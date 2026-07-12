@@ -1,3 +1,9 @@
+"""Tool-call executor for the agent tool loop.
+
+Dispatches each ToolRequest to its handler and records the ToolResult. For
+decompile_function it also tags the result with metadata["decompile_address"] so
+the RE graph can inject that pseudocode into the report deterministically."""
+
 from __future__ import annotations
 
 import json
@@ -373,10 +379,7 @@ class IDAToolExecutor(BaseToolExecutor):
             "get_xrefs_to": self._remote_get_xrefs_to,
             "find_address": self._remote_find_address,
             "rename_local_variable": self._remote_rename_local_variable,
-            "get_local_variables": self._remote_get_local_variables,
             "set_comment": self._remote_set_comment,
-            "start_ida_server_for_binary": self._remote_start_ida_server_for_binary,
-            "stop_ida_server": self._remote_stop_ida_server,
             "save_ida_database": self._remote_save_ida_database,
             "get_entitlements": self._remote_get_entitlements,
             "resolve_objc_dispatch": self._remote_resolve_objc_dispatch,
@@ -485,6 +488,7 @@ class IDAToolExecutor(BaseToolExecutor):
         if success:
             return ToolResult(tool_name="rename_local_variable", success=True, output="Variable renamed successfully.")
         # fetch available names so the model knows exactly what to pass as old_name
+        # self correction called on failure of rename_local_variable
         available = get_local_variables.invoke({"func_address": addr_int})
         return ToolResult(
             tool_name="rename_local_variable",
@@ -493,20 +497,6 @@ class IDAToolExecutor(BaseToolExecutor):
             error=f"Failed to rename '{old_name}' — variable not found or rename failed. {available}",
         )
 
-    def _remote_get_local_variables(self, req: ToolRequest) -> ToolResult:
-        from langgraph_orchestration.tooling.decompiler_tools import get_local_variables
-        func_address = req.arguments.get("func_address")
-        if func_address is None:
-            return ToolResult(tool_name="get_local_variables", success=False, output="", error="Missing func_address argument")
-        try:
-            addr_int = self._parse_address(func_address)
-        except (ValueError, TypeError):
-            return ToolResult(tool_name="get_local_variables", success=False, output="", error="Invalid func_address format")
-        output = get_local_variables.invoke({"func_address": addr_int})
-        if _looks_like_error(output):
-            return ToolResult(tool_name="get_local_variables", success=False, output="", error=output)
-        return ToolResult(tool_name="get_local_variables", success=True, output=output)
-    
     def _remote_set_comment(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import set_comment
         address = req.arguments.get("address")
@@ -524,22 +514,6 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="set_comment", success=True, output="Comment set successfully.")
         return ToolResult(tool_name="set_comment", success=False, output="", error="Failed to set comment.")
     
-    def _remote_start_ida_server_for_binary(self, req: ToolRequest) -> ToolResult:
-        from langgraph_orchestration.tooling.decompiler_tools import start_ida_server_for_binary
-        binary_path = req.arguments.get("binary_path")
-        if not binary_path:
-            return ToolResult(tool_name="start_ida_server_for_binary", success=False, output="", error="Missing binary_path argument")
-        
-        output = start_ida_server_for_binary.invoke({"binary_path": binary_path})
-        if isinstance(output, str) and output.startswith("# ERROR"):
-            return ToolResult(tool_name="start_ida_server_for_binary", success=False, output="", error=output)
-        return ToolResult(tool_name="start_ida_server_for_binary", success=True, output=output)
-    
-    def _remote_stop_ida_server(self, req: ToolRequest) -> ToolResult:
-        from langgraph_orchestration.tooling.decompiler_tools import stop_ida_server
-        output = stop_ida_server.invoke({})
-        return ToolResult(tool_name="stop_ida_server", success=True, output=output)
-
     def _remote_save_ida_database(self, req: ToolRequest) -> ToolResult:
         from langgraph_orchestration.tooling.decompiler_tools import save_ida_database
         output = str(save_ida_database.invoke({}))
@@ -892,6 +866,12 @@ def tool_executor_node(state: AgentState) -> AgentState:
                     output="",
                     source="executor",
                 )
+
+        # tag decompilations with their address so the report compiler can inject
+        # the real pseudocode deterministically (the model must never hand-write it)
+        if tool_request.tool_name == "decompile_function" and result.success and result.output:
+            result.metadata = dict(result.metadata or {})
+            result.metadata["decompile_address"] = tool_request.arguments.get("address")
 
         tool_request.status = "executed" if result.success else "failed"
         state.register_tool_request(tool_request)

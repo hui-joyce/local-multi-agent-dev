@@ -31,8 +31,8 @@ class OrchestrationRuntime:
         self._graph = None
         self._ready = False
         self._build_lock = threading.Lock()
-        # All MLX work (load + inference) runs on this single thread so that
-        # model arrays and the GPU stream stay on one consistent thread.
+        # all MLX work (load + inference) runs on this single thread so that
+        # model arrays and the GPU stream stay on one consistent thread
         self._executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="mlx-inference"
         )
@@ -58,7 +58,7 @@ class OrchestrationRuntime:
             with self._build_lock:
                 if not self._ready:
                     # Build on the dedicated thread so the model is loaded on
-                    # the same thread that will run inference.
+                    # the same thread that will run inference
                     self._executor.submit(self._build).result()
         return self._graph
 

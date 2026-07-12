@@ -64,6 +64,17 @@ class MLXInferenceEngine:
         mx.random.seed(config.seed)
 
         kwargs = {"max_tokens": config.max_tokens, "verbose": False}
+
+        try:
+            from mlx_lm.sample_utils import make_logits_processors
+
+            kwargs["logits_processors"] = make_logits_processors(
+                repetition_penalty=1.1,
+                repetition_context_size=20,
+            )
+        except Exception:
+            pass
+
         if config.temperature and config.temperature > 0.0:
             try:
                 from mlx_lm.sample_utils import make_sampler
