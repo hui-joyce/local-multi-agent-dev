@@ -24,6 +24,7 @@ Local-first, LangGraph-based orchestration for two domains: software development
 | Firmware tooling | `ipsw` CLI |
 | API server | FastAPI |
 | Runtime | Python 3.11+ |
+| Testing / CI | pytest + ruff · GitHub Actions |
 
 ## Architecture
 
@@ -369,6 +370,12 @@ What gets stored:
 ## Dev And Benchmarks
 
 ```bash
+# One-time: install dev/test tooling (pytest, ruff, pip-audit)
+pip install -r requirements-dev.txt
+
+# Unit tests (fast; no MLX / IDA / firmware required)
+pytest
+
 # Syntax check
 python3 -m compileall langgraph_orchestration api.py
 
@@ -381,6 +388,8 @@ python3 benchmarks/test_feature_analysis.py
 # No-RAG benchmark
 python3 benchmarks/test_no_rag.py
 ```
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main`/`langgraph` and every PR: `pip check`, package compile, `ruff check tests/`, `pytest`, and a non-blocking `pip-audit` scan.
 
 LangGraph local dev server with tracing UI:
 1. Create a LangSmith account and generate an API key.

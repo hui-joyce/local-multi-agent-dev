@@ -1,0 +1,55 @@
+[sandbox_diff]
+command: ipsw sb opts --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone17,1_18.6.2_22G100_Restore/22G100__iPhone17,1/kernelcache.release.iPhone17,1 /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone17,1_26.0_23A341_Restore/23A341__iPhone17,1/kernelcache.release.iPhone17,1
+parsed_item_count: 23
+parsed_items:
+appleevent-send
+authorization-right-obtain
+boot-arg-set
++consume-extension
+device*
+device-camera
+device-microphone
+mach-host-exception-port-set
+mach-host-special-port-set
+mach-issue-extension
+-mach-kernel-endpoint
+mach-lookup
+mach-priv*
+mach-priv-host-port
+process-info-rusage
+process-info-sandbox-container
+process-info-setcontrol
++process-iopolicy*
++process-iopolicy-get
++process-iopolicy-set
+process-legacy-codesigning*
+process-legacy-codesigning-blob-get
+process-legacy-codesigning-cdhash-get
+stdout:
+appleevent-send
+ authorization-right-obtain
+ boot-arg-set
++consume-extension
+ device*
+ device-camera
+ device-microphone
+
+ mach-host-exception-port-set
+ mach-host-special-port-set
+ mach-issue-extension
+-mach-kernel-endpoint
+ mach-lookup
+ mach-priv*
+ mach-priv-host-port
+
+ process-info-rusage
+ process-info-sandbox-container
+ process-info-setcontrol
++process-iopolicy*
++process-iopolicy-get
++process-iopolicy-set
+ process-legacy-codesigning*
+ process-legacy-codesigning-blob-get
+ process-legacy-codesigning-cdhash-get
+stderr:
+[34m[1m   •[22m Differences found        [0m

@@ -58,3 +58,10 @@ checksums.txt.sha1
 *.id2
 *.nam
 *.til
+
+# Oversized regenerable firmware-diff files (each exceeds GitHub's 100MB/file limit).
+# These can never be pushed. The small *_analysis.md reports are NOT ignored,
+# so you can `git add` them normally once they're ready.
+# artifacts/firmware_diff/*/report.json
+# artifacts/firmware_diff/*/diff/
+# artifacts/firmware_diff/*/entitlements/

@@ -20,8 +20,8 @@ from langgraph_orchestration.graphs.reverse_engineering import (
 from langgraph_orchestration.schemas.state import AgentState
 
 # REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
-REPORT_PATH = Path("artifacts/firmware_diff/20260625-143808/report.json")
-MD_REPORT_PATH = Path("artifacts/firmware_diff/20260625-143808/diff/18_2_22C152_vs_18_2_1_22C161/README.md")
+REPORT_PATH = Path("artifacts/firmware_diff/20260705-095834/report.json")
+MD_REPORT_PATH = Path("artifacts/firmware_diff/20260705-095834/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
 @dataclass
 class FeatureAnalysisCase:
     case_id: str
