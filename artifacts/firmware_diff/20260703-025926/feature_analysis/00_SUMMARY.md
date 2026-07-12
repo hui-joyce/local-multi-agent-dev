@@ -1,7 +1,7 @@
 # Feature Analysis Summary — iOS 17.1
 
-- **Total components in diff**: 1898  (**HIGH_SIGNAL**: 1868, **LOW_SIGNAL**: 30)
-- **Analysed** (report written): 97  |  **Apple Security Notes matches**: 19  |  **Suppressed TIER_3**: 3  |  **HIGH_SIGNAL not analysed** (budget/security filter): 1768
+- **Total components in diff**: 3160  (**HIGH_SIGNAL**: 1876, **LOW_SIGNAL**: 1284)
+- **Analysed** (report written): 98  |  **Apple Security Notes matches**: 58  |  **Suppressed TIER_3**: 2  |  **HIGH_SIGNAL not analysed** (budget/security filter): 1776
 
 Tier shown is the LLM-assigned tier for analysed components, otherwise a deterministic estimate from the security score (4=Apple Security Notes, 3=hard indicator, 2=security vocabulary, 1=code change, 0=asset/UI/log).
 
@@ -9,129 +9,169 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 
 | Component | Tier | Sec score | Apple Security Notes | Report |
 |---|---|---|---|---|
-| Contacts | TIER_1 | 4 | `Contacts` | [report](Contacts_analysis.md) |
-| CoreRecents | TIER_1 | 4 | `Core Recents` | [report](CoreRecents_analysis.md) |
-| FindMy | TIER_1 | 4 | `Find My` | [report](FindMy_analysis.md) |
-| Game Center | TIER_1 | 4 | `Game Center` | [report](Game_Center_analysis.md) |
+| AppleProResHWDecoder.videodecoder | TIER_1 | 4 | `Pro Res` | [report](AppleProResHWDecoder.videodecoder_analysis.md) |
+| AppleProResHWEncoder.videoencoder | TIER_1 | 4 | `Pro Res` | [report](AppleProResHWEncoder.videoencoder_analysis.md) |
+| ContactsAutocomplete | TIER_1 | 4 | `Contacts` | [report](ContactsAutocomplete_analysis.md) |
+| ContactsBackgroundColorService | TIER_1 | 4 | `Contacts` | [report](ContactsBackgroundColorService_analysis.md) |
+| ContactsDonationFeedback | TIER_1 | 4 | `Contacts` | [report](ContactsDonationFeedback_analysis.md) |
+| ContactsFlowDelegatePlugin | TIER_1 | 4 | `Contacts` | [report](ContactsFlowDelegatePlugin_analysis.md) |
+| ContactsSettings | TIER_1 | 4 | `Contacts` | [report](ContactsSettings_analysis.md) |
+| ContactsUI | TIER_1 | 4 | `Contacts` | [report](ContactsUI_analysis.md) |
+| ContactsWidgetUI | TIER_1 | 4 | `Contacts` | [report](ContactsWidgetUI_analysis.md) |
+| GameCenterAccountNotificationPlugin | TIER_1 | 4 | `Game Center` | [report](GameCenterAccountNotificationPlugin_analysis.md) |
+| GameCenterUI | TIER_1 | 4 | `Game Center` | [report](GameCenterUI_analysis.md) |
+| GameCenterUICore | TIER_1 | 4 | `Game Center` | [report](GameCenterUICore_analysis.md) |
 | ImageIO | TIER_1 | 4 | `ImageIO` | [report](ImageIO_analysis.md) |
-| MobileSafari | TIER_1 | 4 | `Safari` | [report](MobileSafari_analysis.md) |
-| Photos | TIER_1 | 4 | `Photos` | [report](Photos_analysis.md) |
-| Safari | TIER_1 | 4 | `Safari` | [report](Safari_analysis.md) |
-| SetupAssistant | TIER_1 | 4 | `Setup Assistant` | [report](SetupAssistant_analysis.md) |
-| ShareSheet | TIER_1 | 4 | `Share Sheet` | [report](ShareSheet_analysis.md) |
-| Siri | TIER_1 | 4 | `Siri` | [report](Siri_analysis.md) |
-| Weather | TIER_1 | 4 | `Weather` | [report](Weather_analysis.md) |
-| WebCore | TIER_1 | 4 | `WebKit` | [report](WebCore_analysis.md) |
-| WebKitLegacy | TIER_1 | 4 | `WebKit` | [report](WebKitLegacy_analysis.md) |V
+| NanoWeatherComplicationsCompanion | TIER_1 | 4 | `Weather` | [report](NanoWeatherComplicationsCompanion_analysis.md) |
+| ProactiveShareSheetDataHarvestingLighthouse | TIER_1 | 4 | `Share Sheet` | [report](ProactiveShareSheetDataHarvestingLighthouse_analysis.md) |
+| WeatherCore | TIER_1 | 4 | `Weather` | [report](WeatherCore_analysis.md) |
+| WeatherKit | TIER_1 | 4 | `Weather` | [report](WeatherKit_analysis.md) |
+| WeatherMaps | TIER_1 | 4 | `Weather` | [report](WeatherMaps_analysis.md) |
 | com.apple.IOTextEncryptionFamily | TIER_1 | 4 | `IOTextEncryptionFamily` | [report](com.apple.IOTextEncryptionFamily_analysis.md) |
+| com.apple.driver.AppleProResHW | TIER_1 | 4 | `Pro Res` | [report](com.apple.driver.AppleProResHW_analysis.md) |
 | com.apple.kernel | TIER_1 | 4 | `Kernel` | [report](com.apple.kernel_analysis.md) |
 | com.apple.security.sandbox | TIER_1 | 4 | `Sandbox` | [report](com.apple.security.sandbox_analysis.md) |
-| libxpc.dylib | TIER_1 | 4 | `libxpc` | [report](libxpc.dylib_analysis.md) |
-| mDNSResponder | TIER_1 | 4 | `mDNSResponder` | [report](mDNSResponder_analysis.md) |
+| libsystem_sandbox.dylib | TIER_1 | 4 | `Sandbox` | [report](libsystem_sandbox.dylib_analysis.md) |
+| AutomationMode | TIER_2 | 4 | `Automation` | [report](AutomationMode_analysis.md) |
+| ContactPhotoCarouselRemoteAlert | TIER_2 | 4 | `Contacts` | [report](ContactPhotoCarouselRemoteAlert_analysis.md) |
+| Contacts | TIER_2 | 4 | `Contacts` | [report](Contacts_analysis.md) |
+| ContactsFoundation | TIER_2 | 4 | `Contacts` | [report](ContactsFoundation_analysis.md) |
+| ContactsUICore | TIER_2 | 4 | `Contacts` | [report](ContactsUICore_analysis.md) |
+| FindMy | TIER_2 | 4 | `Find My` | [report](FindMy_analysis.md) |
+| Game Center | TIER_2 | 4 | `Game Center` | [report](Game_Center_analysis.md) |
+| GameCenterFoundation | TIER_2 | 4 | `Game Center` | [report](GameCenterFoundation_analysis.md) |
+| GameCenterRemoteAlert | TIER_2 | 4 | `Game Center` | [report](GameCenterRemoteAlert_analysis.md) |
+| HomeAutomationInternal | TIER_2 | 4 | `Automation` | [report](HomeAutomationInternal_analysis.md) |
+| Photos | TIER_2 | 4 | `Photos` | [report](Photos_analysis.md) |
+| RelevanceEngineWeather | TIER_2 | 4 | `Weather` | [report](RelevanceEngineWeather_analysis.md) |
+| ShareSheet | TIER_2 | 4 | `Share Sheet` | [report](ShareSheet_analysis.md) |
+| Siri | TIER_2 | 4 | `Siri` | [report](Siri_analysis.md) |
+| SiriContactsIntents | TIER_2 | 4 | `Contacts` | [report](SiriContactsIntents_analysis.md) |
+| Weather | TIER_2 | 4 | `Weather` | [report](Weather_analysis.md) |
+| WeatherAnalytics | TIER_2 | 4 | `Weather` | [report](WeatherAnalytics_analysis.md) |
+| WeatherDaemon | TIER_2 | 4 | `Weather` | [report](WeatherDaemon_analysis.md) |
+| WeatherUI | TIER_2 | 4 | `Weather` | [report](WeatherUI_analysis.md) |
+| libxpc.dylib | TIER_2 | 4 | `libxpc` | [report](libxpc.dylib_analysis.md) |
+| mDNSResponder | TIER_2 | 4 | `mDNSResponder` | [report](mDNSResponder_analysis.md) |
+| ContactsAutocompleteUI | TIER_3 | 4 | `Contacts` | [report](ContactsAutocompleteUI_analysis.md) |
+| ContactsDonation | TIER_3 | 4 | `Contacts` | [report](ContactsDonation_analysis.md) |
+| ContactsMetrics | TIER_3 | 4 | `Contacts` | [report](ContactsMetrics_analysis.md) |
+| CoreRecents | TIER_3 | 4 | `Core Recents` | [report](CoreRecents_analysis.md) |
+| GameCenterDashboardExtension | TIER_3 | 4 | `Game Center` | [report](GameCenterDashboardExtension_analysis.md) |
+| GameCenterPrivateUIFramework | TIER_3 | 4 | `Game Center` | [report](GameCenterPrivateUIFramework_analysis.md) |
+| GameCenterUIFramework | TIER_3 | 4 | `Game Center` | [report](GameCenterUIFramework_analysis.md) |
+| GameCenterUIService | TIER_3 | 4 | `Game Center` | [report](GameCenterUIService_analysis.md) |
+| NanoWeatherKitUICompanion | TIER_3 | 4 | `Weather` | [report](NanoWeatherKitUICompanion_analysis.md) |
+| Safari | TIER_3 | 4 | `Safari` | [report](Safari_analysis.md) |
+| SetupAssistant | TIER_3 | 4 | `Setup Assistant` | [report](SetupAssistant_analysis.md) |
+| SetupAssistantUI | TIER_3 | 4 | `Setup Assistant` | [report](SetupAssistantUI_analysis.md) |
+| WeatherComplications | TIER_3 | 4 | `Weather` | [report](WeatherComplications_analysis.md) |
+| WebKit | TIER_3 | 4 | `WebKit` | [report](WebKit_analysis.md) |
 
 ## Analysed components (reports written)
 
-<details><summary>Show 97 components</summary>
+<details><summary>Show 98 components</summary>
 
 | Component | Tier | Sec score | Apple Security Notes | Report |
 |---|---|---|---|---|
-| Contacts | TIER_1 | 4 | `Contacts` | [report](Contacts_analysis.md) |
-| CoreRecents | TIER_1 | 4 | `Core Recents` | [report](CoreRecents_analysis.md) |
-| FindMy | TIER_1 | 4 | `Find My` | [report](FindMy_analysis.md) |
-| Game Center | TIER_1 | 4 | `Game Center` | [report](Game_Center_analysis.md) |
+| AppleProResHWDecoder.videodecoder | TIER_1 | 4 | `Pro Res` | [report](AppleProResHWDecoder.videodecoder_analysis.md) |
+| AppleProResHWEncoder.videoencoder | TIER_1 | 4 | `Pro Res` | [report](AppleProResHWEncoder.videoencoder_analysis.md) |
+| ContactsAutocomplete | TIER_1 | 4 | `Contacts` | [report](ContactsAutocomplete_analysis.md) |
+| ContactsBackgroundColorService | TIER_1 | 4 | `Contacts` | [report](ContactsBackgroundColorService_analysis.md) |
+| ContactsDonationFeedback | TIER_1 | 4 | `Contacts` | [report](ContactsDonationFeedback_analysis.md) |
+| ContactsFlowDelegatePlugin | TIER_1 | 4 | `Contacts` | [report](ContactsFlowDelegatePlugin_analysis.md) |
+| ContactsSettings | TIER_1 | 4 | `Contacts` | [report](ContactsSettings_analysis.md) |
+| ContactsUI | TIER_1 | 4 | `Contacts` | [report](ContactsUI_analysis.md) |
+| ContactsWidgetUI | TIER_1 | 4 | `Contacts` | [report](ContactsWidgetUI_analysis.md) |
+| GameCenterAccountNotificationPlugin | TIER_1 | 4 | `Game Center` | [report](GameCenterAccountNotificationPlugin_analysis.md) |
+| GameCenterUI | TIER_1 | 4 | `Game Center` | [report](GameCenterUI_analysis.md) |
+| GameCenterUICore | TIER_1 | 4 | `Game Center` | [report](GameCenterUICore_analysis.md) |
 | ImageIO | TIER_1 | 4 | `ImageIO` | [report](ImageIO_analysis.md) |
-| MobileSafari | TIER_1 | 4 | `Safari` | [report](MobileSafari_analysis.md) |
-| Photos | TIER_1 | 4 | `Photos` | [report](Photos_analysis.md) |
-| Safari | TIER_1 | 4 | `Safari` | [report](Safari_analysis.md) |
-| SetupAssistant | TIER_1 | 4 | `Setup Assistant` | [report](SetupAssistant_analysis.md) |
-| ShareSheet | TIER_1 | 4 | `Share Sheet` | [report](ShareSheet_analysis.md) |
-| Siri | TIER_1 | 4 | `Siri` | [report](Siri_analysis.md) |
-| Weather | TIER_1 | 4 | `Weather` | [report](Weather_analysis.md) |
-| WebCore | TIER_1 | 4 | `WebKit` | [report](WebCore_analysis.md) |
-| WebKitLegacy | TIER_1 | 4 | `WebKit` | [report](WebKitLegacy_analysis.md) |
+| NanoWeatherComplicationsCompanion | TIER_1 | 4 | `Weather` | [report](NanoWeatherComplicationsCompanion_analysis.md) |
+| ProactiveShareSheetDataHarvestingLighthouse | TIER_1 | 4 | `Share Sheet` | [report](ProactiveShareSheetDataHarvestingLighthouse_analysis.md) |
+| WeatherCore | TIER_1 | 4 | `Weather` | [report](WeatherCore_analysis.md) |
+| WeatherKit | TIER_1 | 4 | `Weather` | [report](WeatherKit_analysis.md) |
+| WeatherMaps | TIER_1 | 4 | `Weather` | [report](WeatherMaps_analysis.md) |
 | com.apple.IOTextEncryptionFamily | TIER_1 | 4 | `IOTextEncryptionFamily` | [report](com.apple.IOTextEncryptionFamily_analysis.md) |
+| com.apple.driver.AppleProResHW | TIER_1 | 4 | `Pro Res` | [report](com.apple.driver.AppleProResHW_analysis.md) |
 | com.apple.kernel | TIER_1 | 4 | `Kernel` | [report](com.apple.kernel_analysis.md) |
 | com.apple.security.sandbox | TIER_1 | 4 | `Sandbox` | [report](com.apple.security.sandbox_analysis.md) |
-| libxpc.dylib | TIER_1 | 4 | `libxpc` | [report](libxpc.dylib_analysis.md) |
-| mDNSResponder | TIER_1 | 4 | `mDNSResponder` | [report](mDNSResponder_analysis.md) |
+| libsystem_sandbox.dylib | TIER_1 | 4 | `Sandbox` | [report](libsystem_sandbox.dylib_analysis.md) |
 | ApplePencilDMServicePlugin | TIER_1 | 3 | — | [report](ApplePencilDMServicePlugin_analysis.md) |
-| BooksUI | TIER_1 | 3 | — | [report](BooksUI_analysis.md) |
-| CloudKit | TIER_1 | 3 | — | [report](CloudKit_analysis.md) |
 | CommCenter | TIER_1 | 3 | — | [report](CommCenter_analysis.md) |
-| ContactsUI | TIER_1 | 3 | — | [report](ContactsUI_analysis.md) |
-| CoreAudio | TIER_1 | 3 | — | [report](CoreAudio_analysis.md) |
 | CoreCDPInternal | TIER_1 | 3 | — | [report](CoreCDPInternal_analysis.md) |
 | FinanceDaemon | TIER_1 | 3 | — | [report](FinanceDaemon_analysis.md) |
-| Fitness | TIER_1 | 3 | — | [report](Fitness_analysis.md) |
 | Freeform | TIER_1 | 3 | — | [report](Freeform_analysis.md) |
-| GameCenterFoundation | TIER_1 | 3 | — | [report](GameCenterFoundation_analysis.md) |
 | LighthouseBackground | TIER_1 | 3 | — | [report](LighthouseBackground_analysis.md) |
-| MessageProtection | TIER_1 | 3 | — | [report](MessageProtection_analysis.md) |
 | MobileStoreDemoKit | TIER_1 | 3 | — | [report](MobileStoreDemoKit_analysis.md) |
-| MusicApplication | TIER_1 | 3 | — | [report](MusicApplication_analysis.md) |
-| PeopleSuggester | TIER_1 | 3 | — | [report](PeopleSuggester_analysis.md) |
-| Preferences | TIER_1 | 3 | — | [report](Preferences_analysis.md) |
 | QuartzCore | TIER_1 | 3 | — | [report](QuartzCore_analysis.md) |
-| SoftwareUpdateServices | TIER_1 | 3 | — | [report](SoftwareUpdateServices_analysis.md) |
-| UnifiedAssetFramework | TIER_1 | 3 | — | [report](UnifiedAssetFramework_analysis.md) |
-| com.apple.driver.AppleAVD | TIER_1 | 3 | — | [report](com.apple.driver.AppleAVD_analysis.md) |
 | com.apple.driver.AppleH11ANEInterface | TIER_1 | 3 | — | [report](com.apple.driver.AppleH11ANEInterface_analysis.md) |
-| com.apple.filesystems.apfs | TIER_1 | 3 | — | [report](com.apple.filesystems.apfs_analysis.md) |
 | com.apple.iokit.IONetworkingFamily | TIER_1 | 3 | — | [report](com.apple.iokit.IONetworkingFamily_analysis.md) |
+| com.apple.iokit.IOUserEthernet | TIER_1 | 3 | — | [report](com.apple.iokit.IOUserEthernet_analysis.md) |
 | demod_helper | TIER_1 | 3 | — | [report](demod_helper_analysis.md) |
 | dockaccessoryd | TIER_1 | 3 | — | [report](dockaccessoryd_analysis.md) |
 | identityservicesd | TIER_1 | 3 | — | [report](identityservicesd_analysis.md) |
-| libpcap.A.dylib | TIER_1 | 3 | — | [report](libpcap.A.dylib_analysis.md) |
-| locationd | TIER_1 | 3 | — | [report](locationd_analysis.md) |
 | mediaanalysisd | TIER_1 | 3 | — | [report](mediaanalysisd_analysis.md) |
-| mediaanalysisd-service | TIER_1 | 3 | — | [report](mediaanalysisd-service_analysis.md) |
 | mlhostd | TIER_1 | 3 | — | [report](mlhostd_analysis.md) |
-| nearbyd | TIER_1 | 3 | — | [report](nearbyd_analysis.md) |
-| softwareupdateservicesd | TIER_1 | 3 | — | [report](softwareupdateservicesd_analysis.md) |
 | spaceattributiond | TIER_1 | 3 | — | [report](spaceattributiond_analysis.md) |
-| watchdogd | TIER_1 | 3 | — | [report](watchdogd_analysis.md) |
-| FinanceKitUI | TIER_1 | 2 | — | [report](FinanceKitUI_analysis.md) |
-| HomeKitMatter | TIER_1 | 2 | — | [report](HomeKitMatter_analysis.md) |
-| WorkflowKit | TIER_1 | 2 | — | [report](WorkflowKit_analysis.md) |
-| com.apple.iokit.IOUserEthernet | TIER_2 | 3 | — | [report](com.apple.iokit.IOUserEthernet_analysis.md) |
-| ActionKit | TIER_2 | 2 | — | [report](ActionKit_analysis.md) |
-| AppleMediaServices | TIER_2 | 2 | — | [report](AppleMediaServices_analysis.md) |
-| AudioCodecs | TIER_2 | 2 | — | [report](AudioCodecs_analysis.md) |
-| AudioToolbox | TIER_2 | 2 | — | [report](AudioToolbox_analysis.md) |
-| ChatKit | TIER_2 | 2 | — | [report](ChatKit_analysis.md) |
-| CoreGraphics | TIER_2 | 2 | — | [report](CoreGraphics_analysis.md) |
-| CoreSpeech | TIER_2 | 2 | — | [report](CoreSpeech_analysis.md) |
-| CoreSuggestionsInternals | TIER_2 | 2 | — | [report](CoreSuggestionsInternals_analysis.md) |
-| Espresso | TIER_2 | 2 | — | [report](Espresso_analysis.md) |
-| FinanceKit | TIER_2 | 2 | — | [report](FinanceKit_analysis.md) |
-| GameCenterUI | TIER_2 | 2 | — | [report](GameCenterUI_analysis.md) |
-| GeoServices | TIER_2 | 2 | — | [report](GeoServices_analysis.md) |
-| HomeKit | TIER_2 | 2 | — | [report](HomeKit_analysis.md) |
+| AutomationMode | TIER_2 | 4 | `Automation` | [report](AutomationMode_analysis.md) |
+| ContactPhotoCarouselRemoteAlert | TIER_2 | 4 | `Contacts` | [report](ContactPhotoCarouselRemoteAlert_analysis.md) |
+| Contacts | TIER_2 | 4 | `Contacts` | [report](Contacts_analysis.md) |
+| ContactsFoundation | TIER_2 | 4 | `Contacts` | [report](ContactsFoundation_analysis.md) |
+| ContactsUICore | TIER_2 | 4 | `Contacts` | [report](ContactsUICore_analysis.md) |
+| FindMy | TIER_2 | 4 | `Find My` | [report](FindMy_analysis.md) |
+| Game Center | TIER_2 | 4 | `Game Center` | [report](Game_Center_analysis.md) |
+| GameCenterFoundation | TIER_2 | 4 | `Game Center` | [report](GameCenterFoundation_analysis.md) |
+| GameCenterRemoteAlert | TIER_2 | 4 | `Game Center` | [report](GameCenterRemoteAlert_analysis.md) |
+| HomeAutomationInternal | TIER_2 | 4 | `Automation` | [report](HomeAutomationInternal_analysis.md) |
+| Photos | TIER_2 | 4 | `Photos` | [report](Photos_analysis.md) |
+| RelevanceEngineWeather | TIER_2 | 4 | `Weather` | [report](RelevanceEngineWeather_analysis.md) |
+| ShareSheet | TIER_2 | 4 | `Share Sheet` | [report](ShareSheet_analysis.md) |
+| Siri | TIER_2 | 4 | `Siri` | [report](Siri_analysis.md) |
+| SiriContactsIntents | TIER_2 | 4 | `Contacts` | [report](SiriContactsIntents_analysis.md) |
+| Weather | TIER_2 | 4 | `Weather` | [report](Weather_analysis.md) |
+| WeatherAnalytics | TIER_2 | 4 | `Weather` | [report](WeatherAnalytics_analysis.md) |
+| WeatherDaemon | TIER_2 | 4 | `Weather` | [report](WeatherDaemon_analysis.md) |
+| WeatherUI | TIER_2 | 4 | `Weather` | [report](WeatherUI_analysis.md) |
+| libxpc.dylib | TIER_2 | 4 | `libxpc` | [report](libxpc.dylib_analysis.md) |
+| mDNSResponder | TIER_2 | 4 | `mDNSResponder` | [report](mDNSResponder_analysis.md) |
+| BooksUI | TIER_2 | 3 | — | [report](BooksUI_analysis.md) |
+| CloudKit | TIER_2 | 3 | — | [report](CloudKit_analysis.md) |
+| CoreAudio | TIER_2 | 3 | — | [report](CoreAudio_analysis.md) |
+| Fitness | TIER_2 | 3 | — | [report](Fitness_analysis.md) |
+| MessageProtection | TIER_2 | 3 | — | [report](MessageProtection_analysis.md) |
+| MusicApplication | TIER_2 | 3 | — | [report](MusicApplication_analysis.md) |
+| PeopleSuggester | TIER_2 | 3 | — | [report](PeopleSuggester_analysis.md) |
+| Preferences | TIER_2 | 3 | — | [report](Preferences_analysis.md) |
+| SoftwareUpdateServices | TIER_2 | 3 | — | [report](SoftwareUpdateServices_analysis.md) |
+| UnifiedAssetFramework | TIER_2 | 3 | — | [report](UnifiedAssetFramework_analysis.md) |
+| com.apple.driver.AppleAVD | TIER_2 | 3 | — | [report](com.apple.driver.AppleAVD_analysis.md) |
+| com.apple.filesystems.apfs | TIER_2 | 3 | — | [report](com.apple.filesystems.apfs_analysis.md) |
+| libpcap.A.dylib | TIER_2 | 3 | — | [report](libpcap.A.dylib_analysis.md) |
+| locationd | TIER_2 | 3 | — | [report](locationd_analysis.md) |
+| mediaanalysisd-service | TIER_2 | 3 | — | [report](mediaanalysisd-service_analysis.md) |
+| nearbyd | TIER_2 | 3 | — | [report](nearbyd_analysis.md) |
+| softwareupdateservicesd | TIER_2 | 3 | — | [report](softwareupdateservicesd_analysis.md) |
 | HomeKitDaemon | TIER_2 | 2 | — | [report](HomeKitDaemon_analysis.md) |
 | HomeKitDaemonLegacy | TIER_2 | 2 | — | [report](HomeKitDaemonLegacy_analysis.md) |
-| MediaPlaybackCore | TIER_2 | 2 | — | [report](MediaPlaybackCore_analysis.md) |
-| MediaPlayer | TIER_2 | 2 | — | [report](MediaPlayer_analysis.md) |
 | MobileSpotlightIndex | TIER_2 | 2 | — | [report](MobileSpotlightIndex_analysis.md) |
-| Network | TIER_2 | 2 | — | [report](Network_analysis.md) |
-| PassKitCore | TIER_2 | 2 | — | [report](PassKitCore_analysis.md) |
-| PassKitUI | TIER_2 | 2 | — | [report](PassKitUI_analysis.md) |
 | PhotoLibraryServices | TIER_2 | 2 | — | [report](PhotoLibraryServices_analysis.md) |
-| PhotosGraph | TIER_2 | 2 | — | [report](PhotosGraph_analysis.md) |
 | PhotosUICore | TIER_2 | 2 | — | [report](PhotosUICore_analysis.md) |
-| PhotosUIPrivate | TIER_2 | 2 | — | [report](PhotosUIPrivate_analysis.md) |
-| PowerUI | TIER_2 | 2 | — | [report](PowerUI_analysis.md) |
-| PowerlogHelperdOperators | TIER_2 | 2 | — | [report](PowerlogHelperdOperators_analysis.md) |
-| SiriInstrumentation | TIER_2 | 2 | — | [report](SiriInstrumentation_analysis.md) |
-| SiriKitRuntime | TIER_2 | 2 | — | [report](SiriKitRuntime_analysis.md) |
-| SiriTTS | TIER_2 | 2 | — | [report](SiriTTS_analysis.md) |
-| UIKitCore | TIER_2 | 2 | — | [report](UIKitCore_analysis.md) |
-| VideosUI | TIER_2 | 2 | — | [report](VideosUI_analysis.md) |
-| Vision | TIER_2 | 2 | — | [report](Vision_analysis.md) |
-| WeatherKit | TIER_2 | 2 | — | [report](WeatherKit_analysis.md) |
-| _GroupActivities_UIKit | TIER_2 | 2 | — | [report](GroupActivities_UIKit_analysis.md) |
-| libAudioDSP.dylib | TIER_2 | 2 | — | [report](libAudioDSP.dylib_analysis.md) |
-| libmobileassetd.dylib | TIER_2 | 2 | — | [report](libmobileassetd.dylib_analysis.md) |
-| momentsd | TIER_2 | 2 | — | [report](momentsd_analysis.md) |
+| libgraphcompute-rt.dylib | TIER_2 | 2 | — | [report](libgraphcompute-rt.dylib_analysis.md) |
+| ContactsAutocompleteUI | TIER_3 | 4 | `Contacts` | [report](ContactsAutocompleteUI_analysis.md) |
+| ContactsDonation | TIER_3 | 4 | `Contacts` | [report](ContactsDonation_analysis.md) |
+| ContactsMetrics | TIER_3 | 4 | `Contacts` | [report](ContactsMetrics_analysis.md) |
+| CoreRecents | TIER_3 | 4 | `Core Recents` | [report](CoreRecents_analysis.md) |
+| GameCenterDashboardExtension | TIER_3 | 4 | `Game Center` | [report](GameCenterDashboardExtension_analysis.md) |
+| GameCenterPrivateUIFramework | TIER_3 | 4 | `Game Center` | [report](GameCenterPrivateUIFramework_analysis.md) |
+| GameCenterUIFramework | TIER_3 | 4 | `Game Center` | [report](GameCenterUIFramework_analysis.md) |
+| GameCenterUIService | TIER_3 | 4 | `Game Center` | [report](GameCenterUIService_analysis.md) |
+| NanoWeatherKitUICompanion | TIER_3 | 4 | `Weather` | [report](NanoWeatherKitUICompanion_analysis.md) |
+| Safari | TIER_3 | 4 | `Safari` | [report](Safari_analysis.md) |
+| SetupAssistant | TIER_3 | 4 | `Setup Assistant` | [report](SetupAssistant_analysis.md) |
+| SetupAssistantUI | TIER_3 | 4 | `Setup Assistant` | [report](SetupAssistantUI_analysis.md) |
+| WeatherComplications | TIER_3 | 4 | `Weather` | [report](WeatherComplications_analysis.md) |
+| WebKit | TIER_3 | 4 | `WebKit` | [report](WebKit_analysis.md) |
 
 </details>
 
@@ -140,12 +180,11 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | Component | Tier | Sec score | Apple Security Notes | Report |
 |---|---|---|---|---|
 | Measure | TIER_3 | 3 | — | _suppressed (TIER_3)_ |
-| NeutrinoKit | TIER_3 | 2 | — | _suppressed (TIER_3)_ |
-| libgraphcompute-rt.dylib | TIER_3 | 2 | — | _suppressed (TIER_3)_ |
+| watchdogd | TIER_3 | 3 | — | _suppressed (TIER_3)_ |
 
-## HIGH_SIGNAL — flagged security-relevant but not analysed (520, over budget)
+## HIGH_SIGNAL — flagged security-relevant but not analysed (551, over budget)
 
-<details><summary>Show 520 components</summary>
+<details><summary>Show 551 components</summary>
 
 | Component | Tier | Sec score | Apple Security Notes | Report |
 |---|---|---|---|---|
@@ -168,6 +207,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | AccessibilityUtilities | TIER_2 | 2 | — | _not analysed_ |
 | AccountsDaemon | TIER_2 | 2 | — | _not analysed_ |
 | ActionButtonSelector | TIER_2 | 2 | — | _not analysed_ |
+| ActionKit | TIER_2 | 2 | — | _not analysed_ |
 | ActivityAchievementsUI | TIER_2 | 2 | — | _not analysed_ |
 | ActivityAwardsClient | TIER_2 | 2 | — | _not analysed_ |
 | AirPlayReceiver | TIER_2 | 2 | — | _not analysed_ |
@@ -188,6 +228,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | AppleIDSetupUI | TIER_2 | 2 | — | _not analysed_ |
 | AppleLockdownMode | TIER_2 | 2 | — | _not analysed_ |
 | AppleMIDIUSBDriver | TIER_2 | 2 | — | _not analysed_ |
+| AppleMediaServices | TIER_2 | 2 | — | _not analysed_ |
 | AppleMediaServicesUI | TIER_2 | 2 | — | _not analysed_ |
 | AppleMediaServicesUIDynamicService | TIER_2 | 2 | — | _not analysed_ |
 | AppleNeuralEngine | TIER_2 | 2 | — | _not analysed_ |
@@ -195,9 +236,11 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | AssistantServices | TIER_2 | 2 | — | _not analysed_ |
 | AssistantUI | TIER_2 | 2 | — | _not analysed_ |
 | AttentionAwareness | TIER_2 | 2 | — | _not analysed_ |
+| AudioCodecs | TIER_2 | 2 | — | _not analysed_ |
 | AudioFlowDelegatePlugin | TIER_2 | 2 | — | _not analysed_ |
 | AudioSession | TIER_2 | 2 | — | _not analysed_ |
 | AudioSessionServer | TIER_2 | 2 | — | _not analysed_ |
+| AudioToolbox | TIER_2 | 2 | — | _not analysed_ |
 | AuthKit | TIER_2 | 2 | — | _not analysed_ |
 | AuthKitUIService | TIER_2 | 2 | — | _not analysed_ |
 | AuthenticationServices | TIER_2 | 2 | — | _not analysed_ |
@@ -221,6 +264,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | CarouselAppViewSettings | TIER_2 | 2 | — | _not analysed_ |
 | CarouselLayoutSettings | TIER_2 | 2 | — | _not analysed_ |
 | CarouselPreferenceServices | TIER_2 | 2 | — | _not analysed_ |
+| ChatKit | TIER_2 | 2 | — | _not analysed_ |
 | ChronoKit | TIER_2 | 2 | — | _not analysed_ |
 | ChronoServices | TIER_2 | 2 | — | _not analysed_ |
 | ChronoUIServices | TIER_2 | 2 | — | _not analysed_ |
@@ -243,7 +287,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | CompanionReturnToClockSettings | TIER_2 | 2 | — | _not analysed_ |
 | CompanionStingSettings | TIER_2 | 2 | — | _not analysed_ |
 | CompanionWakeSettings | TIER_2 | 2 | — | _not analysed_ |
-| ContactsAutocompleteUI | TIER_2 | 2 | — | _not analysed_ |
 | ContainerManagerCommon | TIER_2 | 2 | — | _not analysed_ |
 | ContentKit | TIER_2 | 2 | — | _not analysed_ |
 | ConversationKit | TIER_2 | 2 | — | _not analysed_ |
@@ -256,6 +299,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | CoreDuet | TIER_2 | 2 | — | _not analysed_ |
 | CoreEmbeddedSpeechRecognition | TIER_2 | 2 | — | _not analysed_ |
 | CoreGPSTest | TIER_2 | 2 | — | _not analysed_ |
+| CoreGraphics | TIER_2 | 2 | — | _not analysed_ |
 | CoreHAP | TIER_2 | 2 | — | _not analysed_ |
 | CoreHandwriting | TIER_2 | 2 | — | _not analysed_ |
 | CoreIDV | TIER_2 | 2 | — | _not analysed_ |
@@ -271,9 +315,11 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | CoreNavigation | TIER_2 | 2 | — | _not analysed_ |
 | CoreRealityIO | TIER_2 | 2 | — | _not analysed_ |
 | CoreRoutine | TIER_2 | 2 | — | _not analysed_ |
+| CoreSpeech | TIER_2 | 2 | — | _not analysed_ |
 | CoreSpeechFoundation | TIER_2 | 2 | — | _not analysed_ |
 | CoreSpotlight | TIER_2 | 2 | — | _not analysed_ |
 | CoreSuggestions | TIER_2 | 2 | — | _not analysed_ |
+| CoreSuggestionsInternals | TIER_2 | 2 | — | _not analysed_ |
 | CoreSuggestionsUI | TIER_2 | 2 | — | _not analysed_ |
 | CoreUARP | TIER_2 | 2 | — | _not analysed_ |
 | CoreUtils | TIER_2 | 2 | — | _not analysed_ |
@@ -295,6 +341,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | EmailFoundation | TIER_2 | 2 | — | _not analysed_ |
 | EmbeddedAcousticRecognition | TIER_2 | 2 | — | _not analysed_ |
 | EmojiFoundation | TIER_2 | 2 | — | _not analysed_ |
+| Espresso | TIER_2 | 2 | — | _not analysed_ |
 | EventKit | TIER_2 | 2 | — | _not analysed_ |
 | EventKitUI | TIER_2 | 2 | — | _not analysed_ |
 | FTServices | TIER_2 | 2 | — | _not analysed_ |
@@ -304,6 +351,8 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | FeedbackCore | TIER_2 | 2 | — | _not analysed_ |
 | FileProvider | TIER_2 | 2 | — | _not analysed_ |
 | FileProviderDaemon | TIER_2 | 2 | — | _not analysed_ |
+| FinanceKit | TIER_2 | 2 | — | _not analysed_ |
+| FinanceKitUI | TIER_2 | 2 | — | _not analysed_ |
 | FinanceUIService | TIER_2 | 2 | — | _not analysed_ |
 | FindMyLocate | TIER_2 | 2 | — | _not analysed_ |
 | FindMyUICore | TIER_2 | 2 | — | _not analysed_ |
@@ -312,8 +361,8 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | FrontBoard | TIER_2 | 2 | — | _not analysed_ |
 | FrontBoardServices | TIER_2 | 2 | — | _not analysed_ |
 | GPUToolsCapture | TIER_2 | 2 | — | _not analysed_ |
-| GameCenterUICore | TIER_2 | 2 | — | _not analysed_ |
 | GameController | TIER_2 | 2 | — | _not analysed_ |
+| GeoServices | TIER_2 | 2 | — | _not analysed_ |
 | GroupActivities | TIER_2 | 2 | — | _not analysed_ |
 | HMAssistant | TIER_2 | 2 | — | _not analysed_ |
 | Haptics | TIER_2 | 2 | — | _not analysed_ |
@@ -327,7 +376,9 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | HomeDeviceSetup | TIER_2 | 2 | — | _not analysed_ |
 | HomeEnergy | TIER_2 | 2 | — | _not analysed_ |
 | HomeEnergyUI | TIER_2 | 2 | — | _not analysed_ |
+| HomeKit | TIER_2 | 2 | — | _not analysed_ |
 | HomeKitCore | TIER_2 | 2 | — | _not analysed_ |
+| HomeKitMatter | TIER_2 | 2 | — | _not analysed_ |
 | HomeKitMetrics | TIER_2 | 2 | — | _not analysed_ |
 | IDS | TIER_2 | 2 | — | _not analysed_ |
 | IDSFoundation | TIER_2 | 2 | — | _not analysed_ |
@@ -367,6 +418,8 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | MediaCoreUI | TIER_2 | 2 | — | _not analysed_ |
 | MediaExperience | TIER_2 | 2 | — | _not analysed_ |
 | MediaMiningKit | TIER_2 | 2 | — | _not analysed_ |
+| MediaPlaybackCore | TIER_2 | 2 | — | _not analysed_ |
+| MediaPlayer | TIER_2 | 2 | — | _not analysed_ |
 | MediaRemote | TIER_2 | 2 | — | _not analysed_ |
 | MediaToolbox | TIER_2 | 2 | — | _not analysed_ |
 | Message | TIER_2 | 2 | — | _not analysed_ |
@@ -395,8 +448,10 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | NanoPassKit | TIER_2 | 2 | — | _not analysed_ |
 | NanoTimeKit | TIER_2 | 2 | — | _not analysed_ |
 | NearField | TIER_2 | 2 | — | _not analysed_ |
+| Network | TIER_2 | 2 | — | _not analysed_ |
 | NetworkExtension | TIER_2 | 2 | — | _not analysed_ |
 | NeutrinoCore | TIER_2 | 2 | — | _not analysed_ |
+| NeutrinoKit | TIER_2 | 2 | — | _not analysed_ |
 | NotesShared | TIER_2 | 2 | — | _not analysed_ |
 | NotesSupport | TIER_2 | 2 | — | _not analysed_ |
 | NotesUI | TIER_2 | 2 | — | _not analysed_ |
@@ -406,6 +461,8 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | PairedUnlockSettings | TIER_2 | 2 | — | _not analysed_ |
 | PaperBoardUI | TIER_2 | 2 | — | _not analysed_ |
 | PaperKit | TIER_2 | 2 | — | _not analysed_ |
+| PassKitCore | TIER_2 | 2 | — | _not analysed_ |
+| PassKitUI | TIER_2 | 2 | — | _not analysed_ |
 | Passbook | TIER_2 | 2 | — | _not analysed_ |
 | PassbookSettings | TIER_2 | 2 | — | _not analysed_ |
 | PasswordManagerUI | TIER_2 | 2 | — | _not analysed_ |
@@ -416,13 +473,17 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | PhotoLibrary | TIER_2 | 2 | — | _not analysed_ |
 | PhotoLibraryServicesCore | TIER_2 | 2 | — | _not analysed_ |
 | PhotosFormats | TIER_2 | 2 | — | _not analysed_ |
+| PhotosGraph | TIER_2 | 2 | — | _not analysed_ |
 | PhotosPlayer | TIER_2 | 2 | — | _not analysed_ |
 | PhotosUI | TIER_2 | 2 | — | _not analysed_ |
+| PhotosUIPrivate | TIER_2 | 2 | — | _not analysed_ |
 | PlatformSSO | TIER_2 | 2 | — | _not analysed_ |
 | Podcasts | TIER_2 | 2 | — | _not analysed_ |
 | PodcastsFoundation | TIER_2 | 2 | — | _not analysed_ |
 | PointerUIServices | TIER_2 | 2 | — | _not analysed_ |
 | PosterBoardUIServices | TIER_2 | 2 | — | _not analysed_ |
+| PowerUI | TIER_2 | 2 | — | _not analysed_ |
+| PowerlogHelperdOperators | TIER_2 | 2 | — | _not analysed_ |
 | PowerlogLiteOperators | TIER_2 | 2 | — | _not analysed_ |
 | PreferencesFramework | TIER_2 | 2 | — | _not analysed_ |
 | PrivacySettingsUI | TIER_2 | 2 | — | _not analysed_ |
@@ -454,12 +515,14 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | SidecarRelay | TIER_2 | 2 | — | _not analysed_ |
 | SignalCompression | TIER_2 | 2 | — | _not analysed_ |
 | SiriAnalytics | TIER_2 | 2 | — | _not analysed_ |
-| SiriContactsIntents | TIER_2 | 2 | — | _not analysed_ |
 | SiriInformationSearch | TIER_2 | 2 | — | _not analysed_ |
+| SiriInstrumentation | TIER_2 | 2 | — | _not analysed_ |
+| SiriKitRuntime | TIER_2 | 2 | — | _not analysed_ |
 | SiriPlaybackControlIntents | TIER_2 | 2 | — | _not analysed_ |
 | SiriPlaybackControlSupport | TIER_2 | 2 | — | _not analysed_ |
 | SiriRemembers | TIER_2 | 2 | — | _not analysed_ |
 | SiriStates | TIER_2 | 2 | — | _not analysed_ |
+| SiriTTS | TIER_2 | 2 | — | _not analysed_ |
 | SiriUIFoundation | TIER_2 | 2 | — | _not analysed_ |
 | SiriUtilities | TIER_2 | 2 | — | _not analysed_ |
 | SiriVOX | TIER_2 | 2 | — | _not analysed_ |
@@ -502,12 +565,15 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | UIAccessibility | TIER_2 | 2 | — | _not analysed_ |
 | UIFoundation | TIER_2 | 2 | — | _not analysed_ |
 | UIKit | TIER_2 | 2 | — | _not analysed_ |
+| UIKitCore | TIER_2 | 2 | — | _not analysed_ |
 | UsageTrackingAgent | TIER_2 | 2 | — | _not analysed_ |
 | UserNotificationsUIKit | TIER_2 | 2 | — | _not analysed_ |
 | VectorKit | TIER_2 | 2 | — | _not analysed_ |
 | VideoSubscriberAccount | TIER_2 | 2 | — | _not analysed_ |
 | VideoSubscriberAccountUI | TIER_2 | 2 | — | _not analysed_ |
+| VideosUI | TIER_2 | 2 | — | _not analysed_ |
 | VisageHRTF | TIER_2 | 2 | — | _not analysed_ |
+| Vision | TIER_2 | 2 | — | _not analysed_ |
 | VisionKitCore | TIER_2 | 2 | — | _not analysed_ |
 | VoiceMemos | TIER_2 | 2 | — | _not analysed_ |
 | VoiceServices | TIER_2 | 2 | — | _not analysed_ |
@@ -515,13 +581,14 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | VoiceShortcuts | TIER_2 | 2 | — | _not analysed_ |
 | VoiceTrigger | TIER_2 | 2 | — | _not analysed_ |
 | WatchListKit | TIER_2 | 2 | — | _not analysed_ |
-| WeatherCore | TIER_2 | 2 | — | _not analysed_ |
 | WebContentRestrictions | TIER_2 | 2 | — | _not analysed_ |
+| WebCore | TIER_2 | 2 | — | _not analysed_ |
 | WebUI | TIER_2 | 2 | — | _not analysed_ |
 | WiFiCloudSyncEngine | TIER_2 | 2 | — | _not analysed_ |
 | WiFiKitUI | TIER_2 | 2 | — | _not analysed_ |
 | WiFiPolicy | TIER_2 | 2 | — | _not analysed_ |
 | WidgetRenderer | TIER_2 | 2 | — | _not analysed_ |
+| WorkflowKit | TIER_2 | 2 | — | _not analysed_ |
 | WorkflowUI | TIER_2 | 2 | — | _not analysed_ |
 | WorkflowUIServices | TIER_2 | 2 | — | _not analysed_ |
 | WorkoutUI | TIER_2 | 2 | — | _not analysed_ |
@@ -529,6 +596,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | XOJIT | TIER_2 | 2 | — | _not analysed_ |
 | XOJITExecutor | TIER_2 | 2 | — | _not analysed_ |
 | YamahaUSBMIDIDriver | TIER_2 | 2 | — | _not analysed_ |
+| _GroupActivities_UIKit | TIER_2 | 2 | — | _not analysed_ |
 | _MusicKitInternal_SwiftUI | TIER_2 | 2 | — | _not analysed_ |
 | _StoreKit_SwiftUI | TIER_2 | 2 | — | _not analysed_ |
 | accessoryd | TIER_2 | 2 | — | _not analysed_ |
@@ -604,6 +672,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | itunescloudd | TIER_2 | 2 | — | _not analysed_ |
 | keybagd | TIER_2 | 2 | — | _not analysed_ |
 | launchd | TIER_2 | 2 | — | _not analysed_ |
+| libAudioDSP.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libBasebandManager.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libBasebandManagerICE.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libFDR.dylib | TIER_2 | 2 | — | _not analysed_ |
@@ -625,12 +694,12 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | libimg4.dylib | TIER_2 | 2 | — | _not analysed_ |
 | liblog_location.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libmdns.dylib | TIER_2 | 2 | — | _not analysed_ |
+| libmobileassetd.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libnetworkextension.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libsqlite3.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libsystem_c_debug.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libsystem_containermanager.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libsystem_networkextension.dylib | TIER_2 | 2 | — | _not analysed_ |
-| libsystem_sandbox.dylib | TIER_2 | 2 | — | _not analysed_ |
 | libusd_ms.dylib | TIER_2 | 2 | — | _not analysed_ |
 | lifs | TIER_2 | 2 | — | _not analysed_ |
 | logd | TIER_2 | 2 | — | _not analysed_ |
@@ -640,6 +709,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 | merchantd | TIER_2 | 2 | — | _not analysed_ |
 | mmaintenanced | TIER_2 | 2 | — | _not analysed_ |
 | mobileactivationd | TIER_2 | 2 | — | _not analysed_ |
+| momentsd | TIER_2 | 2 | — | _not analysed_ |
 | mstreamd | TIER_2 | 2 | — | _not analysed_ |
 | ndoagent | TIER_2 | 2 | — | _not analysed_ |
 | nesessionmanager | TIER_2 | 2 | — | _not analysed_ |
@@ -672,9 +742,9 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 
 </details>
 
-## HIGH_SIGNAL — excluded, low/no security relevance (1248)
+## HIGH_SIGNAL — excluded, low/no security relevance (1225)
 
-<details><summary>Show 1248 components</summary>
+<details><summary>Show 1225 components</summary>
 
 - AAAFoundation
 - AADataclassEnableNotificationPlugin
@@ -775,8 +845,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - AppleMediaServicesUIPaymentSheets
 - AppleMobileFileIntegrity
 - ApplePencilSessionFilter
-- AppleProResHWDecoder.videodecoder
-- AppleProResHWEncoder.videoencoder
 - AppleProxServiceFilter
 - ApplePushService
 - AppleServiceToolkit
@@ -793,7 +861,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - AudiogramIngestion
 - AuthKitUI
 - AutoBugCaptureCore
-- AutomationMode
 - AvatarKit
 - AvatarPickerMemojiPicker
 - AvatarUI
@@ -909,15 +976,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - CompassViewCalibrationService
 - ComplicationDisplay
 - ConnectivityModule
-- ContactPhotoCarouselRemoteAlert
 - ContactlessReaderUI
-- ContactsAutocomplete
-- ContactsBackgroundColorService
-- ContactsDonation
-- ContactsFlowDelegatePlugin
-- ContactsFoundation
-- ContactsMetrics
-- ContactsUICore
 - ContextSync
 - ContextualSuggestionClient
 - ContextualUnderstanding
@@ -1055,11 +1114,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - GPUTools
 - GPUToolsTransport
 - Gambit
-- GameCenterDashboardExtension
-- GameCenterPrivateUIFramework
-- GameCenterRemoteAlert
-- GameCenterUIFramework
-- GameCenterUIService
 - GameControllerFoundation
 - GameKitFramework
 - GeneralKnowledge-Assistant
@@ -1111,7 +1165,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - HeartRhythmUI
 - Home
 - HomeAI
-- HomeAutomationInternal
 - HomeControlCenterCompactModule
 - HomeControlCenterModule
 - HomeDataModel
@@ -1228,6 +1281,7 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - MobileMailSettings
 - MobilePhone
 - MobileSMS
+- MobileSafari
 - MobileSafariFramework
 - MobileSafariSwift
 - MobileSafariUI
@@ -1270,7 +1324,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - NanoPhotosBridgeSettings
 - NanoPhotosBridgeSetup
 - NanoTimeKitCompanion
-- NanoWeatherKitUICompanion
 - Navigation
 - Nearby
 - NearbyInteraction
@@ -1347,7 +1400,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - PreviewUI
 - PrintKitUI
 - ProVideo
-- ProactiveShareSheetDataHarvestingLighthouse
 - ProductKit
 - ProductPageExtension
 - Profiles
@@ -1439,7 +1491,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - SettingsCellularUI
 - SettingsFoundation
 - SettingsUIKitPrivate
-- SetupAssistantUI
 - SeymourClient
 - SeymourCore
 - SeymourMedia
@@ -1657,13 +1708,10 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - WallpaperSettings
 - WatchControlSettings
 - WatchQuickActionsServices
-- WeatherAnalytics
-- WeatherComplications
-- WeatherMaps
-- WeatherUI
 - WebBookmarks
 - WebGPU
 - WebInspector
+- WebKitLegacy
 - WebProcess
 - WebProcessLoader
 - WiFiKit
@@ -1737,7 +1785,6 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - com.apple.driver.AppleOLYHAL
 - com.apple.driver.ApplePMGR
 - com.apple.driver.ApplePPMCPMS
-- com.apple.driver.AppleProResHW
 - com.apple.driver.AppleS5L8940XI2C
 - com.apple.driver.AppleSPMI
 - com.apple.driver.AppleT8120CLPC
@@ -1927,25 +1974,1083 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 
 </details>
 
-## LOW_SIGNAL — excluded (30, metadata/timestamp churn only)
+## LOW_SIGNAL — excluded (1284, metadata/timestamp churn only)
 
-<details><summary>Show 30 components</summary>
+<details><summary>Show 1284 components</summary>
 
+- AAAFoundationSwift
+- AAAccountNotificationPlugin
+- ACDatabaseBackupNotificationPlugin
+- AFKUser
+- AGXCompilerConnection-S2A8
+- AGXCompilerCore-S2A8
+- AGXGPURawCounter
+- AGXGPURawCounterBundle
+- AISAccountNotificationPlugin
+- AKAccountNotificationPlugin
+- AMPCoreUI
+- AMSAccountNotificationPlugin
+- APConfigurationSystem
+- APFoundation
+- ARKitCore
+- ASDAccountNotficationPlugin
+- ASIOKit
+- ASOctaneSupport
+- ATFoundation
+- AVRouting
+- AXAggregateStatisticsServices
+- AXAssetLoader
+- AXContainerServices
+- AXLocalizationCaptionService
+- AXNTKUtilities
+- AXSpeakFingerManager
+- AXSpeechImplementation
+- AXWatchRemoteScreenServices
+- Accessibility
+- AccessibilityFocusEngine
+- AccessibilityGuidedAccessControlCenterModule
+- AccessibilityRemoteServices
+- AccessibilityRemoteUIServices
+- AccessibilityShorcutsModule
+- AccessibilitySoundDetectionControlCenterModule
+- AccessibilityTextSizeModule
+- AccessibilityUIShared
+- AccessibilityUIViewServices
+- AccessoryAssistiveTouch
+- AccessoryAudio
+- AccessoryCommunications
+- AccessoryComponentAuth
+- AccessoryHID
+- AccessoryMediaLibrary
+- AccessoryNavigation
+- AccessoryNowPlaying
+- AccessoryOOBBTPairing
+- AccessoryVoiceOver
+- AccessoryiAP2Shim
+- ActionPredictionHeuristics
+- ActivityAchievements
+- ActivityAchievementsDaemon
+- ActivityAchievementsPlugin
+- ActivityAwardsCore
+- ActivityAwardsPlugin
+- ActivityAwardsServices
+- ActivitySharingAwardsPlugin
+- ActivitySharingDaemonCore
+- ActivitySharingPlugin
+- ActivitySharingServices
+- ActivitySharingUI
+- AdPlatformsCommon
+- AdPlatformsCommonUI
+- AdServices
+- AirFair
+- AirFair2
+- AirPlayKit
+- AirPlayRoutePrediction
+- AirTraffic
+- AirTrafficDevice
+- AlarmModule
+- AlgosScoreFramework
+- AltimeterHarvest
+- AmbientUIKit
+- AmbientUIServices
+- AnnounceSiriExtensions
+- AppC3D
+- AppClip
+- AppGenius
+- AppPredictionFoundation
+- AppPredictionUIFoundation
+- AppRecommendations
+- AppSSOCore
+- AppSSOKerberos
+- AppSSOUI
+- AppState
+- AppStoreDaemon
+- AppStoreFoundation
+- AppStoreUI
+- AppSupport
+- AppSupportUI
 - AppleAOPAudioPlugin
+- AppleCV3DHA
+- AppleCV3DModels
+- AppleCVAPhoto
+- AppleFirmwareUpdate
+- AppleHIDTransportSupport
+- AppleIDAuthentication
+- AppleKeyStore
+- AppleMediaDiscovery
+- AppleSARHelper
+- AppleTracingSupportSymbolication
+- AskPermission
+- AskTo
+- AskToCore
+- AssertionServices
+- AssistantCardServiceSupport
+- AssistiveTouch
+- AssistiveTouch-iOS
+- AtomicsInternal
+- AttentionAwarenessFilter
+- AudioAccessoryServices
+- AudioAnalytics
+- AudioAnalyticsBase
+- AudioAnalyticsInternal
+- AudioDataAnalysis
+- AudioServerApplication
+- AudioSuggestionsPlugin
+- AudioToolboxCore
+- AutocorrectionTesterDESPlugin
+- AvailabilityKit
+- AvatarPersistence
+- AvatarPoster
+- BLEPairing-iOS
+- BTCloudPairingAccountNotificationPlugin
+- BWCrucible
+- BackBoardHIDEventFoundation
+- BackBoardHIDEventProcessors
+- BackBoardServices
+- BackgroundTasks
+- BacklightServices
+- BagKit
+- BatteryCenter
+- Baum
+- BiomeDSL
+- BiomeFlexibleStorage
+- BiomePubSub
+- BiomeSequence
+- BiomeSync
+- BiometricSupport
+- BluetoothAudio
+- BluetoothServices
+- BluetoothServicesUI
+- BoardServices
 - Bom
+- BookCoverUtility
+- BookLibrary
+- BrailleSymbology
+- BridgeCommons
+- BridgeReporting
+- BrightnessControl
+- BusinessChatService
+- BusinessServices
+- BusinessServicesUI
+- CARP
+- CBORLibrary
+- CDDataAccess
+- CDDataAccessExpress
+- CDPAccountNotificationPlugin_IOS
+- CPAnalytics
+- CTCarrierSpace
+- CTParser
+- CVNLP
+- CacheDelete
+- CalculatorModule
+- CalendarLink
+- CallKit
+- CallScreeningActivity_Shared
+- CameraEditKit
+- CameraModule
+- CarCommandsUIFramework
+- CarKey
+- CarKit
+- CarPlayServices
+- CarPlaySetup
+- CarrierSettings
+- Celestial
+- CellularBridgeUI
+- CellularPlanManager
+- CheckerBoardServices
+- Cinematic
+- ClassroomKit
+- ClassroomUIKit
+- ClipServices
+- ClockComplications
+- ClockKitUI
+- CloudAssetDaemon
+- CloudDocsDataclassOwnerPlugin
+- CloudDocsFileProvider
+- CloudKitAccessPlugin
+- CloudKitAuthenticationPlugin
+- CloudKitCode
+- CloudKitCodeProtobuf
+- CloudKitDistributedSync
+- CloudKitNotificationPlugin
+- CloudKitSettings
+- CloudMediaServicesInterfaceKit
+- CloudSharing
+- CollectionViewCore
+- CollectionsInternal
+- Combine
+- CombineCocoa
+- CommandAndControlUI
+- CommonAuth
+- CommunicationSafetySettingsUI
+- Communications-iOS
+- CompanionCamera
+- CompanionHealthDaemon
+- CompanionHealthPlugin
+- CompanionServices
+- CompanionSync
+- CompassCalibration
+- CompassUI
+- ConfigurationEngineModel
+- ConnectedAudioTest
+- ContainerManagerSystem
+- ContainerManagerUser
+- ContainerMigrator
+- ContextualActionsClient
+- ContinuousDialogManagerService
+- CoreAccessoriesFeatures
+- CoreBluetoothUI
+- CoreCDPUIInternal
+- CoreDuetContext
+- CoreDuetDaemonProtocol
+- CoreDuetSync
+- CoreGPS
+- CoreGlyphsPrivate
+- CoreHaptics
+- CoreIDCred
+- CoreIDCredBuilder
+- CoreIDVAccountNotificationPlugin
+- CoreLocationAccountNotificationPlugin
+- CoreLocationReplay
+- CoreLocationSync
+- CoreLocationUI
+- CoreMIDI
+- CoreMaterial
+- CoreOCModules
+- CoreParsec
+- CorePhoneNumbers
+- CoreRecentsAccountNotificationPlugin
+- CoreRepairCore
+- CoreRepairKit
+- CoreRepairLite
+- CoreRepairUI
+- CoreRoutineAccountNotificationPlugin
+- CoreServices
+- CoreServicesStore
+- CoreSpeechGazeTracking
+- CoreSuggestionsML
+- CoreThread
+- CoreTime
+- CoreUtilsUI
+- CorrectionsProfilesSync
+- Coverage
+- CrisisResources
+- DAAPKit
+- DAAccount
+- DAAccountAuthenticator
+- DAAccountNotifier
+- DACardDAV
+- DACoreDAVGlue
+- DADaemonSubCal
+- DAEAS
+- DAEASOAuthFramework
+- DAIMAPNotes
+- DALDAP
+- DASDaemon
+- DASDelegate
+- DASubCal
+- DEPClientLibrary
+- DMCApps
+- DMCToolsUIUtilities
+- DMDAccountNotificationPlugin
+- DOT
+- DSRemotePairing
+- DailyBriefingFlowPlugin
+- DataAccess
+- DataAccessExpress
+- DataAccessUI
+- DataActivation
+- DefaultAccessPlugin
+- DeviceDiscoveryUI
+- DeviceManagement
+- DeviceOMatic
+- DiagnosticLogCollection
+- DiagnosticRequest
+- DiagnosticsKit
+- DiagnosticsSupport
+- DictionaryUI
+- DifferentialPrivacy
+- DigitalAccess
+- DigitalSeparation
+- Disembark
+- DiskArbitration
+- DiskImages
+- DiskSpaceDiagnostics
+- DoNotDisturb
+- DoNotDisturbKit
+- DocumentManagerCore
+- DocumentUnderstanding
+- DocumentUnderstandingClient
+- DonationAccountWatcher
+- DragUI
+- DrawingBoard
+- DriverManagement
+- DropIn
+- DropInCore
+- EAFirmwareUpdater
+- EAPOLController
+- ESAccountAuthenticator
+- ESAccountNotifier
+- ESDaemonSupport
+- EasyConfig
+- EmailAddressing
+- EmailCore
+- EmbeddingService
+- EmergencyAlertExtension
+- EmergencyAlerts
+- EncoreXPCService
+- Engram
+- EventKitTCCUI
+- EventKitUICore
+- ExchangeSync
+- ExchangeSyncExpress
+- ExpansionBoard
+- ExposureNotification
+- ExposureNotificationDaemon
+- FMF
+- FMIPCore
+- FMNetworking
+- FSEvents
+- FSKit
+- FTAWD
+- FTClientServices
+- FaceTimeMigrator
+- FamilyNotification
+- FeedbackAssistantModule
+- FeedbackLogger
+- FileProviderTelemetry
+- FinHealth
+- FinHealthCore
+- FinHealthInsights
+- FindMyBluetooth
+- FindMyCloudKit
+- FindMyCommon
+- FindMyCrypto
+- FindMyDaemonSupport
+- FindMyDevice
+- FindMyDeviceAccountNotificationPlugin
+- FindMyDeviceUI
+- FindMyLocateObjCWrapper
+- FindMyServerInteraction
+- FindMyStorage
+- FitnessCoaching
+- FitnessCoachingCore
+- FlowFrameKit
+- Fluid
+- FoundInAppsPlugins
+- FoundationODR
+- FusionTracker
+- GEO
+- GKSPerformance
+- GLEngine
+- GLTools
+- GLToolsCore
+- GPURawCounter
+- GPUToolsCore
+- GPUToolsPlayback
+- GPUToolsiOS
+- GSS
+- Game
+- GameControllerSettings
+- GameKit
 - GameKitServices
+- GamePolicy
+- GamePolicyServices
+- GenerationalStorage
+- GeoAnalytics
+- GeoServicesCore
+- GoogleAuthenticationPlugin
+- GroupKit
+- GroupKitCore
+- H10ISPServices
+- H13ISPServices
 - H264H8.videodecoder
+- H264SW.videocodec
+- HAENotifications
+- HID
+- HIDAnalytics
+- HIDDisplay
+- HIDPreferences
+- HRTFEnrollment
+- HSAAuthentication
+- HangTracer
+- HangTracerSettingsClient
+- HealthAlgorithms
+- HealthAppHealthDaemon
+- HealthAppHealthDaemonSupport
+- HealthAppPlugin
+- HealthAppServices
+- HealthAppSupport
+- HealthArticles
+- HealthArticlesGeneration
+- HealthDaemonFoundation
+- HealthDiagnosticExtensionCore
+- HealthDomainsTools
+- HealthFlowDelegatePlugin
+- HealthHearing
+- HealthHearingDaemon
+- HealthKitAccountNotificationPlugin
+- HealthKitAdditions
+- HealthMedications
+- HealthMedicationsDaemonPlugin
+- HealthMedicationsExperience
+- HealthMedicationsVision
+- HealthMedicationsVisionUI
+- HealthMedicationsWidgetUI
+- HealthMenstrualCycles
+- HealthMenstrualCyclesDaemon
+- HealthMenstrualCyclesUI
+- HealthMobility
+- HealthMobilityDaemon
+- HealthMobilityUI
+- HealthPluginHost
+- HealthRecordsConceptsSupport
+- HealthRecordsDaemon
+- HearingMLHelper
+- HeartDaemonPlugin
+- HeartHealth
+- Heimdal
+- HeroDataClient
+- HighlightAlerts
+- Highlights
+- HomeCommunicationUIFramework
+- HomeKitAccountNotificationPlugin
+- HomeKitBackingStore
+- HomeKitFeatures
+- HomePlatformSettingsUI
+- HomeRecommendationEngine
+- HomeServices
+- HomeSharing
+- HomeUICommon
+- HomeUtilityServices
+- HoverTextServices
+- HumanUnderstandingEvidence
+- HumanUnderstandingFoundation
+- IAP
+- IAPAuthentication
+- ICE
+- IDSAccountNotificationPlugin
+- IDSBlastDoorSupport
+- IDSHashPersistence
+- IDSKVStore
+- IMAP
+- IMAccountNotificationPlugin
+- IMCorePipeline
+- IMDMessageServices
+- IMDMessageServicesAgent
+- IMSharedUI
+- IMTransferAgent
+- INDAccountNotificationPlugin
+- IOHIDDisplaySessionFilter
+- IOHIDEventProcessorFilter
+- IOHIDEventSystemStatistics
+- IOHIDKeyboardFilter
+- IOHIDLib
+- IOHIDPointerScrollFilter
+- IOHIDT8027USBSessionFilter
+- IOMobileFramebuffer
+- IOSurface
+- IOSurfaceAccelerator
+- IOUSBDeviceLib
+- IOUSBHost
+- ISPAirPlay.plugin
+- ITMLKit
+- IXATestAppRelay
+- IconFoundation
+- IdentityFlowPlugin
+- IdentityLookup
+- IdentityLookupUI
+- InAppMessages
+- InAppMessagesCore
+- IncomingCallFilter
+- InfoQueryPersonalizationFeatures
+- InputAnalytics
+- IntelligencePlatformCompute
+- IntelligencePlatformComputeService
+- IntelligencePlatformLibrary
+- IntelligentRoutingDaemon
+- IntentsCore
+- IntentsFoundation
+- IntentsServices
+- IntlPreferences
+- IntlPreferencesUI
+- IonosphereHarvest
+- JPEGH1.videodecoder
+- JPEGH1.videoencoder
+- JetPack
+- JetUI
+- JoinRequests
+- KGS
+- KRExperiments
+- KerberosAuthenticationPlugin
+- KeyboardBrightnessModule
+- KeyboardServices
+- KeyboardSettingsFeedback
+- KeychainCircle
+- KeychainDataclassOwner
+- KeychainSyncAccountNotification
+- LearnedFeatures
+- LegacyGameKit
+- LegacyHandle
 - LiblouisBrailleTranslator
+- LighthouseAV
+- LighthouseCoreMLModelAnalysis
+- LighthousePAN
+- LighthouseQuartz
+- LinguisticData
+- LiveFS
+- LiveTranscription
+- LocalAuthenticationCore
+- LocalAuthenticationEmbeddedUI
+- LocalAuthenticationPrivateUI
+- LocalStatusKit
+- LocaleSettings
+- LocationFenceSync
+- LocationPromptUI
+- LocationSupport
+- LockdownMode
+- LockdownModeAccountNotificationPlugin
+- LoopKitGeneratedKernels
+- LowPowerMode
+- LowPowerModule
+- MFAAuthentication
+- MIDI
+- MIME
+- MLAssetIO
+- MLRuntime
+- MMCSServices
 - MP4VH8.videodecoder
+- MPUFoundation
+- MSUDataAccessor
+- MTLSpline
+- MTLToolsDeviceSupport
+- MacinTalk
+- MagnifierModule
+- MailServices
+- MailWebProcessSupport
+- ManagedEvent
+- ManagedSettings
+- ManagedSettingsObjC
+- ManagedSettingsSupport
+- ManagedSettingsUI
 - MapsSuggestions
+- Marco
+- Marrs
+- MatterSupport
+- MeasureFoundation
+- MechPearl
+- Media
+- MediaAccessibility
+- MediaControlsAudioModule
+- MediaControlsModule
+- MediaFoundation
+- MediaGroups
+- MediaGroupsDaemon
+- MediaML
+- MediaMLServices
+- MediaPlatform
+- MediaPlayerUI
+- MediaRemoteDaemonServices
+- MediaServicesBroker
+- MediaSetup
+- MemoryDiagnostics
+- MenstrualAlgorithmsInternal
+- MenstrualCyclesDaemonPlugin
+- MentalHealth
+- MentalHealthDaemon
+- MentalHealthWidgetUI
+- MessageAccountAuthenticationPlugin
+- MessageAccountNotificationPlugin
+- MessageSecurity
+- MessageSupport
+- MessagesAirlockService
+- MessagesBlastDoorService
+- MessagesBlastDoorSupport
+- MessagesComplication
+- MessagesDataKeyboardPlugin
+- MessagesSupport
+- MetadataUtilities
+- MetalKit
+- MetricKit
+- MetricKitCore
+- MetricKitServices
+- MetricKitSource
+- MetricMeasurement
+- MobileAccessoryUpdater
+- MobileAssetUpdater
+- MobileBluetooth
+- MobileCalSettings
+- MobileContainerManager
+- MobileCoreServices
+- MobileDevices-0001
+- MobileDevices-0003
+- MobileIcons
+- MobileInBoxUpdate
+- MobileInstallation
+- MobileObliteration
+- MobilePhoneSettings
+- MobileSoftwareUpdate
+- MobileStoreDemoSetupUI
+- MobileTimerSupport
+- ModuleBase
+- MomentsOnboardingAndSettings
+- MonogramPoster
+- MotionCalibration
+- MultitaskingAndGesturesSettings
+- MusicSettingsSupport
+- MusicStoreUI
+- NCLaunchStats
+- NFC
+- NPTKit
+- NanoAudioControl
+- NanoBackup
+- NanoBooksComplicationsCompanion
+- NanoMailCompanionUI
+- NanoMailKitServer
+- NanoMapsNavigationCompanionDataSource
+- NanoMapsSampleDataSource
+- NanoMediaAPI
+- NanoMenstrualCyclesComplication
+- NanoPhotosCore
+- NanoRegistry
+- NanoSleepComplication
+- NanoSystemSettings
+- NanoUniverse
+- Navigation-iOS
+- NearFieldAccessory
+- NearbySessions
+- NetAppsUtilities
+- NetAppsUtilitiesUI
+- Netrb
+- NetworkQualityServices
+- NetworkRelay
+- NeuralNetworks
+- NewDeviceOutreach
+- NewDeviceOutreachUI
+- News
+- NewsAds
+- NewsAnalytics
+- NewsAnalyticsUpload
+- NewsArticles
+- NewsCore
+- NewsDaemon
+- NewsEngagement
+- NewsEngagementCollector
+- NewsFeed
+- NewsFoundation
+- NewsKit
+- NewsNotificationPlugin
+- NewsPersonalization
+- NewsServices
+- NewsServicesInternal
+- NewsSubscription
+- NewsToday
+- NewsTransport
+- NewsUI
+- NewsUI2
+- NewsURLBucket
+- NewsURLResolution
+- Nexus
+- Ninepoint
+- NotesPreviewKit
+- NotesUIServices
+- NowPlaying-iOS
+- OOBBTPairing-iOS
+- OSAServicesClient
+- OSASubmissionClient
+- OSASyncProxyClient
+- OSAnalyticsPrivate
+- OTSVG
+- OpenGLES
+- Osprey
+- PCSAccountNotificationPlugin
+- PDS
+- PLAMonitor
+- PLSnapshot
+- PairedUnlock
+- PairingProximity
+- ParavirtualizedANE
+- ParsecModel
+- ParsecSubscriptionServiceSupport
+- PassKit
+- PassKitServices
+- PassbookAccountNotificationPlugin
+- PasswordsDigitalSeparation
+- Pasteboard
+- PaymentUI
+- PaymentUIBase
+- PearlEventFilter
+- PegasusConfiguration
+- PegasusPersistence
+- PeopleUIInternal
+- PerfPowerServicesSignpostReader
+- PerfPowerTelemetryReaderService
+- PerformanceControlKit
+- PerformanceTrace
+- PersonalAudio
+- PersonalIntelligenceCore
+- PersonalizationPortrait
+- Phoenix
+- Phone
+- PhoneNumbers
+- Photo
+- PhotosAccountNotificationPlugin
+- PhotosImagingFoundation
+- PhotosKnowledgeGraph
+- PlacesKit
+- Platform-Bluetooth
+- PointerUISystemServices
+- PortraitCore
+- PowerlogAccounting
+- PowerlogControl
+- PowerlogDatabaseReader
+- PowerlogFullOperators
+- PreviewShellKit
+- PreviewsFoundation
+- PreviewsInjection
+- PreviewsMessaging
+- PreviewsOSSupport
+- PreviewsOSSupportUI
+- PreviewsServices
+- PreviewsServicesUI
+- ProactiveBlendingLayer_iOS
+- ProactiveCDNDownloader
+- ProactiveContextClient
+- ProactiveExperiments
+- ProactiveExperimentsInternals
+- ProactiveHarvesting
+- ProactiveInputPredictions
+- ProactiveInputPredictionsInternals
+- ProactiveML
+- ProactiveMagicalMoments
+- ProactiveSuggestionClientModel
+- PromotedContent
+- PromotedContentProxy
+- PromotedContentSupport
+- PromotedContentUI
 - ProofingPlugin
+- ProtectedCloudKeySyncing
+- ProtectedCloudStorage
+- ProtocolBuffer
+- Proximity
+- ProximityControl
+- ProximityUI
+- PushKit
+- PushToTalk
+- QRCodeModule
+- QueryUnderstanding
+- QuickLookThumbnailGeneration
+- QuickLookThumbnailing
+- QuickLookUICore
+- QuickNoteModule
+- QuickSpeak
+- QuickTime
+- RPAccountNotificationPlugin
+- RTBuddyCrashlogDecoder
+- Radio
+- RapportUI
+- RawCamera
 - Recap
+- ReflectionInternal
+- RegulatoryDomain
+- RelativeMotion
+- RelevanceEngineSolar
+- ReminderKitUI
+- RemindersAccountNotificationPlugin
+- RemindersSiriUIPlugin
+- RemoteConfiguration
+- RemoteManagement
+- RemoteManagementProtocol
+- RemoteManagementUI
+- RemoteMediaServices
+- RemoteStateDumpKit
+- RemoteTextInput
+- ResearchApp
+- RespiratoryHealthDaemon
+- RespiratoryHealthDaemonPlugin
+- RespiratoryHealthUI
+- Routine
+- RuntimeInternal
+- SAML
+- SCHelper
 - SDAPI
+- SMBClientProvider
+- SMBSearch
+- SOSUI
+- SPFinder
+- SPOwner
 - STExtractionService
 - STExtractionService.privileged
+- STSXPCHelperClient
+- SafetyAlerts
+- SafetyMonitorMessages
+- SchoolTime
+- SchoolTimeSettingsUI
+- ScreenReaderCore
+- ScreenTime
+- ScreenshotServices
+- SearchPartyAccountNotificationPlugin
+- SecureBackupNotification
+- SensitiveContentAnalysis
+- SensitiveContentAnalysisML
+- SensorKit
+- SensorKitUI
+- SentencePiece
+- ServiceManagement
+- SessionAlert
+- SessionCore
+- SessionFoundation
+- SessionPushNotifications
+- SessionSyncEngine
+- SettingsCellular
+- SetupKit
+- SeymourAwardsPlugin
+- SeymourServerProtocol
+- SharedWebCredentialViewService
+- SharedWithYouCore
+- SharingAccountNotificationPlugin
+- SharingHUD
+- SharingXPCServices
+- ShazamEvents
+- ShazamInsights
+- ShazamKit
+- ShazamKitUI
+- ShazamModule
+- ShortcutUIKit
+- ShortcutsCloudKitAccountNotificationPlugin
+- SidecarUI
+- SignpostCollection
+- SignpostMetrics
+- SignpostNotification
+- SilexVideo
+- SilexWeb
+- SimpleKeyExchange
+- SiriActivationFoundation
+- SiriAppResolution
+- SiriAudioIntentUtils
+- SiriAudioSnippetKit
+- SiriAudioSnippetUI
+- SiriCarCommandsIntents
+- SiriCloudKitAccountsNotifier
+- SiriCorrections
+- SiriDailyBriefingInternal
+- SiriEmergencyIntents
+- SiriFindMyUI
+- SiriGeo
+- SiriHomeAccessoryFramework
+- SiriInformationTypes
+- SiriIntentEvents
+- SiriLiminal
+- SiriNLUOverrides
+- SiriNotebook
+- SiriObservation
+- SiriOntology
+- SiriOntologyProtobuf
+- SiriReaderServices
+- SiriReferenceResolutionDataModel
+- SiriSignals
+- SiriSpeechSynthesis
+- SiriSuggestions
+- SiriSuggestionsKit
+- SiriSuggestionsSupport
+- SiriTasks
+- SiriUICardKitProviderSupport
+- SiriWellnessIntents
+- Sleep
+- SleepDaemon
+- SleepHealth
+- SleepHealthDaemon
+- SleepHealthDaemonPlugin
+- SmartRepliesServer
+- SmartRepliesUI
+- SnippetCommands
+- SnippetKit
+- SocialAccountNotificationPlugin
+- SocialServices
+- SoftwareUpdateController
+- SoftwareUpdateCoreConnect
+- SoftwareUpdateCoreSupport
+- SoundBoardServices
+- SoundScapesUtility
+- SpeechRecognitionCore
+- SpeechRecognitionSharedSupport
+- SpokenNotificationsModule
+- SpotlightFoundation
+- SpotlightLinguistics
+- SpotlightReceiver
+- SpotlightRecommendation
+- SpotlightResources
+- SpotlightUI
+- SpotlightUIShared
+- SpringBoardIntents
+- StatusKit
+- StopwatchModule
+- StorageKit
+- StorageUI
+- StoreBookkeeper
+- StoreBookkeeperClient
+- StoreServices
+- SuggestionsSpotlightMetrics
+- SummariesHealthDaemon
+- SurfStatusSync
+- SwiftCertificate
+- SwiftNN
+- SwiftSQLite
+- SwiftUIAccessibility
+- Symbols
+- SymptomAnalytics
+- SymptomDiagnosticReporter
+- SymptomNetworkUsage
+- SymptomPresentationFeed
+- SymptomPresentationLite
+- SymptomReporter
+- SynapseSyncPlugin
+- System
+- SystemAperture
+- SystemConfiguration
+- SystemCustomization
+- SystemPaperPresentation
+- SystemStatus
+- SystemWake
 - TSApplication
 - TSReading
+- TSUtility
+- TVAppServices
+- TVLatency
+- TVUIKit
+- TailspinSymbolication
+- TailspinSymbolicationServer
+- TeaCharts
+- TeaDB
+- TeaFoundation
+- TeaSettings
+- TeaSnappy
+- TeaTemplate
+- TextInput_bo
+- TextInput_ca
+- TextInput_chr
+- TextInput_cs
+- TextInput_de
+- TextInput_el
+- TextInput_emoji
+- TextInput_en
+- TextInput_es
+- TextInput_fr
+- TextInput_haw
+- TextInput_he
+- TextInput_intl
+- TextInput_mul
+- TextInput_my
+- TextInput_nl
+- TextInput_pa
+- TextInput_pt
+- TextInput_si
+- TextInput_sk
+- TextInput_ta
+- TextInput_tr
+- TextInput_ug
+- TextInput_yue
+- TextUnderstandingShared
+- ThreadNetwork
+- TimeAppServices
+- TimeZone
+- TinCanShared
+- TipKitLegacy
+- TipKitServices
+- TipsNextServices
+- ToneLibrary
+- TraitsArbiter
+- TranslationUI
+- TrialArchivingService
+- TrialProto
+- TypingDESPlugin
+- TypologyAccess
+- UARPUpdaterService
+- UARPiCloud
+- UIKitServices
+- UITriggerVC
+- URLFormatting
+- USDLib_FormatLoaderProxy
+- UVFSService
+- UVFSXPCService
+- UniformTypeIdentifiers
+- UsageTracking
+- UserEventAgent
+- UserFS
+- UserManagement
+- UserManagementLayout
+- UserManagementUI
+- UserNotifications
+- UserNotificationsKit
+- UserNotificationsSettings
+- UserNotificationsTranslation
+- UserSafety
+- VPNPreferences
+- VideoToolboxParavirtualizationSupport
+- VirtualGarage
+- VisionCore
+- VisionKit
+- VisionKitInternal
+- VisualLocalization
+- VisualLogger
+- VoiceDial
+- VoiceMemosModule
+- VoiceShortcutsUICardKitProviderSupport
+- WalletModule
+- WatchControlAssets
+- WatchFacesWallpaperSupport
+- WatchReplies
+- WatchdogClient
+- WebApp
+- WebBookmarksNotificationPlugin
+- WebBookmarksSwift
+- WebContentAnalysis
+- WebContentAnalysisUI
+- WebSheet
+- WellnessUI
+- WiFiAnalytics
+- WiFiPeerToPeer
+- WiFiSharing
+- WiFiVelocity
+- WidgetPreviewsExtensionAgent
+- WirelessCoexManager
+- WirelessInsights
+- WorkoutHealthBridge
+- WorkoutKitServices
+- WorldClockComplications
+- XGBoostFramework
+- XPCAcmeService
+- XavierCore
+- XavierNews
+- YahooAuthenticationPlugin
+- YelpAccessPlugin
+- _AVKit_SwiftUI
+- _AppIntents_SwiftUI
+- _AppIntents_UIKit
+- _AuthenticationServices_SwiftUI
+- _Coherence_CloudKit_Private
+- _CoreLocationUI_SwiftUI
+- _DeviceActivity_SwiftUI
+- _HomeKit_SwiftUI
+- _JetUI_SwiftUI
+- _PassKit_SwiftUI
+- _PhotosUI_SwiftUI
+- _QuickLook_SwiftUI
+- _SceneKit_SwiftUI
+- _SwiftData_CoreData
+- _SwiftData_SwiftUI
+- apfs_boot_mount
+- apfs_checkseal
 - apfs_condenser
+- bookassetd
+- brctl
+- cfprefsd
+- ckdiscretionaryd
+- com.apple.DriverKit-AppleEthernetMLX5
+- com.apple.Translate.appremoval
+- com.apple.askpermission.AccountNotificationPlugin
+- com.apple.corelocation.locationUI
+- com.apple.dispatch.vfs
 - com.apple.driver.AppleAOPAudio
 - com.apple.driver.AppleAOPVoiceTrigger
 - com.apple.driver.AppleIDV
@@ -1953,13 +3058,209 @@ Tier shown is the LLM-assigned tier for analysed components, otherwise a determi
 - com.apple.driver.AppleUSBDeviceMux
 - com.apple.driver.AudioDMAController-T8120
 - com.apple.driver.RTBuddy
+- com.apple.fsevents.matching
+- com.apple.systemconfiguration
 - companion_proxy
+- containermanagerd
+- containermanagerd_system
+- countryd
 - destinationd
+- deu.dylib
+- distnoted
+- eci.dylib
+- eng.dylib
+- enu.dylib
+- esm.dylib
+- esp.dylib
+- fairplayd.H2
+- filecoordinationd
+- fin.dylib
+- findmydeviced
+- fra.dylib
+- frc.dylib
+- fskitd
+- geocorrectiond
+- gputoolsserviced
+- hangreporter
+- hangtracerd
+- iCloudDriveService
+- iMessageApps
+- iOSDiagnostics
+- iTunesStore
+- iTunesStoreFramework
+- iTunesStoreUI
+- iapd
+- icloudMCCKit
+- ita.dylib
 - itunesstored
+- keychainsharingmessagingd
+- libAHTRestore.dylib
+- libATCommandStudioDynamic.dylib
+- libAXSafeCategoryBundle.dylib
+- libAXSpeechManager.dylib
+- libAccessibility.dylib
+- libAppPatch.dylib
+- libAppleEXR.dylib
+- libAppleSSEExt.dylib
+- libAudioStatistics.dylib
+- libBASupport.dylib
+- libBBUpdaterDynamic_stubs.dylib
+- libBasebandDiagnostic.dylib
+- libCTGreenTeaLogger.dylib
+- libCVMSPluginSupport.dylib
+- libCellularDecoders.dylib
+- libCommCenterCNTargetData.dylib
+- libCommCenterCommandDrivers.dylib
+- libCoreFSCache.dylib
+- libCoreVMClient.dylib
+- libETLDIAGLoggingDynamic.dylib
+- libETLDLFDynamic.dylib
+- libETLDLOADCoreDumpDynamic.dylib
+- libETLDLOADDynamic.dylib
+- libETLDMCDynamic.dylib
+- libETLDynamic.dylib
+- libETLEFSDumpDynamic.dylib
+- libETLSAHDynamic.dylib
+- libFDRDecode.dylib
+- libGFXShared.dylib
+- libGLImage.dylib
 - libGLProgrammability.dylib
+- libGLVMPlugin.dylib
+- libGPUSupportMercury.dylib
+- libHDLCDynamic.dylib
+- libHZ.dylib
+- libIOABP.dylib
+- libIOACIPC.dylib
+- libIOReport.dylib
+- libISO2022.dylib
+- libMTLCompilerHelper.dylib
+- libMainThreadChecker.dylib
+- libMatch.1.dylib
+- libMobileGestaltExtensions.dylib
+- libNFC_Comet.dylib
+- libNFC_HAL.dylib
+- libORTools.dylib
+- libPPM.dylib
+- libPPMDataModel.dylib
+- libQMIParserDynamic.dylib
+- libRoseBooter.dylib
+- libRoseUpdater.dylib
+- libSESShared.dylib
+- libSoftwareUpdateSSO.dylib
+- libSpatial.dylib
+- libSystemDetermination.dylib
+- libSystemHealth.dylib
+- libValidationCapsule.dylib
+- libVibeSynthEngine.dylib
+- libWISSupport.dylib
+- libamsupport.dylib
+- libcharset.1.dylib
+- libcupolicy.dylib
+- libdscsym.dylib
+- libdyld.dylib
+- libfaceCore.dylib
+- libheimdal-asn1.dylib
+- libhvf.dylib
+- libiconv_none.dylib
+- liblaunch.dylib
+- liblivefiles.plugin.dummy.dylib
+- libllvm-lmdb.dylib
+- liblockdown.dylib
+- liblog_IOHIDFamily.dylib
+- liblog_SystemConfiguration.dylib
+- liblog_coreacc.dylib
+- liblog_geo.dylib
+- liblog_mdns.dylib
+- liblog_mdnsresponder.dylib
+- liblog_network.dylib
+- liblog_signpost.description.dylib
+- liblog_signpost.dylib
+- liblog_signpost.telemetry.dylib
+- libmapper_646.dylib
+- libmapper_std.dylib
+- libmapper_zone.dylib
+- libmav_ipc_router_dynamic.dylib
+- libmecab.dylib
+- libmrc.dylib
+- libnetquality.dylib
+- libnetwork.dylib
+- libnfstorage.dylib
 - libolaf.dylib
+- libpartition2_dynamic.dylib
+- libprequelite.dylib
+- libskit.dylib
+- libswiftAVFoundation.dylib
+- libswiftAssetsLibrary.dylib
+- libswiftCarPlay.dylib
+- libswiftCore.dylib
+- libswiftCoreML.dylib
+- libswiftCoreMedia.dylib
+- libswiftCryptoTokenKit.dylib
+- libswiftDarwin.dylib
+- libswiftDemangle.dylib
+- libswiftDistributed.dylib
+- libswiftFileProvider.dylib
+- libswiftHealthKit.dylib
+- libswiftHomeKit.dylib
+- libswiftIdentityLookup.dylib
+- libswiftMediaPlayer.dylib
+- libswiftMetal.dylib
+- libswiftNearbyInteraction.dylib
+- libswiftNetwork.dylib
+- libswiftObservation.dylib
+- libswiftPassKit.dylib
+- libswiftPhotos.dylib
+- libswiftPhotosUI.dylib
+- libswiftRegexBuilder.dylib
+- libswiftSpatial.dylib
+- libswiftSwiftOnoneSupport.dylib
+- libswiftUIKit.dylib
+- libswiftUniformTypeIdentifiers.dylib
+- libswiftVideoToolbox.dylib
+- libswiftWebKit.dylib
+- libswift_Concurrency.dylib
+- libswift_Differentiation.dylib
+- libswift_RegexParser.dylib
+- libswift_StringProcessing.dylib
+- libsysdiagnose.dylib
+- libsystem_collections.dylib
+- libsystem_configuration.dylib
+- libsystem_darwin.dylib
+- libsystem_dnssd.dylib
+- libsystem_kernel.dylib
+- libsystem_m.dylib
+- libsystem_symptoms.dylib
+- libsystem_trace.dylib
+- libsystemstats.dylib
+- libtailspin.dylib
+- libusrtcp.dylib
+- libutil.dylib
+- libvDSP.dylib
+- libxml2.2.dylib
+- libxpc_datastores.dylib
+- libz.1.dylib
 - livefiles_apfs.dylib
+- livefiles_exfat.dylib
+- livefiles_ntfs.dylib
+- localspeechrecognition
+- locationd.events
+- managedappdistributiond
+- microstackshot
+- mscamerad-xpc
+- newfs_apfs
+- powerlogHelperd
+- ptb.dylib
+- ptpcamerad
+- ptpd
+- replayd
+- snatmap
+- softwareupdated
+- suggest_tool
+- tailspind
 - terminusd
+- triald_system
+- usbsmartcardreaderd
 - useractivityd
+- vCard
 
 </details>

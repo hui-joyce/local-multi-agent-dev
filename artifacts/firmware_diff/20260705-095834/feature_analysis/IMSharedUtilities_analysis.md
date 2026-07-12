@@ -3,26 +3,16 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "%@-%@-r1"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 20 (20 AI-authored, 0 auto-generated); comments: 4 (2 AI-authored, 2 auto-generated); across 2 function(s); verified persisted in .i64: 24 named variables, 2 comments.
+- **Database annotations** — variable renames: 2 (2 AI-authored, 0 auto-generated); comments: 4 (2 AI-authored, 2 auto-generated); across 2 function(s); verified persisted in .i64: 24 named variables, 3 comments.
 
 ## What this feature does
 
-The `IMSharedUtilities` framework update introduces a new server-side message payload processing mechanism designed to handle "server bags" (structured message metadata) and filter them based on sender identity. The two new symbols—`_IMServerBagValueForKnownSender` and `_IMSharedHelperPayloadByStrippingServerBagKeys`—indicate a system for extracting and sanitizing message payloads.
-
-Key evidence:
-- **New strings**: `"Server bag set, stripping payload keys %@ for sender (known: %{BOOL}d)"`, `"known-sender"`, `"unknown-sender"`, and format string `"%@-%@-r1"` suggest a sender-aware payload filtering system.
-- **New symbols**: Both are code functions, not data, indicating active processing logic.
-- **Binary changes**: The framework grew by 2 symbols and 2 functions, with increased text and string sections, confirming new functionality was added.
-- **Removed dependencies**: `AVFoundation`, `libswift_StringProcessing`, `libswiftos`, `libswiftsimd` were removed, suggesting a refactoring or optimization of the framework's internal dependencies.
-
-The feature appears to be a **sender-based message payload sanitization system** that:
-1. Determines if a sender is "known" or "unknown"
-2. Strips specific keys from the message payload based on sender type
-3. Processes server bags through a lookup table mechanism with signature validation
+The `IMSharedUtilities` framework update introduces a mechanism to dynamically filter and strip specific payload keys from server-side configuration data (the "Server Bag") based on the sender's identity. This feature distinguishes between "known" and "unknown" senders to enforce stricter data sanitization, likely to prevent the leakage of sensitive configuration keys or to ensure compatibility with legacy/restricted client states.
 
 ## How is it implemented
 
-### Decompiled Function: `IMServerBagValueForKnownSender`
+
+### Decompilation at `0x1a9c92778`
 
 ```c
 __int64 IMServerBagValueForKnownSender()
@@ -38,10 +28,13 @@ __int64 IMServerBagValueForKnownSender()
 }
 ```
 
-### Decompiled Function: `IMSharedHelperPayloadByStrippingServerBagKeys`
+### Decompilation at `0x1a9c927f8`
 
 ```c
-__int64 __fastcall IMSharedHelperPayloadByStrippingServerBagKeys(__int64 n_a1, __int64 n_a2, int n_a3)
+__int64 __fastcall IMSharedHelperPayloadByStrippingServerBagKeys(
+        __int64 payload_dict,
+        __int64 n_a2,
+        int is_known_sender)
 {
   __CFString *lookup_table; // x8
   __int64 intermediate_value_1; // x0
@@ -65,7 +58,7 @@ __int64 __fastcall IMSharedHelperPayloadByStrippingServerBagKeys(__int64 n_a1, _
 
   expected_signature = *MEMORY[0x1E6782818];
   lookup_table = &stru_1F1E176F8;
-  if ( n_a3 )
+  if ( is_known_sender )
     lookup_table = &stru_1F1E176D8;
   current_table = lookup_table;
   sub_1A9FC0660(MEMORY[0x1E6707260]);
@@ -85,7 +78,7 @@ __int64 __fastcall IMSharedHelperPayloadByStrippingServerBagKeys(__int64 n_a1, _
       key_count = 138412546;
       payload = intermediate_value_2;
       max_size = 1024;
-      sender_type = n_a3;
+      sender_type = is_known_sender;
       MEMORY[0x1AB32E860](
         &dword_1A9B7C000,
         intermediate_value_6,
@@ -99,14 +92,14 @@ __int64 __fastcall IMSharedHelperPayloadByStrippingServerBagKeys(__int64 n_a1, _
   }
   while ( 1 )
   {
-    current_entry = sub_1A9FB8340(n_a1);
+    current_entry = sub_1A9FB8340(payload_dict);
     sub_1A9FBB220();
     processed_entry = sub_1A9FADA20(current_entry);
     MEMORY[0x1AB32EEC0]();
-    n_a1 = MEMORY[0x1AB32ED20](processed_entry);
+    payload_dict = MEMORY[0x1AB32ED20](processed_entry);
 LABEL_9:
     if ( *MEMORY[0x1E6782818] == expected_signature )
-      return n_a1;
+      return payload_dict;
     loop_state = MEMORY[0x1AB32E7F0]();
     if ( loop_limit != 1 )
       break;
@@ -118,105 +111,28 @@ LABEL_9:
 }
 ```
 
-### Implementation Analysis
+The implementation centers on the new function `IMSharedHelperPayloadByStrippingServerBagKeys`. This function accepts a payload and a boolean flag indicating the sender's status. It retrieves the current server bag configuration and checks it against a predefined lookup table. 
 
-**`IMServerBagValueForKnownSender`** (at `0x1a9c92778`):
-- Takes no parameters and returns a `__int64` value
-- Retrieves a server bag from a fixed memory location (`0x1E673F8D0`)
-- Performs a mask check using bit manipulation (`mask_check ^ (2 * mask_check) & 0x4000000000000000LL`)
-- If the mask check fails, it breaks (returns 0 or error code)
-- Returns the extracted server bag value after processing
-
-**`IMSharedHelperPayloadByStrippingServerBagKeys`** (at `0x1a9c927f8`):
-- Takes three parameters: `n_a1` (likely a server bag or entry), `n_a2` (likely a payload), `n_a3` (sender type flag)
-- Uses a lookup table that varies based on `n_a3` (sender type)
-- Performs signature validation against a fixed address (`0x1E6782818`)
-- Calls `IMSharedHelper` (via `MEMORY[0x1AB32E5B0]`) to process the payload
-- If sender type indicates "known sender" (`n_a3` is truthy), it strips keys from the payload
-- Iterates through entries, processing each one with various helper functions
-- Returns the final processed payload
-
-**Data Flow:**
-1. The system checks if a sender is "known" or "unknown" (via string constants)
-2. For known senders, it uses one lookup table; for unknown senders, another
-3. It validates message signatures to prevent tampering
-4. It calls `IMSharedHelper` to perform the actual payload stripping
-5. It iterates through the server bag entries, processing each one
-6. The final result is a sanitized payload ready for transmission
-
-**Key Observations:**
-- The function uses Objective-C messaging (`objc_msgSend` pattern) for dynamic method calls
-- It maintains state through loop iterations with a `loop_limit` of 1
-- The `IMSharedHelper` call suggests this is part of a larger helper system
-- The signature validation at `0x1E6782818` is critical for security
+The logic performs a conditional check: if the sender is identified as "known," it selects a specific set of keys to strip; otherwise, it defaults to a different set. The function iterates through the provided payload entries, comparing them against the determined filter criteria. If a match is found, the key is removed from the payload. The process includes integrated logging that records the stripping action, specifically noting the sender type and the keys being processed, which aids in debugging server-side configuration synchronization. The helper function `IMServerBagValueForKnownSender` acts as a wrapper to retrieve the relevant server bag value, ensuring that the stripping logic operates on the most current and validated configuration state.
 
 ## How to trigger this feature
 
-Based on the evidence:
-
-1. **Direct API Call**: The new functions are likely called by other iMessage-related frameworks when processing incoming or outgoing messages
-2. **Message Processing Pipeline**: The feature is triggered when:
-   - A message is received from a "known" sender (sender type = known)
-   - A message is received from an "unknown" sender (sender type = unknown)
-   - The system needs to process server bag metadata
-3. **Conditional Execution**: The `n_a3` parameter controls which lookup table is used, suggesting the feature activates based on sender identity
-4. **Signature Validation**: The feature only processes payloads that pass signature validation, indicating it's part of a secure message handling system
-
-The feature is likely triggered by:
-- iMessage receipt of a message with server bag metadata
-- The system determining the sender's trust status
-- The need to sanitize the payload before further processing
+This feature is triggered internally by the `IMSharedHelper` subsystem whenever a server bag payload is received or processed. It is invoked during the parsing of configuration data where the sender's identity is verified. The trigger condition is dependent on the `n_a3` parameter (the sender type boolean), which is determined by the upstream messaging service's classification of the incoming sender.
 
 ## Vulnerability Assessment
 
-**Security Relevance: HIGH**
-
-This feature addresses a **potential message tampering and sender spoofing vulnerability** in the iMessage system.
-
-### Old Code Vulnerability (Inferred from Removed Components):
-- **No sender-based payload filtering**: The old system likely processed all message payloads uniformly, regardless of sender identity
-- **No server bag validation**: The removal of `libswift_StringProcessing` and related components suggests the old system may have had weaker or no server bag validation
-- **No signature verification**: The new signature check at `0x1E6782818` suggests the old code may have accepted unverified payloads
-- **No known/unknown sender distinction**: The new strings `"known-sender"` and `"unknown-sender"` suggest the old system didn't differentiate between trusted and untrusted senders
-
-### New Code Mitigations:
-1. **Sender-based Payload Stripping**: The new code strips specific keys from payloads based on whether the sender is known or unknown, preventing untrusted senders from injecting malicious data
-2. **Signature Validation**: The check against `expected_signature` at `0x1E6782818` ensures only valid, unmodified payloads are processed
-3. **Lookup Table Selection**: Different processing paths for known vs. unknown senders provide defense-in-depth
-4. **Loop Limit Protection**: The `loop_limit != 1` check prevents infinite loops in the processing pipeline
-
-### Vulnerability Class: **Information Disclosure / Message Tampering**
-
-**Impact if Left Unpatched:**
-- **Unknown Sender Spoofing**: Attackers could send messages with arbitrary payloads that would be processed without filtering
-- **Server Bag Injection**: Malicious server bag entries could be added to messages, potentially leaking information or triggering unwanted behavior
-- **Payload Manipulation**: Without sender-based filtering, attackers could inject keys that shouldn't be present in messages from untrusted senders
-- **Signature Bypass**: If signature validation is bypassed, attackers could modify messages without detection
-
-**Mitigation Effectiveness:**
-- **HIGH**: The new code implements multiple layers of protection:
-  - Sender identity verification (known vs. unknown)
-  - Cryptographic signature validation
-  - Dynamic payload filtering based on sender trust
-  - Loop protection against infinite processing
-
-**Risk Level: TIER_1 (Critical)**
-
-This is a **security boundary update** that addresses message integrity and sender authentication. If this patch is not applied, the iMessage system remains vulnerable to:
-- Message tampering by untrusted senders
-- Server bag injection attacks
-- Potential information disclosure through unfiltered payload keys
-- Possible privilege escalation if server bag data is used for authorization decisions
-
-The removal of `AVFoundation` and Swift processing libraries suggests this is a significant architectural change, possibly moving to a more secure, native-based implementation rather than relying on higher-level frameworks that may have had vulnerabilities.
+This update appears to be a hardening measure rather than a direct patch for a critical vulnerability. By explicitly stripping payload keys based on sender identity, the framework reduces the attack surface for potential configuration-based exploits. It prevents "unknown" or potentially untrusted senders from influencing or accessing sensitive server-side configuration parameters that should only be available to "known" (authenticated/trusted) entities. This is a proactive security control designed to enforce the principle of least privilege regarding server bag data access.
 
 ## Evidence
 
-### Binary Diff Summary:
-- **Framework**: `/System/Library/PrivateFrameworks/IMSharedUtilities.framework/IMSharedUtilities`
-- **Version Change**: `1450.
+- **New Symbols**: `_IMServerBagValueForKnownSender`, `_IMSharedHelperPayloadByStrippingServerBagKeys`
+- **New Strings**: `"Server bag set, stripping payload keys %@ for sender (known: %{BOOL}d)"`, `"known-sender"`, `"unknown-sender"`
+- **Logic**: The implementation uses a conditional lookup table based on the `sender_type` boolean to determine which keys to strip from the payload, followed by an iterative removal process.
 
 ## AI Prioritisation Scoring System
 
-No actionable methods or prioritisation targets identified for this component.
+- **static_analysis**
+  - **Tier**: TIER_2
+  - **Category**: security_hardening
+  - **Reasoning**: This is a security-focused hardening update that implements data sanitization for server-side configuration payloads, preventing unauthorized access to sensitive keys based on sender identity.
 

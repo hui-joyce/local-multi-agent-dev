@@ -3,210 +3,544 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "#bt-accessory,AddServiceListener: existing listener [%@] for peer [%@]"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 28 (20 AI-authored, 8 auto-generated); comments: 1 (0 AI-authored, 1 auto-generated); across 1 function(s); verified persisted in .i64: 28 named variables, 3 comments.
+- **Database annotations** — variable renames: 130 (2 AI-authored, 128 auto-generated); comments: 6 (2 AI-authored, 4 auto-generated); across 4 function(s); verified persisted in .i64: 130 named variables, 79 comments.
 
 ## What this feature does
 
-The `nearbyd` binary manages Apple's Nearby device discovery and communication services, specifically handling Bluetooth Low Energy (BLE) GATT (Generic Attribute Profile) service discovery and management for accessories. The updated version introduces a new `NIServerAccessoryGATTServiceManager` class that orchestrates GATT service discovery, listener management, and background authorization for nearby accessories.
-
-The feature enables:
-- **GATT Service Discovery**: Automatically discovers and reads configuration characteristics from nearby BLE accessories
-- **Listener Management**: Manages multiple listeners for the same peer with proper state tracking and authorization checks
-- **Background Authorization**: Verifies that accessories have proper background authorization before allowing persistent connections
-- **State Machine**: Implements a comprehensive state machine for connection lifecycle (discovery → connection → configuration → ranging)
-- **Error Handling**: Robust error handling for Bluetooth unavailability, connection failures, and authorization issues
+The `nearbyd` binary update introduces a robust management layer for Bluetooth Low Energy (BLE) accessory interactions, specifically focusing on GATT (Generic Attribute Profile) service discovery and peer connection lifecycle management. The new `NIServerAccessoryGATTServiceManager` class centralizes the logic for connecting to accessories, verifying background authorization, and managing service listeners. This update improves the reliability of accessory discovery and connection states, particularly when handling asynchronous Bluetooth manager updates and service characteristic discovery.
 
 ## How is it implemented
 
-```c
-void __fastcall sub_1001CED20(__int64 a1)
-{
-  id *WeakRetained; // x0
-  NSMutableDictionary *v3; // x19
-  id v4; // x21
-  void *v5; // x22
-  NIServerSystemConfigurator *v6; // x21
-  id v7; // x22
-  NIServerHomeDeviceService *v8; // x21
-  id v9; // x22
-  NIServerAccessoryGATTServiceManager *v10; // x21
-  id v11; // x22
-  NIServerNearbyAccessoryRangingService *v12; // x21
-  id v13; // x22
-  id v14; // x21
-  id v15; // x22
-  void *v16; // x23
-  NIServerFindableDeviceProxySessionManager *v17; // x21
-  id v18; // x22
-  id v19; // x21
-  void *v20; // x22
-  NIServerGRResponderRangingService *v21; // x21
-  id v22; // x22
-  NIServerDLTDOAService *v23; // x21
-  id v24; // x22
-  __int64 v25; // x0
-  id v26; // x21
-  NIServerUsageAnalyticsAggregator *v27; // x21
-  id v28; // x22
-  id *v29; // [xsp+8h] [xbp-38h]
-  __int64 vars8; // [xsp+48h] [xbp+8h]
 
-  WeakRetained = (id *)objc_loadWeakRetained((id *)(a1 + 40));
-  if ( WeakRetained )
+### Decompilation at `0x10002aacc`
+
+```c
+void __cdecl -[PRBLEDiscoverySession activateWithDelegate:delegateQueue:sessionIRK:sessionIdentifier:controlFlags:tokenFlags:](
+        PRBLEDiscoverySession *self,
+        SEL sel_a2,
+        id id_a3,
+        id id_a4,
+        id id_a5,
+        id id_a6,
+        NIBluetoothDiscoveryControlFlags nibluetoothd_a7,
+        unsigned int n_a8)
+{
+  id id_v15; // x0
+  id id_v16; // x0
+  id id_v17; // x0
+  id id_v18; // x0
+  OS_dispatch_queue *clientQueue; // x8
+  CBSpatialInteractionSession *cbSession; // x8
+  NSObject *nsobject_v21; // x25
+  id id_v22; // x0
+  unsigned int controlFlags; // w0
+  id inited; // x0
+  double flt_v25; // d0
+  CBSpatialInteractionSession *cbSession_2; // x23
+  _QWORD n_v27[5]; // [xsp+8h] [xbp-A8h] BYREF
+  id id2_v28[2]; // [xsp+30h] [xbp-80h] BYREF
+  id buf; // [xsp+40h] [xbp-70h] BYREF
+  __int16 n_v30; // [xsp+48h] [xbp-68h]
+  int n_v31; // [xsp+4Ah] [xbp-66h]
+  __int16 n_v32; // [xsp+4Eh] [xbp-62h]
+  unsigned int n_v33; // [xsp+50h] [xbp-60h]
+  __int16 n_v34; // [xsp+54h] [xbp-5Ch]
+  unsigned int n_v35; // [xsp+56h] [xbp-5Ah]
+
+  id_v15 = objc_retain(id_a4);
+  id_v16 = objc_retain(id_a5);
+  id_v17 = objc_retain(id_a6);
+  if ( (unsigned int)(self->_cbSessionState - 1) >= 2 )
   {
-    v29 = WeakRetained;
-    v3 = objc_opt_new(&OBJC_CLASS___NSMutableDictionary);
-    v4 = objc_loadWeakRetained(v29 + 38);
-    v5 = objc_retainAutoreleasedReturnValue(objc_msgSend(v4, "allSessionsPrintableState"));
-    -[NSMutableDictionary addEntriesFromDictionary:](v3, "addEntriesFromDictionary:", v5);
-    objc_release(v5);
-    objc_release(v4);
-    v6 = objc_retainAutoreleasedReturnValue(+[NIServerSystemConfigurator sharedInstance](&OBJC_CLASS___NIServerSystemConfigurator, "sharedInstance"));
-    v7 = objc_retainAutoreleasedReturnValue(-[NIServerSystemConfigurator printableState](v6, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v7, CFSTR("System Configurator"));
-    objc_release(v7);
-    objc_release(v6);
-    v8 = objc_retainAutoreleasedReturnValue(+[NIServerHomeDeviceService sharedInstance](&OBJC_CLASS___NIServerHomeDeviceService, "sharedInstance"));
-    v9 = objc_retainAutoreleasedReturnValue(-[NIServerHomeDeviceService printableState](v8, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v9, CFSTR("Home Device Service"));
-    objc_release(v9);
-    objc_release(v8);
-    v10 = objc_retainAutoreleasedReturnValue(+[NIServerAccessoryGATTServiceManager sharedInstance](&OBJC_CLASS___NIServerAccessoryGATTServiceManager, "sharedInstance"));
-    v11 = objc_retainAutoreleasedReturnValue(-[NIServerAccessoryGATTServiceManager printableState](v10, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v11, CFSTR("GATT Service Manager"));
-    objc_release(v11);
-    objc_release(v10);
-    v12 = objc_retainAutoreleasedReturnValue(+[NIServerNearbyAccessoryRangingService sharedInstance](&OBJC_CLASS___NIServerNearbyAccessoryRangingService, "sharedInstance"));
-    v13 = objc_retainAutoreleasedReturnValue(-[NIServerNearbyAccessoryRangingService printableState](v12, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v13, CFSTR("Ranging Service"));
-    objc_release(v13);
-    objc_release(v12);
-    v14 = objc_retainAutoreleasedReturnValue(+[NIServerFindableDeviceProxySessionManager sharedInstance](&OBJC_CLASS___NIServerFindableDeviceProxySessionManager, "sharedInstance"));
-    v15 = objc_retainAutoreleasedReturnValue(-[NIServerFindableDeviceProxySessionManager printableState](v14, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v15, CFSTR("Findable Device Proxy"));
-    objc_release(v15);
-    objc_release(v14);
-    v16 = objc_retainAutoreleasedReturnValue(+[NIServerGRResponderRangingService sharedInstance](&OBJC_CLASS___NIServerGRResponderRangingService, "sharedInstance"));
-    v17 = objc_retainAutoreleasedReturnValue(-[NIServerGRResponderRangingService printableState](v16, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v17, CFSTR("GR Responder Home Service"));
-    objc_release(v17);
-    objc_release(v16);
-    v18 = objc_retainAutoreleasedReturnValue(+[NIServerDLTDOAService sharedInstance](&OBJC_CLASS___NIServerDLTDOAService, "sharedInstance"));
-    v19 = objc_retainAutoreleasedReturnValue(-[NIServerDLTDOAService printableState](v18, "printableState"));
-    -[NSMutableDictionary setObject:forKey:](v3, "setObject:forKey:", v19, CFSTR("DL-TDOA Service"));
-    objc_release(v19);
-    objc_release(v18);
-    v20 = objc_retainAutoreleasedReturnValue(+[NIServerUsageAnalyticsAggregator sharedInstance](&OBJC_CLASS___NIServerUsageAnalyticsAggregator, "sharedInstance"));
-    v21 = objc_retainAutoreleasedReturnValue(-[NIServerUsageAnalyticsAggregator printableState](v20, "printableState"));
-    -[NSMutableDictionary addEntriesFromDictionary:](v3, "addEntriesFromDictionary:", v21);
-    objc_release(v21);
-    objc_release(v20);
-    (*(void (**)(void))(*(_QWORD *)(a1 + 32) + 16LL))();
-    objc_release(v3);
-    WeakRetained = v29;
+    objc_storeWeak((id *)&self->_delegate, id_a3);
+    id_v18 = objc_retain(id_a4);
+    clientQueue = self->_clientQueue;
+    self->_clientQueue = (OS_dispatch_queue *)id_a4;
+    objc_release(clientQueue);
+    cbSession = self->_cbSession;
+    self->_cbSession = 0;
+    objc_release(cbSession);
+    -[PRBLEDiscoverySession _configureCBSpatialSession](self, "_configureCBSpatialSession");
+    -[CBSpatialInteractionSession setUwbTokenFlags:](
+      self->_cbSession,
+      "setUwbTokenFlags:",
+      (unsigned int)-[CBSpatialInteractionSession uwbTokenFlags](self->_cbSession, "uwbTokenFlags") | n_a8);
+    -[CBSpatialInteractionSession setClientIrkData:](self->_cbSession, "setClientIrkData:", id_a5);
+    -[CBSpatialInteractionSession setClientIdentifierData:](self->_cbSession, "setClientIdentifierData:", id_a6);
+    -[CBSpatialInteractionSession setBleRSSIThresholdHint:](self->_cbSession, "setBleRSSIThresholdHint:", 4294967206LL);
+    -[CBSpatialInteractionSession setControlFlags:](self->_cbSession, "setControlFlags:", 25);
+    if ( nibluetoothd_a7.var0 )
+      -[CBSpatialInteractionSession setControlFlags:](
+        self->_cbSession,
+        "setControlFlags:",
+        (unsigned int)-[CBSpatialInteractionSession controlFlags](self->_cbSession, "controlFlags") | 2);
+    if ( (*(_WORD *)&nibluetoothd_a7 & 0x100) != 0 )
+    {
+      -[CBSpatialInteractionSession setControlFlags:](
+        self->_cbSession,
+        "setControlFlags:",
+        (unsigned int)-[CBSpatialInteractionSession controlFlags](self->_cbSession, "controlFlags") | 0x800);
+      self->_wifiAdvertisingAllowed = 1;
+    }
+    nsobject_v21 = (NSObject *)qword_100A29E10;
+    id_v22 = objc_retain((id)qword_100A29E10);
+    if ( os_log_type_enabled(nsobject_v21, OS_LOG_TYPE_DEFAULT) )
+    {
+      controlFlags = (unsigned int)-[CBSpatialInteractionSession controlFlags](self->_cbSession, "controlFlags");
+      LODWORD(buf) = 67109888;
+      HIDWORD(buf) = nibluetoothd_a7.var0;
+      n_v30 = 1024;
+      n_v31 = (unsigned __int64)(*(_WORD *)&nibluetoothd_a7 & 0x100) >> 8;
+      n_v32 = 1024;
+      n_v33 = n_a8;
+      n_v34 = 1024;
+      n_v35 = controlFlags;
+      _os_log_impl(
+        (void *)&_mh_execute_header,
+        nsobject_v21,
+        OS_LOG_TYPE_DEFAULT,
+        "#ble,Activate. Supports UWB: [%d], Supports WiFi ToF: [%d], TokenFlags: [0x%08x]. ControlFlags: [0x%08x]",
+        (uint8_t *)&buf,
+        0x1Au);
+    }
+    objc_release(nsobject_v21);
+    -[NSMutableSet removeAllObjects](self->_activationPendingPeers, "removeAllObjects");
+    self->_activationPendingControlFlags = (unsigned int)-[CBSpatialInteractionSession controlFlags](
+                                                           self->_cbSession,
+                                                           "controlFlags");
+    self->_activationPendingRssiThresholdHint = (unsigned __int8)-[CBSpatialInteractionSession bleRSSIThresholdHint](
+                                                                   self->_cbSession,
+                                                                   "bleRSSIThresholdHint");
+    self->_activationPendingScanBurstPeriod = 0.0;
+    if ( self->_activationPendingRelationshipSpecifier.__engaged_ )
+      self->_activationPendingRelationshipSpecifier.__engaged_ = 0;
+    inited = objc_initWeak(&buf, self);
+    self->_cbSessionState = 1;
+    flt_v25 = sub_100005FD8(inited);
+    cbSession_2 = self->_cbSession;
+    n_v27[0] = _NSConcreteStackBlock;
+    n_v27[1] = 3221225472LL;
+    n_v27[2] = sub_10002ADC4;
+    n_v27[3] = &unk_1009B6F30;
+    id2_v28[1] = *(id *)&flt_v25;
+    objc_copyWeak(id2_v28, &buf);
+    n_v27[4] = self;
+    -[CBSpatialInteractionSession activateWithCompletion:](cbSession_2, "activateWithCompletion:", n_v27);
+    objc_destroyWeak(id2_v28);
+    objc_destroyWeak(&buf);
   }
-  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
-    __break(0xC471u);
-  objc_release(WeakRetained);
+  objc_release(id_a6);
+  objc_release(id_a5);
+  objc_release(id_a4);
 }
 ```
 
-The function `sub_1001CED20` appears to be a state dictionary builder that collects printable state information from multiple Nearby services. It creates a dictionary containing states from:
-- System Configurator
-- Home Device Service  
-- GATT Service Manager (NEW in 17.1)
-- Ranging Service
-- Findable Device Proxy
-- GR Responder Home Service
-- DL-TDOA Service
-- Usage Analytics Aggregator
+### Decompilation at `0x10024f2fc`
 
-The function loads a weak retained reference from the first parameter, builds a comprehensive state dictionary by calling `printableState` on each service, and then calls another function at offset `a1 + 32` with the dictionary.
+```c
+void __cdecl -[NIServerFindingServicePool setService:forToken:](
+        NIServerFindingServicePool *self,
+        SEL sel_a2,
+        id id_a3,
+        id id_a4)
+{
+  id id_v7; // x0
+  id id_v8; // x0
+  void *objectForKeyedSubscript; // x22
+  void *objectForKeyedSubscript_2; // x22
+  unsigned __int8 isEqual; // w23
+  __int64 n_v12; // x22
+  NSObject *nsobject_v13; // x22
+  NSObject *nsobject_v14; // x22
+  int n_v15; // [xsp+0h] [xbp-50h] BYREF
+  id id_v16; // [xsp+4h] [xbp-4Ch]
+
+  id_v7 = objc_retain(id_a3);
+  id_v8 = objc_retain(id_a4);
+  if ( id_a4 )
+  {
+    std::mutex::lock((std::mutex *)((char *)self + 112));
+    if ( !id_a3 )
+    {
+      nsobject_v13 = (NSObject *)qword_100A29E10;
+      if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_DEFAULT) )
+      {
+        n_v15 = 138543362;
+        id_v16 = id_a4;
+        _os_log_impl(
+          (void *)&_mh_execute_header,
+          nsobject_v13,
+          OS_LOG_TYPE_DEFAULT,
+          "#find-ses,FindingServicePool remove service for token: %{public}@",
+          (uint8_t *)&n_v15,
+          0xCu);
+      }
+      objc_msgSend(*((id *)self + 1), "removeObjectForKey:", id_a4);
+      goto LABEL_13;
+    }
+    objectForKeyedSubscript = objc_retainAutoreleasedReturnValue(objc_msgSend(*((id *)self + 1), "objectForKeyedSubscript:", id_a4));
+    objc_release(objectForKeyedSubscript);
+    if ( objectForKeyedSubscript )
+    {
+      objectForKeyedSubscript_2 = objc_retainAutoreleasedReturnValue(objc_msgSend(*((id *)self + 1), "objectForKeyedSubscript:", id_a4));
+      isEqual = (unsigned __int8)objc_msgSend(objectForKeyedSubscript_2, "isEqual:", id_a3);
+      objc_release(objectForKeyedSubscript_2);
+      if ( (isEqual & 1) != 0 )
+      {
+LABEL_13:
+        std::mutex::unlock((std::mutex *)((char *)self + 112));
+        goto LABEL_14;
+      }
+      n_v12 = qword_100A29E10;
+      if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_FAULT) )
+        sub_1004D1464(id_a4, n_v12);
+    }
+    else
+    {
+      nsobject_v14 = (NSObject *)qword_100A29E10;
+      if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_DEFAULT) )
+      {
+        n_v15 = 138543362;
+        id_v16 = id_a4;
+        _os_log_impl(
+          (void *)&_mh_execute_header,
+          nsobject_v14,
+          OS_LOG_TYPE_DEFAULT,
+          "#find-ses,FindingServicePool replace nil service for token: %{public}@. Race condition (OK)",
+          (uint8_t *)&n_v15,
+          0xCu);
+      }
+    }
+    objc_msgSend(*((id *)self + 1), "setObject:forKey:", id_a3, id_a4);
+    goto LABEL_13;
+  }
+LABEL_14:
+  objc_release(id_a4);
+  objc_release(id_a3);
+}
+```
+
+### Decompilation at `0x1001dc9dc`
+
+```c
+void __cdecl -[NIServerAccessoryGATTServiceManager peripheral:didDiscoverCharacteristicsForService:error:](
+        NIServerAccessoryGATTServiceManager *self,
+        SEL sel_a2,
+        id id_a3,
+        id id_a4,
+        id id_a5)
+{
+  id id_v9; // x0
+  id id_v10; // x0
+  id id_v11; // x0
+  void *identifier; // x22
+  void *objectForKeyedSubscript; // x24
+  void *objectForKeyedSubscript_2; // x25
+  void *peripheral; // x26
+  void *objectForKeyedSubscript_3; // x27
+  id peripheral_2; // x28
+  void *objectForKeyedSubscript_4; // x24
+  unsigned int connectionState; // w25
+  __int64 n_v20; // x24
+  NSError *errorWithDomain; // x24
+  __int64 n_v22; // x23
+  __int64 n_v23; // x23
+  void *uUID; // x24
+  CBUUID *uUIDWithString; // x25
+  void *objectForKeyedSubscript_5; // x24
+  void *objectForKeyedSubscript_6; // x24
+  void *characteristics; // x24
+  id id_v29; // x0
+  id id_v30; // x0
+  void *objectForKeyedSubscript_7; // x24
+  unsigned __int8 readingMultiConfigCharacteristics; // w25
+  void *characteristics_2; // x24
+  id id_v34; // x0
+  id id_v35; // x0
+  void *objectForKeyedSubscript_8; // x24
+  _BOOL4 numCharacteristicsLeftToRead; // w25
+  NSObject *nsobject_v38; // x24
+  id id_v39; // x0
+  unsigned int count; // w28
+  void *objectForKeyedSubscript_9; // x26
+  unsigned int numCharacteristicsLeftToRead_2; // w25
+  void *objectForKeyedSubscript_10; // x27
+  unsigned int readingMultiConfigCharacteristics_2; // w0
+  const char *str_v45; // x8
+  NSError *errorWithDomain_2; // x24
+  void *characteristics_3; // [xsp+8h] [xbp-118h]
+  _QWORD n_v48[4]; // [xsp+10h] [xbp-110h] BYREF
+  id id_v49; // [xsp+30h] [xbp-F0h]
+  NIServerAccessoryGATTServiceManager *niserveracce_v50; // [xsp+38h] [xbp-E8h]
+  id id_v51; // [xsp+40h] [xbp-E0h]
+  _QWORD n_v52[4]; // [xsp+48h] [xbp-D8h] BYREF
+  id id_v53; // [xsp+68h] [xbp-B8h]
+  NIServerAccessoryGATTServiceManager *niserveracce_v54; // [xsp+70h] [xbp-B0h]
+  id id_v55; // [xsp+78h] [xbp-A8h]
+  uint8_t buf[4]; // [xsp+80h] [xbp-A0h] BYREF
+  void *void_v57; // [xsp+84h] [xbp-9Ch]
+  __int16 n_v58; // [xsp+8Ch] [xbp-94h]
+  unsigned int n_v59; // [xsp+8Eh] [xbp-92h]
+  __int16 n_v60; // [xsp+92h] [xbp-8Eh]
+  unsigned int n_v61; // [xsp+94h] [xbp-8Ch]
+  __int16 n_v62; // [xsp+98h] [xbp-88h]
+  const char *str_v63; // [xsp+9Ah] [xbp-86h]
+
+  id_v9 = objc_retain(id_a3);
+  id_v10 = objc_retain(id_a4);
+  id_v11 = objc_retain(id_a5);
+  identifier = objc_retainAutoreleasedReturnValue(objc_msgSend(id_a3, "identifier"));
+  objectForKeyedSubscript = objc_retainAutoreleasedReturnValue(
+                              -[NSMutableDictionary objectForKeyedSubscript:](
+                                self->_peerDevices,
+                                "objectForKeyedSubscript:",
+                                identifier));
+  if ( objectForKeyedSubscript )
+  {
+    objectForKeyedSubscript_2 = objc_retainAutoreleasedReturnValue(
+                                  -[NSMutableDictionary objectForKeyedSubscript:](
+                                    self->_peerDevices,
+                                    "objectForKeyedSubscript:",
+                                    identifier));
+    peripheral = objc_retainAutoreleasedReturnValue(objc_msgSend(objectForKeyedSubscript_2, "peripheral"));
+    if ( peripheral )
+    {
+      objectForKeyedSubscript_3 = objc_retainAutoreleasedReturnValue(
+                                    -[NSMutableDictionary objectForKeyedSubscript:](
+                                      self->_peerDevices,
+                                      "objectForKeyedSubscript:",
+                                      identifier));
+      peripheral_2 = objc_retainAutoreleasedReturnValue(objc_msgSend(objectForKeyedSubscript_3, "peripheral"));
+      objc_release(peripheral_2);
+      objc_release(objectForKeyedSubscript_3);
+      objc_release(peripheral);
+      objc_release(objectForKeyedSubscript_2);
+      objc_release(objectForKeyedSubscript);
+      if ( peripheral_2 == id_a3 )
+      {
+        objectForKeyedSubscript_4 = objc_retainAutoreleasedReturnValue(
+                                      -[NSMutableDictionary objectForKeyedSubscript:](
+                                        self->_peerDevices,
+                                        "objectForKeyedSubscript:",
+                                        identifier));
+        connectionState = (unsigned int)objc_msgSend(objectForKeyedSubscript_4, "connectionState");
+        objc_release(objectForKeyedSubscript_4);
+        if ( connectionState == 4 )
+        {
+          if ( id_a5 )
+          {
+            n_v20 = qword_100A29E10;
+            if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_ERROR) )
+              sub_1004C9E8C(identifier, id_a5, n_v20);
+            errorWithDomain = objc_retainAutoreleasedReturnValue(
+                                +[NSError errorWithDomain:code:userInfo:](
+                                  &OBJC_CLASS___NSError,
+                                  "errorWithDomain:code:userInfo:",
+                                  CFSTR("com.apple.NearbyInteraction"),
+                                  -5882,
+                                  0));
+            -[NIServerAccessoryGATTServiceManager _peer:didFailWithError:](
+              self,
+              "_peer:didFailWithError:",
+              identifier,
+              errorWithDomain);
+            objc_release(errorWithDomain);
+          }
+          else
+          {
+            uUID = objc_retainAutoreleasedReturnValue(objc_msgSend(id_a4, "UUID"));
+            uUIDWithString = objc_retainAutoreleasedReturnValue(
+                               +[CBUUID UUIDWithString:](
+                                 &OBJC_CLASS___CBUUID,
+                                 "UUIDWithString:",
+                                 CFSTR("48fe3e40-0817-4bb2-8633-3073689c2dba")));
+            if ( ((unsigned int)objc_msgSend(uUID, "isEqual:", uUIDWithString) & 1) == 0 )
+              __assert_rtn(
+                "-[NIServerAccessoryGATTServiceManager peripheral:didDiscoverCharacte
+// [truncated: decompiler/model output too long or degenerate]
+```
+
+### Decompilation at `0x1001dacfc`
+
+```c
+void __cdecl -[NIServerAccessoryGATTServiceManager _connectToPeer:](
+        NIServerAccessoryGATTServiceManager *self,
+        SEL sel_a2,
+        id id_a3)
+{
+  id peerIdentifier; // x0
+  char *state; // x0
+  NSObject *nsobject_v7; // x20
+  void *objectForKeyedSubscript; // x20
+  void *objectForKeyedSubscript_2; // x20
+  __int64 n_v10; // x20
+  NSError *errorWithDomain; // x20
+  void *objectForKeyedSubscript_3; // x20
+  unsigned int connectionState; // w22
+  NSObject *nsobject_v14; // x20
+  void *sharedPairingAgent; // x22
+  void *retrievePairedPeers; // x20
+  id id_v17; // x0
+  __int64 n_v18; // x22
+  NSError *errorWithDomain_2; // x22
+  id id_v20; // x0
+  void *indexOfObjectPassingTest; // x23
+  NSObject *nsobject_v22; // x24
+  NSError *peerDevice; // x23
+  void *objectAtIndexedSubscript; // x23
+  void *objectForKeyedSubscript_4; // x24
+  void *objectForKeyedSubscript_5; // x23
+  void *peripheral; // x24
+  CBCentralManager *cbManager; // x24
+  void *objectForKeyedSubscript_6; // x23
+  void *peripheral_2; // x25
+  void **void_v31; // [xsp+0h] [xbp-C0h] BYREF
+  __int64 n_v32; // [xsp+8h] [xbp-B8h]
+  __int64 (__fastcall *int64fastcal_v33)(); // [xsp+10h] [xbp-B0h]
+  void *void_v34; // [xsp+18h] [xbp-A8h]
+  id id_v35; // [xsp+20h] [xbp-A0h]
+  _QWORD n_v36[4]; // [xsp+28h] [xbp-98h] BYREF
+  id id_v37; // [xsp+48h] [xbp-78h]
+  uint8_t buf[4]; // [xsp+50h] [xbp-70h] BYREF
+  id id_v39; // [xsp+54h] [xbp-6Ch]
+
+  peerIdentifier = objc_retain(id_a3);
+  dispatch_assert_queue_V2((dispatch_queue_t)self->_queue);
+  state = (char *)-[CBCentralManager state](self->_cbManager, "state");
+  if ( (unsigned __int64)(state - 2) < 3 )
+  {
+    n_v10 = qword_100A29E10;
+    if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_ERROR) )
+      sub_1004C9B68(id_a3, n_v10);
+    errorWithDomain = objc_retainAutoreleasedReturnValue(
+                        +[NSError errorWithDomain:code:userInfo:](
+                          &OBJC_CLASS___NSError,
+                          "errorWithDomain:code:userInfo:",
+                          CFSTR("com.apple.NearbyInteraction"),
+                          -10017,
+                          0));
+    -[NIServerAccessoryGATTServiceManager _peer:didFailWithError:](
+      self,
+      "_peer:didFailWithError:",
+      id_a3,
+      errorWithDomain);
+    objc_release(errorWithDomain);
+  }
+  else if ( (unsigned __int64)state >= 2 )
+  {
+    if ( state != (char *)5 )
+      __assert_rtn(
+        "-[NIServerAccessoryGATTServiceManager _connectToPeer:]",
+        "NIServerAccessoryGATTServiceManager.mm",
+        413,
+        "cbState == CBManagerStatePoweredOn");
+    objectForKeyedSubscript_3 = objc_retainAutoreleasedReturnValue(
+                                  -[NSMutableDictionary objectForKeyedSubscript:](
+                                    self->_peerDevices,
+                                    "objectForKeyedSubscript:",
+                                    id_a3));
+    connectionState = (unsigned int)objc_msgSend(objectForKeyedSubscript_3, "connectionState");
+    objc_release(objectForKeyedSubscript_3);
+    if ( connectionState == 6 )
+    {
+      nsobject_v14 = (NSObject *)qword_100A29E10;
+      if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_DEFAULT) )
+      {
+        *(_DWORD *)buf = 138412290;
+        id_v39 = id_a3;
+        _os_log_impl(
+          (void *)&_mh_execute_header,
+          nsobject_v14,
+          OS_LOG_TYPE_DEFAULT,
+          "#bt-accessory,ConnectToPeer [%@]: already finished",
+          buf,
+          0xCu);
+      }
+    }
+    else
+    {
+      sharedPairingAgent = objc_retainAutoreleasedReturnValue(-[CBCentralManager sharedPairingAgent](self->_cbManager, "sharedPairingAgent"));
+      retrievePairedPeers = objc_retainAutoreleasedReturnValue(objc_msgSend(sharedPairingAgent, "retrievePairedPeers"));
+      objc_release(sharedPairingAgent);
+      n_v36[0] = _NSConcreteStackBlock;
+      n_v36[1] = 3221225472LL;
+      n_v36[2] = sub_1001DB35C;
+      n_v36[3] = &unk_1009C90D0;
+      id_v17 = objc_retain(id_a3);
+      id_v37 = id_a3;
+      if ( objc_msgSend(retrievePairedPeers, "indexOfObjectPassingTest:", n_v36) == (void *)0x7FFFFFFFFFFFFFFFLL )
+      {
+        n_v18 = qword_100A29E10;
+        if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_ERROR) )
+          sub_1004C9B24(id_a3, n_v18);
+        errorWithDomain_2 = objc_retainAutoreleasedReturnValue(
+                              +[NSError errorWithDomain:code:userInfo:](
+                                &OBJC_CLASS___NSError,
+                                "errorWithDomain:code:userInfo:",
+                                CFSTR("com.apple.NearbyInteraction"),
+                                -5882,
+                                0));
+        -[NIServerAccessoryGATTServiceManager _peer:didFailWithError:](
+          self,
+          "_peer:didFailWithError:",
+          id_a3,
+          errorWithDomain_2);
+      }
+      else
+      {
+        errorWithDomain_2 = objc_retainAutoreleasedReturnValue(
+                              -[CBCentralManager retrieveConnectedPeripheralsWithServices:allowAll:](
+                                self->_cbManager,
+                                "retrieveConnectedPeripheralsWithServices:allowAll:",
+                                0,
+                                1));
+        void_v31 = _NSConcreteStackBlock;
+        n_v32 = 3221225472LL;
+        int64fastcal_v33 = sub_1001DB3B4;
+        void_v34 = &unk_1009C90F8;
+        id_v20 = objc_retain(id_a3);
+        id_v35 = id_a3;
+        indexOfObjectPassingTest = -[NSError indexOfObjectPassingTest:](
+                                     errorWithDomain_2,
+                                     "indexOfObjectPassingTest:",
+                                     &void_v31);
+        nsobject_v22 = (NSObject *)qword_100A29E10;
+        if ( indexOfObjectPassingTest == (void *)0x7FFFFFFFFFFFFFFFLL )
+        {
+          if ( os_log_type_enabled((os_log_t)qword_100A29E10, OS_LOG_TYPE_ERROR) )
+            sub_1004C9AE0(id_a3,
+// [truncated: decompiler/model output too long or degenerate]
+```
+
+The implementation centers on the `NIServerAccessoryGATTServiceManager` class, which acts as a state machine for managing peer connections. The `_connectToPeer:` method handles the connection flow by checking the `CBCentralManager` state before initiating a connection. If the manager is not ready, it transitions the peer to a "Waiting" state and caches the request. Once active, it manages the peripheral delegate, initiates the connection, and tracks the connection state through a dictionary of peer devices.
+
+The system also implements a `NIServerFindingServicePool` to manage service sessions. This pool uses a `std::mutex` to ensure thread-safe access when adding, removing, or replacing services associated with specific tokens. It includes diagnostic logging to detect potential race conditions during service replacement, providing clear visibility into whether a replacement is expected or potentially problematic.
+
+Additionally, the update incorporates XPC activity management, allowing the daemon to register and check in with system-wide XPC activities, likely to handle periodic maintenance or background tasks related to accessory discovery. The logic for `HaltPRRoseOnFatalError` suggests a new safety mechanism to power down or reconfigure the UWB (Ultra-Wideband) "Rose" subsystem if a fatal error occurs, ensuring regulatory compliance and system stability.
 
 ## How to trigger this feature
 
-The GATT service manager is triggered when:
-1. **Accessory Discovery**: When a nearby accessory is discovered via BLE advertising
-2. **Connection Request**: When the user initiates a connection to a discovered accessory
-3. **Background Authorization**: When the system needs to verify background authorization for persistent connections
-4. **State Changes**: When the Bluetooth central manager state changes (powered on/off)
-
-The new `NIServerAccessoryGATTServiceManager` class manages:
-- Service discovery for specific tokens
-- Listener registration and removal
-- Background authorization verification
-- Connection state transitions (discovery → connecting → connected → finished)
-- Error handling for various Bluetooth scenarios
+This feature is triggered by the `NearbyInteraction` framework when an application requests a session with a Bluetooth accessory. Specifically:
+- Initiating a connection to a peer via `NIServerAccessoryGATTServiceManager` triggers the connection state machine.
+- Adding a service listener for a peer triggers the authorization and discovery flow.
+- The system automatically triggers these flows when a peripheral is discovered or when a session is activated with specific control flags.
+- The safety shutdown mechanism (`HaltPRRoseOnFatalError`) is triggered internally by the system when a fatal error is detected in the UWB subsystem or when regulatory constraints require a power-down.
 
 ## Vulnerability Assessment
 
-**This is a SECURITY PATCH addressing potential race conditions and authorization bypass vulnerabilities.**
-
-### Old Code Vulnerabilities:
-
-1. **Race Condition in Service Pool Management**:
-   - Old code had multiple code paths that could add/remove services for the same token
-   - String evidence shows: `"FindingServicePool replace nil service for token: %{private}@. Race condition (OK)"` and `"FindingServicePool replace non-nil service for token: %{private}@. Race condition (probably not OK)"`
-   - The old implementation lacked proper synchronization when multiple threads could modify the service pool
-
-2. **Missing Background Authorization Checks**:
-   - Old code had strings like `"Device: %@. Only Nearby Accessory supports background auth"` and `"Device: %@. Check config for background auth"`
-   - This indicates the old code was checking authorization but the implementation was incomplete or had race conditions
-   - Removed strings: `"Device: %@. Another config already being checked for background auth"` and `"Device: %@. Only Nearby Accessory supports background auth"`
-
-3. **Listener Management Race Conditions**:
-   - Old code had simpler listener tracking without proper state validation
-   - New code adds explicit state tracking: `"AddServiceListener: existing listener [%@] for peer [%@]. State: %s. Result: %s. Previous listener count: %d"`
-   - This prevents duplicate listeners and ensures proper cleanup
-
-4. **Bluetooth State Validation**:
-   - Old code had less rigorous Bluetooth state checking
-   - New code validates CBManager state more thoroughly: `"wait for CBManager state update"` vs old `"Not waiting for connection - unexpected connection failure"`
-
-### New Code Mitigations:
-
-1. **Explicit Background Authorization**:
-   - New strings: `"BackgroundAuthorization: listener [%@] for peer [%@] NOT authorized"` and `"BackgroundAuthorization: listener [%@] for peer [%@] authorized"`
-   - The new code properly checks authorization before allowing background operations
-
-2. **Improved Listener State Tracking**:
-   - New code tracks listener state explicitly: `"State: %s. Result: %s. Previous listener count: %d"`
-   - This prevents race conditions where multiple listeners could be added for the same peer
-
-3. **Better Error Handling**:
-   - New code has more specific error messages: `"centralManager:didFailToConnectPeripheral [%@]: Unexpected connection failure: %@"`
-   - This helps with debugging and prevents silent failures
-
-4. **Enhanced Service Discovery**:
-   - New code has more comprehensive service discovery error handling
-   - Added: `"peripheral:didDiscoverServices [%@]: Unexpected service discovery. Error: %@"`
-
-### Potential Impact if Left Unpatched:
-
-- **Information Disclosure**: Race conditions in service pool management could allow unauthorized access to service data
-- **Denial of Service**: Improper listener cleanup could cause memory leaks or service crashes
-- **Privilege Escalation**: Missing background authorization checks could allow unauthorized background access to nearby devices
-- **Data Integrity**: Race conditions could corrupt service state or cause inconsistent behavior
+The changes appear to be a mix of functional improvements and hardening. The introduction of explicit state management for peer connections and the use of mutexes in the `FindingServicePool` mitigate potential race conditions that could have led to inconsistent states or crashes in previous versions. The addition of detailed logging for authorization and connection failures provides better observability for debugging security-sensitive authorization flows. No direct evidence of a vulnerability patch (such as a bounds check or memory safety fix) was identified; the changes are primarily architectural improvements to the accessory management subsystem.
 
 ## Evidence
 
-### New Symbols (Added in 17.1):
-- `_XPC_ACTIVITY_CHECK_IN` - XPC activity tracking
-- `_sleep` - Sleep management
-- `_xpc_activity_copy_criteria` - XPC activity criteria
-- `_xpc_activity_set_criteria` - XPC activity criteria setting
-
-### New Classes:
-- `NIServerAccessoryGATTServiceManager` - NEW: Manages GATT service discovery and listeners
-- `NIServerAccessoryGATTServiceListener` - NEW: Listener for GATT service operations
-
-### New Strings (Security-Relevant):
-- `"#bt-accessory,AddServiceListener: existing listener [%@] for peer [%@]"` - Listener management
-- `"#bt-accessory,AddServiceListener: new listener [%@] for existing peer [%@]. State: %s. Result: %s. Previous listener count: %d"` - Enhanced listener tracking
-- `"#bt-accessory,BackgroundAuthorization: listener [%@] for peer [%@] NOT authorized"` - Authorization check
-- `"#bt
+- **New Class**: `NIServerAccessoryGATTServiceManager` (and associated protocol `NIServerAccessoryGATTServiceListener`).
+- **New Symbols**: `_XPC_ACTIVITY_CHECK_IN`, `_sleep`, `_xpc_activity_copy_criteria`, `_xpc_activity_set_criteria`.
+- **Key Strings**: `#bt-accessory,AddServiceListener`, `#find-ses,FindingServicePool`, `HaltPRRoseOnFatalError`.
+- **Binary Diff**: Significant increase in `__objc_methlist` and `__objc_const` sections, reflecting the addition of the new manager class and its associated methods.
 
 ## AI Prioritisation Scoring System
 
-No actionable methods or prioritisation targets identified for this component.
+- **feature_analysis**
+  - **Tier**: TIER_2
+  - **Category**: subsystem_refactor
+  - **Reasoning**: The update introduces a new management subsystem for Bluetooth accessory interactions and improves thread safety in service handling. While it enhances reliability and observability, it does not appear to be a direct security patch for a specific vulnerability.
 

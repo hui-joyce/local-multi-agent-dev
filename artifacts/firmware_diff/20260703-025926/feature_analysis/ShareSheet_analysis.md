@@ -3,201 +3,117 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "!q"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
+- **Database annotations** — variable renames: 15 (1 AI-authored, 14 auto-generated); comments: 5 (1 AI-authored, 4 auto-generated); across 4 function(s); verified persisted in .i64: 15 named variables, 4 comments.
 - **Apple Security Notes**: matches advisory component `Share Sheet` — Apple confirms a security-relevant change here; this analysis examines the likely vulnerability patch.
 
 ## What this feature does
 
-The ShareSheet component in iOS 17.1 (21B80) introduces a new presentation blocking mechanism designed to prevent the Share Sheet from appearing when the user is in "Guest Mode". This is a security and privacy feature that restricts sharing functionality for guest users, ensuring that guest accounts cannot access or display the system-wide sharing sheet.
-
-The key changes include:
-1. **New blocking view controller**: `SHSheetPresentationBlockingViewController` and `SHSheetPresentationBlockingRootView` are added to intercept and block the Share Sheet presentation.
-2. **New blocking scene**: `SHSheetWindowScene` is introduced to handle the blocking logic within the window scene architecture.
-3. **New metadata update action**: `SHSheetMetadataUpdateAction` replaces the previous `SHSheetContentUpdateNotification` mechanism, suggesting a shift from notification-based to action-based metadata updates.
-4. **UI updates**: New strings like "SHARE_SHEET_SHARING_UNAVAILABLE_DESCRIPTION" and "SHARE_SHEET_SHARING_UNAVAILABLE_TITLE" indicate that the UI now explicitly informs users when sharing is unavailable.
-5. **Removed functionality**: Several symbols and strings related to content updates and action types have been removed, indicating a refactoring of the sharing flow.
+The Share Sheet component has been updated to support a new scene-based architecture, specifically introducing `SHSheetWindowScene` and `SHSheetMetadataUpdateAction`. This update enables more granular control over the presentation of share sheets, particularly in complex environments like "RealityLauncher" (likely related to visionOS or AR/VR integration). The changes include new UI components for blocking presentation, improved metadata handling for remote scenes, and enhanced logging for activity item resolution.
 
 ## How is it implemented
 
-The implementation involves adding new Objective-C classes that intercept the Share Sheet presentation flow. The new classes are:
+
+### Decompilation at `0x18bb46f14`
 
 ```c
-// SHSheetPresentationBlockingViewController
-// This class manages the blocking logic and creates the system close button
-- (void)_createSystemCloseButton {
-    // Creates a system-style close button for the blocking view
-}
+void __fastcall -[UIDevice(ShareSheet) setSh_hostUserInterfaceIdiom:](__int64 n_a1)
+{
+  __int64 n_v2; // x20
+  __int64 numberWithInteger; // [xsp+8h] [xbp-18h]
+  __int64 vars8; // [xsp+28h] [xbp+8h]
 
-- (void)_handleClose {
-    // Handles the close button tap, dismissing the blocking view
-}
-
-- (void)loadView {
-    // Loads the view hierarchy for the blocking controller
-}
-
-- (void)setCloseButton:(id)arg1 {
-    // Sets the close button on the view
-}
-
-- (void)didMoveToSuperview {
-    // Called when the view is added to a superview
-}
-
-- (void)updateConstraints {
-    // Updates layout constraints
-}
-
-- (void)hasAppliedConstraints {
-    // Checks if constraints have been applied
+  n_v2 = SHSheetUserInterfaceIdiomPropertyKey;
+  numberWithInteger = MEMORY[0x18D7A9C50](objc_msgSend(MEMORY[0x1E6707138], "numberWithInteger:"));
+  MEMORY[0x18D7A9D50](n_a1, n_v2, numberWithInteger, 1);
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  JUMPOUT(0x18D7A9B40LL);
 }
 ```
 
+### Decompilation at `0x18bafa5cc`
+
 ```c
-// SHSheetPresentationBlockingRootView
-// This is the root view for the blocking presentation
-- (void)loadView {
-    // Loads the view hierarchy
-}
-
-- (void)updateConstraints {
-    // Updates layout constraints
-}
-
-- (void)hasAppliedConstraints {
-    // Checks if constraints have been applied
-}
-
-- (void)setTitleLabel:(id)arg1 {
-    // Sets the title label
-}
-
-- (void)setDescriptionLabel:(id)arg1 {
-    // Sets the description label
-}
-
-- (void)setContainerView:(id)arg1 {
-    // Sets the container view
-}
-
-- (void)setHasAppliedConstraints:(BOOL)arg1 {
-    // Sets whether constraints have been applied
+double -[SHSheetContentLayoutProvider _resolvedDirectionalLayoutMargins:trailingMargin:]()
+{
+  objc_msgSend((id)MEMORY[0x18D7A9C50](objc_msgSend(MEMORY[0x1E6775E40], "currentDevice")), "userInterfaceIdiom");
+  MEMORY[0x18D7A9B70]();
+  return 0.0;
 }
 ```
 
+### Decompilation at `0x18bad3dcc`
+
 ```c
-// SHSheetMetadataUpdateAction
-// This action handles metadata updates, replacing the old notification-based approach
-- (void)initWithSerializedMetadata:(id)arg1 {
-    // Initializes with serialized metadata
-}
+__int64 __fastcall -[SHSheetRemoteSceneViewController scene:didReceiveMetadataUpdateAction:](
+        void *void_a1,
+        __int64 n_a2,
+        __int64 n_a3,
+        void *metadataAction)
+{
+  __int64 n_v6; // x0
+  __int64 n_v7; // x0
+  __int64 n_v8; // x21
+  __int64 n_v9; // x0
+  __int64 metadata; // x21
+  _WORD n_v12[8]; // [xsp+0h] [xbp-30h] BYREF
 
-- (id)metadata {
-    // Returns the metadata
-}
-
-- (id)serializedMetadata {
-    // Returns the serialized metadata
+  n_v6 = MEMORY[0x18D7A9CA0](void_a1, n_a2, n_a3);
+  n_v7 = share_sheet_log(n_v6);
+  n_v8 = MEMORY[0x18D7A9C50](n_v7);
+  n_v9 = MEMORY[0x18D7A9E20](n_v8, 0);
+  if ( (_DWORD)n_v9 )
+  {
+    n_v12[0] = 0;
+    n_v9 = MEMORY[0x18D7A97A0](
+             &dword_18BAC0000,
+             n_v8,
+             0,
+             "SHSheetRemoteSceneViewController received metadata update",
+             n_v12,
+             2);
+  }
+  MEMORY[0x18D7A9B90](n_v9);
+  metadata = MEMORY[0x18D7A9C50](objc_msgSend(metadataAction, "metadata"));
+  MEMORY[0x18D7A9B80]();
+  return MEMORY[0x18D7A9B90](objc_msgSend(void_a1, "setRemoteHeaderMetadata:", metadata));
 }
 ```
 
-```c
-// SHSheetWindowScene
-// This scene handles the window-level blocking logic
-- (void)_usesMinimumSafeAreaInsets {
-    // Checks if minimum safe area insets are used
-}
+### Decompilation at `0x18bb239b0`
 
-- (void)setFenceCompletionHandler:(id)arg1 {
-    // Sets the fence completion handler
+```c
+__int64 __fastcall _ShareSheetIsRealityLauncher(__int64 n_a1, __int64 n_a2)
+{
+  if ( _ShareSheetIsRealityLauncher_onceToken != -1 )
+    _ShareSheetIsRealityLauncher_cold_1(n_a1, n_a2);
+  return (unsigned __int8)_ShareSheetIsRealityLauncher_isRealityLauncher;
 }
 ```
 
-The blocking mechanism works by:
-1. Detecting when the user is in Guest Mode (likely through `UIDevice(ShareSheet) sh_hostUserInterfaceIdiom` or similar checks)
-2. Intercepting the Share Sheet presentation attempt
-3. Presenting the blocking view instead
-4. Showing appropriate messages like "SHARE_SHEET_SHARING_UNAVAILABLE_TITLE" and "SHARE_SHEET_SHARING_UNAVAILABLE_DESCRIPTION"
+The implementation introduces a new `SHSheetMetadataUpdateAction` class to facilitate communication between the host and the share sheet scene. The `SHSheetRemoteSceneViewController` has been updated to handle these metadata updates via the `scene:didReceiveMetadataUpdateAction:` method. When this action is received, the controller logs the event and extracts the metadata from the action object, subsequently updating the remote header metadata.
+
+Additionally, the system now includes a check for "RealityLauncher" status, which appears to be a global state used to gate specific behaviors. The UI layout logic has been refined to support custom directional margins and safe area insets, and new view controllers (`SHSheetPresentationBlockingViewController`) and root views (`SHSheetPresentationBlockingRootView`) have been added to manage the lifecycle and presentation state of the share sheet, including a system-provided close button.
 
 ## How to trigger this feature
 
-The feature is triggered when:
-1. A user attempts to share content while in Guest Mode
-2. The system detects the guest user interface idiom
-3. The Share Sheet presentation flow is intercepted by the new blocking classes
-
-The trigger conditions are likely:
-- User is authenticated as a guest user
-- User attempts to invoke the Share Sheet (e.g., by tapping a share button)
-- The system checks the user's authentication status before allowing Share Sheet presentation
+This feature is triggered when a share sheet is presented in a context that utilizes the new `SHSheetWindowScene` specification. The metadata update flow is triggered when the host application sends an `SHSheetMetadataUpdateAction` to the share sheet scene, which occurs during the lifecycle of the share sheet presentation or when the underlying activity items or metadata change.
 
 ## Vulnerability Assessment
 
-**Security-relevant change**: The diff shows the removal of `SHSheetContentUpdateNotification` and related content update mechanisms, replaced by `SHSheetMetadataUpdateAction`. Additionally, new blocking classes (`SHSheetPresentationBlockingViewController`, `SHSheetPresentationBlockingRootView`, `SHSheetWindowScene`) are added.
-
-**Patch mechanism**: The new implementation introduces a presentation blocking mechanism that prevents the Share Sheet from being displayed to guest users. The blocking view controller intercepts the presentation flow and shows an unavailable message instead.
-
-**Evidence**:
-1. **New blocking classes**: `SHSheetPresentationBlockingViewController` and `SHSheetPresentationBlockingRootView` are added in Version 2
-2. **New blocking scene**: `SHSheetWindowScene` is added
-3. **New blocking strings**: "SHARE_SHEET_SHARING_UNAVAILABLE_DESCRIPTION", "SHARE_SHEET_SHARING_UNAVAILABLE_TITLE"
-4. **Removed content update notification**: `SHSheetContentUpdateNotification` is removed
-5. **New metadata update action**: `SHSheetMetadataUpdateAction` replaces the old notification-based approach
-
-**Potential vulnerability class**: This appears to be a **privacy/access control** fix rather than a traditional memory safety vulnerability. The old implementation may have allowed guest users to access the Share Sheet, which could lead to:
-- Privacy leaks (guest users could see/share content they shouldn't have access to)
-- Access control bypass (guest users could perform actions they're not authorized for)
-
-**How the old code was exploitable**: The old `SHSheetContentUpdateNotification` mechanism may not have properly checked user authentication status before allowing Share Sheet presentation, potentially allowing guest users to access sharing functionality.
-
-**How the new code mitigates it**: The new blocking mechanism explicitly prevents Share Sheet presentation for guest users by intercepting the presentation flow and showing an unavailable message.
-
-**Impact if left unpatched**: Guest users could potentially access the Share Sheet and share content they shouldn't have access to, leading to privacy violations and potential data leaks.
+The changes appear to be architectural improvements rather than direct security patches. The introduction of `SHSheetPresentationBlockingRootView` and associated view controllers suggests a move toward more robust UI containment, which can help prevent UI-redressing or "tap-jacking" attacks by ensuring the share sheet remains in a controlled, blocking state during critical operations. The use of `%{private}@` in log strings for activity items and metadata indicates a privacy-focused hardening effort, ensuring that sensitive user data is not leaked into system logs. No evidence of memory safety fixes (like bounds checks) was found in the provided decompilation, suggesting this is a functional and privacy-oriented update.
 
 ## Evidence
 
-### New Symbols (Added in Version 2)
-- `SHSheetPresentationBlockingViewController` - New blocking view controller
-- `SHSheetPresentationBlockingRootView` - New blocking root view
-- `SHSheetWindowScene` - New blocking scene
-- `SHSheetMetadataUpdateAction` - New metadata update action (replaces old notification)
-- `__ShareSheetIsRealityLauncher` - New property for reality launcher detection
-- `SHSheetMetadataChangedAction` - New action for metadata changes
-
-### New Strings (Added in Version 2)
-- `SHARE_SHEET_SHARING_UNAVAILABLE_DESCRIPTION` - Description for unavailable sharing
-- `SHARE_SHEET_SHARING_UNAVAILABLE_TITLE` - Title for unavailable sharing
-- `SHSheetMetadataUpdateAction` - Action name
-- `SHSheetPresentationBlockingRootView` - View class name
-- `SHSheetWindowScene` - Scene class name
-
-### Removed Symbols (Removed in Version 2)
-- `SHSheetContentUpdateNotification` - Old notification-based mechanism
-- `SHSheetAction` - Old action class
-- `SHSheetMetadataChangedAction` - Old metadata action
-- `UIActivityActionGroupCell` - Old cell class
-- `UIAirDropGroupActivityCell` - Old cell class
-
-### Removed Strings (Removed in Version 2)
-- `Sharing is unavailable in Guest Mode` - Old guest mode message
-- `SHSheetContentUpdateNotification` - Old notification name
-
-### Binary Diff Analysis
-- **Size changes**: The binary size increased from 2905.4.0.0.0 to 2909.1.4.3.0, indicating new code was added
-- **Symbol count**: Increased from 383 to 383 (same count, but different symbols)
-- **String count**: Increased from 239 to 239 (same count, but different strings)
-- **Framework changes**: Removed `CoreFoundation` and `CoreGraphics` frameworks, removed `libAXSafeCategoryBundle.dylib`
-
-### Key Implementation Details
-1. **Presentation blocking**: New classes intercept the Share Sheet presentation flow
-2. **User authentication check**: New `__ShareSheetIsRealityLauncher` property suggests reality launcher detection
-3. **Metadata update mechanism**: Changed from notification-based to action-based
-4. **UI feedback**: New strings provide clear feedback when sharing is unavailable
+- **New Classes**: `SHSheetMetadataUpdateAction`, `SHSheetPresentationBlockingRootView`, `SHSheetWindowScene`.
+- **New Methods**: `-[SHSheetRemoteSceneViewController scene:didReceiveMetadataUpdateAction:]`, `-[UIDevice(ShareSheet) setSh_hostUserInterfaceIdiom:]`.
+- **Logging Changes**: Updated log strings now use `%{private}@` for activity items and metadata, replacing previous `%{public}@` or less specific formats.
+- **Binary Diff**: Significant addition of symbols related to `SHSheetPresentationBlocking` and `SHSheetMetadataUpdateAction`.
 
 ## AI Prioritisation Scoring System
 
-- **Static binary diff analysis with decompiled code review**
-  - **Tier**: TIER_1
-  - **Category**: Security/Privacy - Access Control
-  - **Reasoning**: This change implements a critical security/privacy fix by preventing guest users from accessing the Share Sheet. The diff shows the addition of new blocking classes (SHSheetPresentationBlockingViewController, SHSheetPresentationBlockingRootView, SHSheetWindowScene) and the removal of the old content update notification mechanism. This prevents potential privacy leaks where guest users could access sharing functionality they shouldn't have. The change is directly related to Apple's security notes naming 'Share Sheet' as changed, indicating this is a deliberate security hardening measure. The implementation uses a presentation blocking mechanism that intercepts the Share Sheet flow and shows an unavailable message for guest users.
+- **feature_analysis**
+  - **Tier**: TIER_2
+  - **Category**: UI/Privacy
+  - **Reasoning**: The changes represent a significant architectural update to the Share Sheet subsystem, including new scene-based presentation logic and improved privacy controls in logging, but do not appear to be direct security vulnerability patches.
 
