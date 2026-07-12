@@ -83,19 +83,6 @@ def build_vulnerability_detection_prompt(user_input: str, analysis_output: str =
     )
     return body
 
-def build_firmware_categorization_prompt(user_input: str, retrieved_methods: str = "") -> str:
-    method_block = f"Diff Evidence to Analyze:\n{retrieved_methods}\n\n" if retrieved_methods else ""
-    _, body = render_prompt(
-        "reverse_engineering/firmware_categorization.md",
-        method_block=method_block,
-        user_input=user_input,
-    )
-    return _prepend_tooling_block(
-        user_input=user_input,
-        task_focus="Analyze the provided diff evidence and prioritize the component strictly into JSON format.",
-        body=body,
-    )
-
 def _format_ground_truth_decompilation(
     decompilations: list[dict] | None, per_cap: int = 3000
 ) -> str:
