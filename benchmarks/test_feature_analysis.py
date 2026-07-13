@@ -20,8 +20,8 @@ from langgraph_orchestration.graphs.reverse_engineering import (
 from langgraph_orchestration.schemas.state import AgentState
 
 # REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
-REPORT_PATH = Path("artifacts/firmware_diff/20260703-025926/report.json")
-MD_REPORT_PATH = Path("artifacts/firmware_diff/20260703-025926/diff/17_0_3_21A360_vs_17_1_21B80/README.md")
+REPORT_PATH = Path("artifacts/firmware_diff/20260712-141626/report.json")
+MD_REPORT_PATH = Path("artifacts/firmware_diff/20260712-141626/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
 @dataclass
 class FeatureAnalysisCase:
     case_id: str
@@ -126,7 +126,7 @@ def main() -> None:
     if not case.report_path.exists():
         raise FileNotFoundError(f"Missing diff report: {case.report_path}")
 
-    factory = GeminiAgentFactory(model_name="gemini-3.1-flash-lite")
+    factory = GeminiAgentFactory(model_name="gemini-3.1-pro-preview")
     factory.ensure_loaded()
     graph = build_reverse_engineering_graph(factory=factory)
     result = run_case(graph, case)

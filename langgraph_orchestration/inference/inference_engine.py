@@ -279,7 +279,7 @@ class GeminiInferenceEngine:
         if not self.api_key:
             raise RuntimeError("GEMINI_API_KEY environment variable is not set in .env")
             
-        self.model_name = "gemini-3.1-flash-lite"
+        self.model_name = "gemini-3.1-pro-preview"
 
     def generate(
         self,

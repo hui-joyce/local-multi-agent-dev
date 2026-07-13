@@ -1924,7 +1924,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
         try:
             output = engine.generate(
                 chat_prompt,
-                config=GenerationConfig(max_tokens=3000, temperature=0.0),
+                config=GenerationConfig(max_tokens=8192, temperature=0.0),
                 stream=False,
             )
         except Exception as gen_err:
@@ -2017,7 +2017,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             try:
                 output = engine.generate(
                     chat_prompt_retry,
-                    config=GenerationConfig(max_tokens=3000, temperature=0.0),
+                    config=GenerationConfig(max_tokens=8192, temperature=0.0),
                     stream=False,
                 )
                 parsed = parse_agent_output(output)
@@ -2052,7 +2052,7 @@ def build_reverse_engineering_graph(factory: MLXAgentFactory = None):
             try:
                 alt = engine.generate(
                     engine.build_prompt(user_input=fb_prompt, system_prompt="", enable_thinking=False),
-                    config=GenerationConfig(max_tokens=3000, temperature=0.0),
+                    config=GenerationConfig(max_tokens=8192, temperature=0.0),
                     stream=False,
                 )
                 if ("## What this feature does" in alt) and ("<think>" not in alt) and ("</think>" not in alt):

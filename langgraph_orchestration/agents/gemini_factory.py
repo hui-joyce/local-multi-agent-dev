@@ -11,7 +11,7 @@ from langgraph_orchestration.agents.mlx_agents import (
 from langgraph_orchestration.agents.supervisor import SupervisorAgent
 
 class GeminiAgentFactory:
-    def __init__(self, model_name: str = "gemini-3.1-flash-lite"):
+    def __init__(self, model_name: str = "gemini-3.1-pro-preview"):
         self.model_name = model_name
         self.inference_engine: Optional[GeminiInferenceEngine] = None
         self._model_loaded = False

@@ -1,0 +1,329 @@
+[dyld_diff]
+command: ipsw dyld info --dylibs --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone18,1_26.4.1_23E254_Restore/23E254__iPhone18,1/dyld_shared_cache_arm64e /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone18,1_26.4.2_23E261_Restore/23E261__iPhone18,1/dyld_shared_cache_arm64e
+parsed_item_count: 60
+parsed_items:
+/System/Library/Accounts/Notification/IMAccountNotificationPlugin.bundle/IMAccountNotificationPlugin
+/System/Library/DataClassMigrators/MessagesDataMigrator.migrator/MessagesDataMigrator
+/System/Library/Frameworks/Messages.framework/Messages
+/System/Library/Messages/PlugIns/FaceTime.imservice/FaceTime
+/System/Library/NanoTimeKit/ComplicationBundles/MessagesComplication.bundle/MessagesComplication
+/System/Library/PrivateFrameworks/ActionPredictionHeuristics.framework/ActionPredictionHeuristics
+/System/Library/PrivateFrameworks/ActionPredictionHeuristicsInternal.framework/ActionPredictionHeuristicsInternal
+/System/Library/PrivateFrameworks/AppNotificationsLoggingClient.framework/AppNotificationsLoggingClient
+/System/Library/PrivateFrameworks/AppPredictionClient.framework/AppPredictionClient
+/System/Library/PrivateFrameworks/AppPredictionFoundation.framework/AppPredictionFoundation
+/System/Library/PrivateFrameworks/AppPredictionInternal.framework/AppPredictionInternal
+/System/Library/PrivateFrameworks/AppPredictionToolsInternal.framework/AppPredictionToolsInternal
+/System/Library/PrivateFrameworks/AppPredictionUI.framework/AppPredictionUI
+/System/Library/PrivateFrameworks/AppPredictionUIFoundation.framework/AppPredictionUIFoundation
+/System/Library/PrivateFrameworks/AppPredictionUIWidget.framework/AppPredictionUIWidget
+/System/Library/PrivateFrameworks/BubbleKit.framework/BubbleKit
+/System/Library/PrivateFrameworks/ChatKit.framework/ChatKit
+/System/Library/PrivateFrameworks/CommunicationDetails.framework/CommunicationDetails
+/System/Library/PrivateFrameworks/ContextualSuggestionClient.framework/ContextualSuggestionClient
+/System/Library/PrivateFrameworks/HeroDataClient.framework/HeroDataClient
+/System/Library/PrivateFrameworks/IMAssistantCore.framework/IMAssistantCore
+/System/Library/PrivateFrameworks/IMCore.framework/IMCore
+/System/Library/PrivateFrameworks/IMCorePipeline.framework/IMCorePipeline
+/System/Library/PrivateFrameworks/IMDMessageServices.framework/IMDMessageServices
+/System/Library/PrivateFrameworks/IMDPersistence.framework/IMDPersistence
+/System/Library/PrivateFrameworks/IMDaemonCore.framework/IMDaemonCore
+/System/Library/PrivateFrameworks/IMRCSTransfer.framework/IMRCSTransfer
+/System/Library/PrivateFrameworks/IMSharedUI.framework/IMSharedUI
+/System/Library/PrivateFrameworks/IMSharedUtilities.framework/IMSharedUtilities
+/System/Library/PrivateFrameworks/IMTranscoderAgent.framework/IMTranscoderAgent
+/System/Library/PrivateFrameworks/IMTranscoding.framework/IMTranscoding
+/System/Library/PrivateFrameworks/IMTransferAgent.framework/IMTransferAgent
+/System/Library/PrivateFrameworks/IMTransferAgentClient.framework/IMTransferAgentClient
+/System/Library/PrivateFrameworks/MMCSServices.framework/MMCSServices
+/System/Library/PrivateFrameworks/MessagesCloudSync.framework/MessagesCloudSync
+/System/Library/PrivateFrameworks/MessagesSettingsUI.framework/MessagesSettingsUI
+/System/Library/PrivateFrameworks/MessagesSupport.framework/MessagesSupport
+/System/Library/PrivateFrameworks/PaperBoardUI.framework/PaperBoardUI
+/System/Library/PrivateFrameworks/PosterBoard.framework/PosterBoard
+/System/Library/PrivateFrameworks/PosterBoardServices.framework/PosterBoardServices
+/System/Library/PrivateFrameworks/PosterBoardUI.framework/PosterBoardUI
+/System/Library/PrivateFrameworks/PosterBoardUIServices.framework/PosterBoardUIServices
+/System/Library/PrivateFrameworks/PosterFoundation.framework/PosterFoundation
+/System/Library/PrivateFrameworks/PosterFuturesKit.framework/PosterFuturesKit
+/System/Library/PrivateFrameworks/PosterKit.framework/PosterKit
+/System/Library/PrivateFrameworks/PosterLegibilityKit.framework/PosterLegibilityKit
+/System/Library/PrivateFrameworks/PosterModel.framework/PosterModel
+/System/Library/PrivateFrameworks/PosterPlatformSupport.framework/PosterPlatformSupport
+/System/Library/PrivateFrameworks/PosterUIFoundation.framework/PosterUIFoundation
+/System/Library/PrivateFrameworks/ProactiveBlendingLayer_iOS.framework/ProactiveBlendingLayer_iOS
+/System/Library/PrivateFrameworks/ProactiveCDNDownloader.framework/ProactiveCDNDownloader
+/System/Library/PrivateFrameworks/ProactiveContextClient.framework/ProactiveContextClient
+/System/Library/PrivateFrameworks/ProactiveMagicalMoments.framework/ProactiveMagicalMoments
+/System/Library/PrivateFrameworks/ProactivePredictionClient.framework/ProactivePredictionClient
+/System/Library/PrivateFrameworks/ProactivePredictionFoundation.framework/ProactivePredictionFoundation
+/System/Library/PrivateFrameworks/ProactiveSuggestionClientModel.framework/ProactiveSuggestionClientModel
+/System/Library/PrivateFrameworks/VisualActionPrediction.framework/VisualActionPrediction
+/System/Library/PrivateFrameworks/VisualActionPredictionCore.framework/VisualActionPredictionCore
+/System/Library/PrivateFrameworks/VisualActionPredictionSupport.framework/VisualActionPredictionSupport
+/System/Library/PrivateFrameworks/iMessageApps.framework/iMessageApps
+stdout:
+/System/Library/Accounts/Notification/GameCenterAccountNotificationPlugin.bundle/GameCenterAccountNotificationPlugin	(820.4.21.2.3)
+ /System/Library/Accounts/Notification/HealthKitAccountNotificationPlugin.bundle/HealthKitAccountNotificationPlugin	(6200.5.85.2.2)
+ /System/Library/Accounts/Notification/IDSAccountNotificationPlugin.bundle/IDSAccountNotificationPlugin	(1969.500.91.2.2)
+-/System/Library/Accounts/Notification/IMAccountNotificationPlugin.bundle/IMAccountNotificationPlugin	(1450.500.221.2.9)
++/System/Library/Accounts/Notification/IMAccountNotificationPlugin.bundle/IMAccountNotificationPlugin	(1450.500.221.2.14)
+ /System/Library/Accounts/Notification/INDAccountNotificationPlugin.bundle/INDAccountNotificationPlugin	(301.23.4.7.0)
+ /System/Library/Accounts/Notification/KeychainSyncAccountNotification.bundle/KeychainSyncAccountNotification	(61901.102.2.0.0)
+ /System/Library/Accounts/Notification/LockdownModeAccountNotificationPlugin.bundle/LockdownModeAccountNotificationPlugin	(80.100.8.0.0)
+
+ /System/Library/CoreServices/RawCamera.bundle/RawCamera	(1756.102.2.0.0)
+ /System/Library/DataClassMigrators/DAAccount.migrator/DAAccount	(2691.4.6.0.0)
+ /System/Library/DataClassMigrators/FaceTimeMigrator.migrator/FaceTimeMigrator	(1969.500.91.2.2)
+-/System/Library/DataClassMigrators/MessagesDataMigrator.migrator/MessagesDataMigrator	(1450.500.221.2.9)
++/System/Library/DataClassMigrators/MessagesDataMigrator.migrator/MessagesDataMigrator	(1450.500.221.2.14)
+ /System/Library/DigitalSeparation/SharingSources/PasswordsDigitalSeparation.bundle/PasswordsDigitalSeparation	(7624.1.16.10.6)
+ /System/Library/Extensions/AGXGPURawCounterBundle.bundle/AGXGPURawCounterBundle	(350.37.0.0.0)
+ /System/Library/Extensions/AGXMetalG18P.bundle/AGXMetalG18P	(350.37.0.0.0)
+
+ /System/Library/Frameworks/MediaToolbox.framework/MediaToolbox	(3305.24.1.2.0)
+ /System/Library/Frameworks/MediaToolbox.framework/Support/libSTS-N.dylib	(1556.528.0.0.0)
+ /System/Library/Frameworks/MessageUI.framework/MessageUI	(3864.500.181.2.3)
+-/System/Library/Frameworks/Messages.framework/Messages	(1450.500.221.2.9)
++/System/Library/Frameworks/Messages.framework/Messages	(1450.500.221.2.14)
+ /System/Library/Frameworks/Metal.framework/Metal	(372.14.0.0.0)
+ /System/Library/Frameworks/MetalFX.framework/MetalFX	(31.8.0.0.0)
+ /System/Library/Frameworks/MetalKit.framework/MetalKit	(173.7.0.0.0)
+
+ /System/Library/Health/Plugins/RespiratoryHealthDaemonPlugin.bundle/RespiratoryHealthDaemonPlugin	(6200.5.85.2.2)
+ /System/Library/Health/Plugins/SleepHealthDaemonPlugin.bundle/SleepHealthDaemonPlugin	(6200.5.85.2.2)
+ /System/Library/MediaCapture/H16ISP.mediacapture	(5.408.0.0.0)
+-/System/Library/Messages/PlugIns/FaceTime.imservice/FaceTime	(1450.500.221.2.9)
++/System/Library/Messages/PlugIns/FaceTime.imservice/FaceTime	(1450.500.221.2.14)
+ /System/Library/NanoPreferenceBundles/General/AccessibilitySettings.bundle/AccessibilitySettings	(3005.24.0.0.0)
+-/System/Library/NanoTimeKit/ComplicationBundles/MessagesComplication.bundle/MessagesComplication	(1450.500.221.2.9)
++/System/Library/NanoTimeKit/ComplicationBundles/MessagesComplication.bundle/MessagesComplication	(1450.500.221.2.14)
+ /System/Library/NanoTimeKit/ComplicationBundles/NanoCompassComplications.bundle/NanoCompassComplications	(676.5.6.0.0)
+ /System/Library/NanoTimeKit/ComplicationBundles/NanoMenstrualCyclesComplication.bundle/NanoMenstrualCyclesComplication	(6200.5.85.2.2)
+ /System/Library/NanoTimeKit/ComplicationBundles/NanoSleepComplication.bundle/NanoSleepComplication	(6200.5.85.2.2)
+
+ /System/Library/PrivateFrameworks/ActionButtonSelector.framework/ActionButtonSelector	(58.4.1.0.0)
+ /System/Library/PrivateFrameworks/ActionKit.framework/ActionKit	(4528.0.4.3.0)
+ /System/Library/PrivateFrameworks/ActionKitUI.framework/ActionKitUI	(4528.0.4.3.0)
+-/System/Library/PrivateFrameworks/ActionPredictionHeuristics.framework/ActionPredictionHeuristics	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/ActionPredictionHeuristicsInternal.framework/ActionPredictionHeuristicsInternal	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/ActionPredictionHeuristics.framework/ActionPredictionHeuristics	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/ActionPredictionHeuristicsInternal.framework/ActionPredictionHeuristicsInternal	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/ActivityAchievements.framework/ActivityAchievements	(2026.4.11.0.0)
+ /System/Library/PrivateFrameworks/ActivityAchievementsDaemon.framework/ActivityAchievementsDaemon	(2026.4.11.0.0)
+ /System/Library/PrivateFrameworks/ActivityAchievementsUI.framework/ActivityAchievementsUI	(2026.4.11.0.0)
+
+ /System/Library/PrivateFrameworks/AppIntentsIndex.framework/AppIntentsIndex	(300.4.48.2.101)
+ /System/Library/PrivateFrameworks/AppIntentsServices.framework/AppIntentsServices	(40.4.45.0.0)
+ /System/Library/PrivateFrameworks/AppIntentsTypeSupport.framework/AppIntentsTypeSupport	(300.4.48.2.101)
+-/System/Library/PrivateFrameworks/AppNotificationsLoggingClient.framework/AppNotificationsLoggingClient	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/AppNotificationsLoggingClient.framework/AppNotificationsLoggingClient	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/AppPlaceholderSync.framework/AppPlaceholderSync	(52.1.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionClient.framework/AppPredictionClient	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionFoundation.framework/AppPredictionFoundation	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionInternal.framework/AppPredictionInternal	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionToolsInternal.framework/AppPredictionToolsInternal	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionUI.framework/AppPredictionUI	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionUIFoundation.framework/AppPredictionUIFoundation	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/AppPredictionUIWidget.framework/AppPredictionUIWidget	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/AppPredictionClient.framework/AppPredictionClient	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/AppPredictionFoundation.framework/AppPredictionFoundation	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/AppPredictionInternal.framework/AppPredictionInternal	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/AppPredictionToolsInternal.framework/AppPredictionToolsInternal	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/AppPredictionUI.framework/AppPredictionUI	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/AppPredictionUIFoundation.framework/AppPredictionUIFoundation	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/AppPredictionUIWidget.framework/AppPredictionUIWidget	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/AppProtection.framework/AppProtection	(46.4.3.0.0)
+ /System/Library/PrivateFrameworks/AppProtectionDaemon.framework/AppProtectionDaemon	(46.4.3.0.0)
+ /System/Library/PrivateFrameworks/AppProtectionUI.framework/AppProtectionUI	(46.4.3.0.0)
+
+ /System/Library/PrivateFrameworks/BrookDataCollection.framework/BrookDataCollection	(248.0.0.0.0)
+ /System/Library/PrivateFrameworks/BrookServices.framework/BrookServices	(248.0.0.0.0)
+ /System/Library/PrivateFrameworks/BrowserSupportKit.framework/BrowserSupportKit	(624.1.16.10.6)
+-/System/Library/PrivateFrameworks/BubbleKit.framework/BubbleKit	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/BubbleKit.framework/BubbleKit	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/BulletinBoard.framework/BulletinBoard	(924.4.6.0.0)
+ /System/Library/PrivateFrameworks/BulletinDistributorCompanion.framework/BulletinDistributorCompanion	(381.4.9.0.0)
+ /System/Library/PrivateFrameworks/BusinessChatService.framework/BusinessChatService	(30114.34.9.10.6)
+
+ /System/Library/PrivateFrameworks/CertInfo.framework/CertInfo	(2052.100.2.0.0)
+ /System/Library/PrivateFrameworks/CertUI.framework/CertUI	(2052.100.2.0.0)
+ /System/Library/PrivateFrameworks/ChassisTriageXPCAPI.framework/ChassisTriageXPCAPI	(8.0.0.0.0)
+-/System/Library/PrivateFrameworks/ChatKit.framework/ChatKit	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/ChatKit.framework/ChatKit	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/CheckerBoardServices.framework/CheckerBoardServices	(249.100.2.0.0)
+ /System/Library/PrivateFrameworks/Chirp.framework/Chirp	(324.100.35.0.0)
+ /System/Library/PrivateFrameworks/ChronoCore.framework/ChronoCore	(664.4.42.100.0)
+
+ /System/Library/PrivateFrameworks/CommandAndControlUI.framework/CommandAndControlUI	(148.6.0.0.0)
+ /System/Library/PrivateFrameworks/CommonAuth.framework/CommonAuth	(710.100.4.0.0)
+ /System/Library/PrivateFrameworks/CommonUtilities.framework/CommonUtilities	(297.500.1.0.0)
+-/System/Library/PrivateFrameworks/CommunicationDetails.framework/CommunicationDetails	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/CommunicationDetails.framework/CommunicationDetails	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/CommunicationSafetySettingsUI.framework/CommunicationSafetySettingsUI	(34.4.1.0.0)
+ /System/Library/PrivateFrameworks/CommunicationTrust.framework/CommunicationTrust	(106.500.211.2.12)
+ /System/Library/PrivateFrameworks/CommunicationsFilter.framework/CommunicationsFilter	(181.500.61.2.1)
+
+ /System/Library/PrivateFrameworks/ContextKitExtraction.framework/ContextKitExtraction	(302.0.0.0.0)
+ /System/Library/PrivateFrameworks/ContextKitPrediction.framework/ContextKitPrediction	(302.0.0.0.0)
+ /System/Library/PrivateFrameworks/ContextSync.framework/ContextSync	(209.15.0.3.0)
+-/System/Library/PrivateFrameworks/ContextualSuggestionClient.framework/ContextualSuggestionClient	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/ContextualSuggestionClient.framework/ContextualSuggestionClient	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/ContextualUnderstanding.framework/ContextualUnderstanding	(165.6.3.0.0)
+ /System/Library/PrivateFrameworks/ContinuitySing.framework/ContinuitySing	(665.100.10.0.0)
+ /System/Library/PrivateFrameworks/ContinuousDialogManagerService.framework/ContinuousDialogManagerService	(3520.38.1.0.0)
+
+ /System/Library/PrivateFrameworks/HeartRhythmUI.framework/HeartRhythmUI	(6200.5.85.2.2)
+ /System/Library/PrivateFrameworks/Heimdal.framework/Heimdal	(710.100.4.0.0)
+ /System/Library/PrivateFrameworks/HelpKit.framework/HelpKit	(198.4.1.0.0)
+-/System/Library/PrivateFrameworks/HeroDataClient.framework/HeroDataClient	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/HeroDataClient.framework/HeroDataClient	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/Home.framework/Home	(1166.5.10.1.1)
+ /System/Library/PrivateFrameworks/HomeAI.framework/HomeAI	(359.0.0.0.0)
+ /System/Library/PrivateFrameworks/HomeAccessoryControlUI.framework/HomeAccessoryControlUI	(1166.5.10.1.1)
+
+ /System/Library/PrivateFrameworks/IDSHashPersistence.framework/IDSHashPersistence	(1969.500.91.2.2)
+ /System/Library/PrivateFrameworks/IDSKVStore.framework/IDSKVStore	(1969.500.91.2.2)
+ /System/Library/PrivateFrameworks/IMAVCore.framework/IMAVCore	(691.500.21.0.0)
+-/System/Library/PrivateFrameworks/IMAssistantCore.framework/IMAssistantCore	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMCore.framework/IMCore	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMCorePipeline.framework/IMCorePipeline	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMDMessageServices.framework/IMDMessageServices	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMDPersistence.framework/IMDPersistence	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMDaemonCore.framework/IMDaemonCore	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/IMAssistantCore.framework/IMAssistantCore	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMCore.framework/IMCore	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMCorePipeline.framework/IMCorePipeline	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMDMessageServices.framework/IMDMessageServices	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMDPersistence.framework/IMDPersistence	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMDaemonCore.framework/IMDaemonCore	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/IMFoundation.framework/IMFoundation	(1121.500.41.0.0)
+-/System/Library/PrivateFrameworks/IMRCSTransfer.framework/IMRCSTransfer	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMSharedUI.framework/IMSharedUI	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMSharedUtilities.framework/IMSharedUtilities	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMTranscoderAgent.framework/IMTranscoderAgent	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMTranscoding.framework/IMTranscoding	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMTransferAgent.framework/IMTransferAgent	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/IMTransferAgentClient.framework/IMTransferAgentClient	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/IMRCSTransfer.framework/IMRCSTransfer	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMSharedUI.framework/IMSharedUI	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMSharedUtilities.framework/IMSharedUtilities	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMTranscoderAgent.framework/IMTranscoderAgent	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMTranscoding.framework/IMTranscoding	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMTransferAgent.framework/IMTransferAgent	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/IMTransferAgentClient.framework/IMTransferAgentClient	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/IMTransferServices.framework/IMTransferServices	(1121.500.41.0.0)
+ /System/Library/PrivateFrameworks/IO80211.framework/IO80211	(1550.33.0.0.0)
+ /System/Library/PrivateFrameworks/IOAccelMemoryInfo.framework/IOAccelMemoryInfo	(487.4.3.0.0)
+
+ /System/Library/PrivateFrameworks/MLModelSpecification.framework/MLModelSpecification	(107.0.0.0.0)
+ /System/Library/PrivateFrameworks/MLRuntime.framework/MLRuntime	(111.1.0.0.0)
+ /System/Library/PrivateFrameworks/MMCS.framework/MMCS	(2300.120.0.0.0)
+-/System/Library/PrivateFrameworks/MMCSServices.framework/MMCSServices	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/MMCSServices.framework/MMCSServices	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/MOVStreamIO.framework/MOVStreamIO	(3.36.0.0.0)
+ /System/Library/PrivateFrameworks/MPUFoundation.framework/MPUFoundation	(4025.100.2.0.0)
+ /System/Library/PrivateFrameworks/MSGExternalSync.framework/MSGExternalSync	(101.0.24.0.0)
+
+ /System/Library/PrivateFrameworks/MessageSecurity.framework/MessageSecurity	(195.100.77.0.0)
+ /System/Library/PrivateFrameworks/MessageSupport.framework/MessageSupport	(3864.500.181.2.3)
+ /System/Library/PrivateFrameworks/MessagesBlastDoorSupport.framework/MessagesBlastDoorSupport	(295.500.201.2.1)
+-/System/Library/PrivateFrameworks/MessagesCloudSync.framework/MessagesCloudSync	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/MessagesSettingsUI.framework/MessagesSettingsUI	(1450.500.221.2.9)
+-/System/Library/PrivateFrameworks/MessagesSupport.framework/MessagesSupport	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/MessagesCloudSync.framework/MessagesCloudSync	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/MessagesSettingsUI.framework/MessagesSettingsUI	(1450.500.221.2.14)
++/System/Library/PrivateFrameworks/MessagesSupport.framework/MessagesSupport	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/MetadataUtilities.framework/MetadataUtilities	(2418.4.13.104.0)
+ /System/Library/PrivateFrameworks/MetalTools.framework/MetalTools	(372.14.0.0.0)
+ /System/Library/PrivateFrameworks/MetricKitCore.framework/MetricKitCore	(297.102.1.0.0)
+
+ /System/Library/PrivateFrameworks/PairedUnlock.framework/PairedUnlock	(184.4.1.0.0)
+ /System/Library/PrivateFrameworks/PairingProximity.framework/PairingProximity	(1310.11.0.0.0)
+ /System/Library/PrivateFrameworks/PanicHelper.framework/PanicHelper	(6.100.8.0.0)
+-/System/Library/PrivateFrameworks/PaperBoardUI.framework/PaperBoardUI	(304.4.14.101.0)
++/System/Library/PrivateFrameworks/PaperBoardUI.framework/PaperBoardUI	(304.4.14.102.0)
+ /System/Library/PrivateFrameworks/ParavirtualizedANE.framework/ParavirtualizedANE	(380.502.0.0.0)
+ /System/Library/PrivateFrameworks/ParsecModel.framework/ParsecModel	(3520.80.3.0.0)
+ /System/Library/PrivateFrameworks/ParsecSubscriptionServiceSupport.framework/ParsecSubscriptionServiceSupport	(3520.80.3.0.0)
+
+ /System/Library/PrivateFrameworks/Portrait.framework/Portrait	(492.100.3.0.0)
+ /System/Library/PrivateFrameworks/PortraitCore.framework/PortraitCore	(492.100.3.0.0)
+ /System/Library/PrivateFrameworks/PostSiriEngagement.framework/PostSiriEngagement	(3520.39.1.0.0)
+-/System/Library/PrivateFrameworks/PosterBoard.framework/PosterBoard	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterBoardServices.framework/PosterBoardServices	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterBoardUI.framework/PosterBoardUI	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterBoardUIServices.framework/PosterBoardUIServices	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterFoundation.framework/PosterFoundation	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterFuturesKit.framework/PosterFuturesKit	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterKit.framework/PosterKit	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterLegibilityKit.framework/PosterLegibilityKit	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterModel.framework/PosterModel	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterPlatformSupport.framework/PosterPlatformSupport	(304.4.14.101.0)
+-/System/Library/PrivateFrameworks/PosterUIFoundation.framework/PosterUIFoundation	(304.4.14.101.0)
++/System/Library/PrivateFrameworks/PosterBoard.framework/PosterBoard	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterBoardServices.framework/PosterBoardServices	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterBoardUI.framework/PosterBoardUI	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterBoardUIServices.framework/PosterBoardUIServices	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterFoundation.framework/PosterFoundation	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterFuturesKit.framework/PosterFuturesKit	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterKit.framework/PosterKit	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterLegibilityKit.framework/PosterLegibilityKit	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterModel.framework/PosterModel	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterPlatformSupport.framework/PosterPlatformSupport	(304.4.14.102.0)
++/System/Library/PrivateFrameworks/PosterUIFoundation.framework/PosterUIFoundation	(304.4.14.102.0)
+ /System/Library/PrivateFrameworks/PowerExceptions_ClientFramework.framework/PowerExceptions_ClientFramework	(4.100.50.0.0)
+ /System/Library/PrivateFrameworks/PowerExperience.framework/PowerExperience	(136.100.13.0.0)
+ /System/Library/PrivateFrameworks/PowerLog.framework/PowerLog	(3031.102.1.0.0)
+
+ /System/Library/PrivateFrameworks/PrivateSearchProtocols.framework/PrivateSearchProtocols	(4.0.0.0.0)
+ /System/Library/PrivateFrameworks/ProDisplayLibrary.framework/ProDisplayLibrary	(10.5.1.0.0)
+ /System/Library/PrivateFrameworks/ProVideo.framework/ProVideo	(610.0.1.0.0)
+-/System/Library/PrivateFrameworks/ProactiveBlendingLayer_iOS.framework/ProactiveBlendingLayer_iOS	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/ProactiveCDNDownloader.framework/ProactiveCDNDownloader	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/ProactiveContextClient.framework/ProactiveContextClient	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/ProactiveBlendingLayer_iOS.framework/ProactiveBlendingLayer_iOS	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/ProactiveCDNDownloader.framework/ProactiveCDNDownloader	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/ProactiveContextClient.framework/ProactiveContextClient	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/ProactiveDaemonSupport.framework/ProactiveDaemonSupport	(3520.68.1.0.0)
+ /System/Library/PrivateFrameworks/ProactiveEventTracker.framework/ProactiveEventTracker	(418.1.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveExperiments.framework/ProactiveExperiments	(1311.7.0.0.0)
+
+ /System/Library/PrivateFrameworks/ProactiveInputPredictions.framework/ProactiveInputPredictions	(1311.7.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveInputPredictionsInternals.framework/ProactiveInputPredictionsInternals	(1311.7.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveML.framework/ProactiveML	(1311.7.0.0.0)
+-/System/Library/PrivateFrameworks/ProactiveMagicalMoments.framework/ProactiveMagicalMoments	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/ProactivePredictionClient.framework/ProactivePredictionClient	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/ProactivePredictionFoundation.framework/ProactivePredictionFoundation	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/ProactiveSuggestionClientModel.framework/ProactiveSuggestionClientModel	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/ProactiveMagicalMoments.framework/ProactiveMagicalMoments	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/ProactivePredictionClient.framework/ProactivePredictionClient	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/ProactivePredictionFoundation.framework/ProactivePredictionFoundation	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/ProactiveSuggestionClientModel.framework/ProactiveSuggestionClientModel	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/ProactiveSummarization.framework/ProactiveSummarization	(1311.7.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveSummarizationClient.framework/ProactiveSummarizationClient	(1311.7.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveSupport.framework/ProactiveSupport	(418.1.0.0.0)
+
+ /System/Library/PrivateFrameworks/VisionHWAccelerationServices.framework/VisionHWAccelerationServices	(4.3.7.0.0)
+ /System/Library/PrivateFrameworks/VisionKitCore.framework/VisionKitCore	(324.1.0.0.0)
+ /System/Library/PrivateFrameworks/Vista.framework/Vista	(44.100.12.0.0)
+-/System/Library/PrivateFrameworks/VisualActionPrediction.framework/VisualActionPrediction	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/VisualActionPredictionCore.framework/VisualActionPredictionCore	(627.11.0.0.0)
+-/System/Library/PrivateFrameworks/VisualActionPredictionSupport.framework/VisualActionPredictionSupport	(627.11.0.0.0)
++/System/Library/PrivateFrameworks/VisualActionPrediction.framework/VisualActionPrediction	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/VisualActionPredictionCore.framework/VisualActionPredictionCore	(627.11.0.1.0)
++/System/Library/PrivateFrameworks/VisualActionPredictionSupport.framework/VisualActionPredictionSupport	(627.11.0.1.0)
+ /System/Library/PrivateFrameworks/VisualAlert.framework/VisualAlert	(3191.28.0.0.0)
+ /System/Library/PrivateFrameworks/VisualGeneration.framework/VisualGeneration	(92.13.4.0.0)
+ /System/Library/PrivateFrameworks/VisualIntelligenceCore.framework/VisualIntelligenceCore	(114.12.0.0.0)
+
+ /System/Library/PrivateFrameworks/iCloudWebData.framework/iCloudWebData	(63.1.0.0.0)
+ /System/Library/PrivateFrameworks/iCloudWebSupport.framework/iCloudWebSupport	(63.1.0.0.0)
+ /System/Library/PrivateFrameworks/iCloudWebUI.framework/iCloudWebUI	(63.1.0.0.0)
+-/System/Library/PrivateFrameworks/iMessageApps.framework/iMessageApps	(1450.500.221.2.9)
++/System/Library/PrivateFrameworks/iMessageApps.framework/iMessageApps	(1450.500.221.2.14)
+ /System/Library/PrivateFrameworks/iOSDiagnostics.framework/iOSDiagnostics	(1066.100.31.0.0)
+ /System/Library/PrivateFrameworks/iOSScreenSharing.framework/iOSScreenSharing	(144.1.0.0.0)
+ /System/Library/PrivateFrameworks/iTunesCloud.framework/iTunesCloud	(4025.510.1.0.0)
+stderr:
+[34m[1m   •[22m Differences found        [0m
