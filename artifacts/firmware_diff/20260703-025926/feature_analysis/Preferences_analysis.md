@@ -3,225 +3,200 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "MomentsTesting"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 2 (0 AI-authored, 2 auto-generated); comments: 4 (0 AI-authored, 4 auto-generated); across 4 function(s); verified persisted in .i64: 50 named variables, 4 comments.
+- **Database annotations** — variable renames: 39 (2 AI-authored, 37 auto-generated); comments: 6 (2 AI-authored, 4 auto-generated); across 4 function(s); verified persisted in .i64: 39 named variables, 4 comments.
 
 ## What this feature does
 
-This feature implements a new **Journaling Suggestions** system within the iOS Settings app, specifically designed to provide users with personalized suggestions for what they might want to record in the Journal app. The feature is tightly integrated with Apple's Account Kit (ACM) and System Policy frameworks to manage privacy permissions and access controls.
-
-Key components include:
-- **Journaling Suggestions UI**: New strings like "JOURNALING_SUGGESTIONS" and "JOURNALING_SUGGESTIONS_GROUP" indicate a new settings page or section for managing journaling suggestions.
-- **Access Control**: New entitlements (`com.apple.developer.moments.allow`) and symbols (`_supportsJournalingSuggestions`, `supportsJournalingSuggestions`) suggest a new privacy/access control mechanism.
-- **ACM Integration**: Symbols like `ACMRequirement - ACMRequirementDataRatchet`, `LibCall_ACMSEPControl`, and `LibCall_ACMSEPControl_Block` indicate integration with Apple's Account Kit for managing account requirements and data serialization.
-- **Moments Integration**: Strings like "MomentsTesting" and "MomentsTestingSettings" suggest integration with the Moments app for testing and settings synchronization.
-
-The feature appears to be a new subsystem for managing journaling suggestions, with privacy controls and account-based requirements.
+The update introduces support for "Journaling Suggestions" within the system settings, specifically integrating with the new Journaling application ecosystem. It adds infrastructure to query whether specific applications are permitted to provide journaling suggestions and manages the UI lifecycle for these settings controllers. The changes include new internal mechanisms for handling privacy access policies and lifecycle notifications for root controllers in the Preferences application.
 
 ## How is it implemented
 
+
+### Decompilation at `0x18b7c2cec`
+
 ```c
-__int64 __fastcall LibCall_ACMSEPControl(
-        __int64 (__fastcall *Size)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *),
+void *__fastcall -[PSRootController initWithNavigationBarClass:toolbarClass:](
+        const char *str_a1,
         __int64 n_a2,
         __int64 n_a3,
-        __int64 n_a4,
-        __int64 n_a5,
-        __int64 n_a6,
-        __int64 n_a7,
-        __int64 n_a8,
-        unsigned __int64 *unsignedint6_a9)
+        __int64 n_a4)
 {
-  __int64 (__fastcall *str_v15)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *); // x22
-  __int64 n_v16; // x0
-  __int64 n_v17; // x27
-  __int64 n_v18; // x0
-  __int64 n_v19; // x8
-  char *str_v20; // x20
-  __int64 n_v21; // x21
-  unsigned int n_v22; // w8
-  __int64 n_v23; // x24
-  unsigned __int64 n_v24; // x20
-  __int64 n_v26; // x0
-  __int64 n_v27; // [xsp+20h] [xbp-490h] BYREF
-  __int64 n_v28; // [xsp+28h] [xbp-488h]
-  unsigned __int64 n_v29; // [xsp+30h] [xbp-480h] BYREF
-  __int64 n_v30; // [xsp+38h] [xbp-478h] BYREF
-  __int64 n_v31; // [xsp+40h] [xbp-470h] BYREF
-  __int64 n_v32; // [xsp+48h] [xbp-468h] BYREF
-  _BYTE n_v33[1024]; // [xsp+50h] [xbp-460h] BYREF
-  __int64 n_v34; // [xsp+450h] [xbp-60h]
+  __int64 n_v7; // x0
+  __int64 n_v8; // x22
+  __int64 n_v9; // x0
+  void *void_v10; // x0
+  void *void_v11; // x19
+  __int64 n_v13; // x0
+  const char *str_v14[2]; // [xsp+0h] [xbp-50h] BYREF
+  int n_v15; // [xsp+10h] [xbp-40h]
+  const char *initWithNavigationBarClass; // [xsp+14h] [xbp-3Ch]
+  __int64 n_v17; // [xsp+28h] [xbp-28h]
 
-  n_v28 = n_a8;
-  str_v15 = Size;
-  n_v34 = *(_QWORD *)off_1DFF0F3B0;
-  if ( (unsigned __int8)gACMLoggingLevel <= 0xAu )
-    Size = (__int64 (__fastcall *)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *))sub_1A84931B0(
-                                                                                                    "%s: %s: called.\n",
-                                                                                                    "ACM",
-                                                                                                    "LibCall_ACMSEPControl");
-  n_v31 = 1024;
-  n_v32 = 0;
-  if ( !str_v15 || (n_a3 != 0 || n_a4 != 0) != (n_a3 != 0 && (unsigned __int64)(n_a4 - 1) < 0x1000) )
+  n_v17 = *MEMORY[0x1E6782818];
+  n_v7 = _PSLoggingFacility(str_a1);
+  n_v8 = MEMORY[0x18D7A39D0](n_v7);
+  n_v9 = MEMORY[0x18D7A3BC0](n_v8, 0);
+  if ( (_DWORD)n_v9 )
   {
-    n_v22 = 70;
-    n_v21 = 4294967293LL;
-    goto LABEL_17;
+    n_v15 = 136315138;
+    initWithNavigationBarClass = "-[PSRootController initWithNavigationBarClass:toolbarClass:]";
+    n_v9 = MEMORY[0x18D7A3480](&dword_18B76E000, n_v8, 0, "%s", str_v14[0]);
   }
-  Size = (__int64 (__fastcall *)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *))LibSer_SEPControl_GetSize(
-                    n_v23,
-                    n_v31,
-                    &n_v32,
-                    &n_v22);
-  if ( !(_DWORD)Size )
-  {
-    n_v24 = n_v22;
-    if ( *unsignedint6_a9 >= n_v24 )
-    {
-      if ( n_v32 )
-        Size = (__int64 (__fastcall *)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *))sub_1A8492CD0(n_v23, n_v32, n_v24);
-      n_v21 = 0;
-      *unsignedint6_a9 = n_v24;
-      n_v22 = 10;
-      goto LABEL_17;
-    }
-    n_v21 = 4294967276LL;
-LABEL_23:
-    n_v22 = 70;
-    goto LABEL_17;
-  }
-LABEL_22:
-  n_v21 = (__int64)Size;
-  goto LABEL_23;
-LABEL_17:
-  if ( n_v22 >= (unsigned __int8)gACMLoggingLevel )
-    Size = (__int64 (__fastcall *)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *))sub_1A84931B0(
-                                                                                                    "%s: %s: returning, err = %ld.\n",
-                                                                                                    "ACM",
-                                                                                                    "LibCall_ACMSEPControl",
-                                                                                                    (int)n_v21);
-  if ( *(_QWORD *)off_1DFF0F3B0 == n_v34 )
-    return n_v21;
-  n_v26 = MEMORY[0x1AE1486C0](Size);
-  return aclRequiresPasscodeInternal(n_v26);
+  MEMORY[0x18D7A3910](n_v9);
+  str_v14[0] = str_a1;
+  str_v14[1] = (const char *)off_1E6FD5D60;
+  void_v10 = (void *)MEMORY[0x18D7A3830](str_v14, 0x1FAFF6C50uLL, n_a3, n_a4);
+  void_v11 = void_v10;
+  if ( void_v10 )
+    void_v10 = objc_msgSend(void_v10, "commonInit");
+  if ( *MEMORY[0x1E6782818] == n_v17 )
+    return void_v11;
+  n_v13 = MEMORY[0x18D7A3420](void_v10);
+  return (void *)-[PSRootController initWithRootViewController:](n_v13);
 }
 ```
 
+### Decompilation at `0x18b7a8c88`
+
 ```c
-__int64 __fastcall LibCall_ACMSEPControl_Block(
-        __int64 (__fastcall *n_a1)(__int64, __int64, _QWORD, char *, __int64, _BYTE *, __int64 *),
+void *__fastcall +[PSSystemPolicyManager _journalingSuggestionsSettingsNeededForBundleID:](
+        __int64 n_a1,
         __int64 n_a2,
-        __int64 n_a3,
-        __int64 n_a4,
-        __int64 n_a5,
-        __int64 n_a6,
-        __int64 n_a7,
-        __int64 n_a8)
+        __int64 n_a3)
 {
-  __int64 n_v16; // x0
-  __int64 n_v17; // x20
-  _BYTE *byte_v18; // x1
-  unsigned int n_v19; // w8
-  __int64 n_v21; // x0
-  unsigned __int64 n_v22; // [xsp+18h] [xbp-468h] BYREF
-  _BYTE n_v23[1024]; // [xsp+20h] [xbp-460h] BYREF
-  __int64 n_v24; // [xsp+420h] [xbp-60h]
+  __int64 n_v4; // x20
+  void *appRecord; // x20
+  void *supportsJournalingSuggestions; // x19
 
-  n_v24 = *(_QWORD *)off_1DFF0F3B0;
-  if ( (unsigned __int8)gACMLoggingLevel <= 0xAu )
-    sub_1A84931B0("%s: %s: called.\n", "ACM", "LibCall_ACMSEPControl_Block");
-  n_v22 = 1024;
-  n_v16 = LibCall_ACMSEPControl(n_a1, n_a2, n_a3, n_a4, n_a5, n_a6, n_a7, (__int64)n_v23, &n_v22);
-  n_v17 = n_v16;
-  if ( n_a8 )
-  {
-    if ( n_v22 )
-      byte_v18 = n_v23;
-    else
-      byte_v18 = 0;
-    n_v16 = (*(__int64 (__fastcall **)(__int64, _BYTE *))(n_a8 + 16))(n_a8, byte_v18);
-  }
-  if ( (_DWORD)n_v17 )
-    n_v19 = 70;
-  else
-    n_v19 = 10;
-  if ( n_v19 >= (unsigned __int8)gACMLoggingLevel )
-    n_v16 = sub_1A84931B0("%s: %s: returning, err = %ld.\n", "ACM", "LibCall_ACMSEPControl_Block", (int)n_v17);
-  if ( *(_QWORD *)off_1DFF0F3B0 == n_v24 )
-    return n_v17;
-  n_v21 = MEMORY[0x1AE1486C0](n_v16);
-  return LibCall_ACMGlobalContextCredentialGetProperty_Block(n_v21);
+  n_v4 = MEMORY[0x1E66FF8F8];
+  MEMORY[0x18D7A3A10](n_a1, n_a2);
+  appRecord = objc_msgSend(
+                (id)MEMORY[0x18D7A3710](n_v4),
+                "initWithBundleIdentifier:allowPlaceholder:error:",
+                n_a3,
+                0,
+                0);
+  MEMORY[0x18D7A38D0]();
+  supportsJournalingSuggestions = objc_msgSend(appRecord, "supportsJournalingSuggestions");
+  MEMORY[0x18D7A38F0]();
+  return supportsJournalingSuggestions;
 }
 ```
+
+### Decompilation at `0x18b771e7c`
 
 ```c
-_DWORD *__fastcall Util_getSubrequirement(_DWORD *dword_a1, __int64 n_a2)
+__int64 __fastcall -[PSRootController initWithTitle:identifier:](const char *str_a1, __int64 n_a2, __int64 n_a3)
 {
-  _DWORD *Subrequirement_cold_1; // x0
-  __int64 v4; // x1
+  __int64 n_v5; // x0
+  __int64 n_v6; // x0
+  __int64 n_v7; // x21
+  __int64 n_v8; // x0
+  void *commonInit; // x0
+  void *void_v10; // x20
+  __int64 n_v11; // x0
+  __int64 n_v13; // x0
+  const char *str_v14[2]; // [xsp+0h] [xbp-50h] BYREF
+  int n_v15; // [xsp+10h] [xbp-40h]
+  const char *initWithTitle; // [xsp+14h] [xbp-3Ch]
+  __int64 n_v17; // [xsp+28h] [xbp-28h]
 
-  if ( dword_a1 )
+  n_v17 = *MEMORY[0x1E6782818];
+  n_v5 = MEMORY[0x18D7A3A10](str_a1, n_a2);
+  n_v6 = _PSLoggingFacility(n_v5);
+  n_v7 = MEMORY[0x18D7A39D0](n_v6);
+  n_v8 = MEMORY[0x18D7A3BC0](n_v7, 0);
+  if ( (_DWORD)n_v8 )
   {
-    if ( *dword_a1 == 7 && dword_a1[5] > (unsigned int)n_a2 )
-      return *(_DWORD **)&dword_a1[2 * (unsigned int)n_a2 + 6];
-    else
-      return 0;
+    n_v15 = 136315138;
+    initWithTitle = "-[PSRootController initWithTitle:identifier:]";
+    n_v8 = MEMORY[0x18D7A3480](&dword_18B76E000, n_v7, 0, "%s", str_v14[0]);
   }
-  else
+  MEMORY[0x18D7A3900](n_v8);
+  str_v14[0] = str_a1;
+  str_v14[1] = (const char *)off_1E6FD5D60;
+  commonInit = (void *)MEMORY[0x18D7A3830](str_v14, 0x1FB7FC150uLL);
+  void_v10 = commonInit;
+  if ( commonInit )
   {
-    Subrequirement_cold_1 = (_DWORD *)Util_getSubrequirement_cold_1(0, n_a2);
-    return Util_getSubrequirementOfType(Subrequirement_cold_1, v4);
+    objc_msgSend(commonInit, "setTitle:", n_a3);
+    commonInit = objc_msgSend(void_v10, "commonInit");
   }
+  n_v11 = MEMORY[0x18D7A38D0](commonInit);
+  if ( *MEMORY[0x1E6782818] == n_v17 )
+    return (__int64)void_v10;
+  n_v13 = MEMORY[0x18D7A3420](n_v11);
+  return _PSLoggingFacility(n_v13);
 }
 ```
+
+### Decompilation at `0x18b772028`
 
 ```c
-_DWORD *__fastcall Util_getSubrequirementOfType(_DWORD *dword_a1, __int64 n_a2)
+void *__fastcall -[PSRootController commonInit](_QWORD *rootController)
 {
-  _DWORD *n_v3; // x19
-  __int64 v4; // x21
-  _DWORD *SubrequirementOfType; // x0
-  __int64 SubrequirementOfType_cold_1; // x0
+  void *void_v2; // x0
+  void *defaultCenter; // x0
+  void *defaultCenter_2; // x0
+  __int64 vars8; // [xsp+28h] [xbp+8h]
 
-  if ( dword_a1 )
-  {
-    n_v3 = dword_a1;
-    if ( *dword_a1 != (_DWORD)n_a2 )
-    {
-      if ( *dword_a1 == 7 && dword_a1[5] )
-      {
-        v4 = 0;
-        while ( 1 )
-        {
-          SubrequirementOfType = Util_getSubrequirementOfType(*(_DWORD **)&n_v3[2 * v4 + 6], n_a2);
-          if ( SubrequirementOfType )
-            break;
-          if ( ++v4 >= (unsigned __int64)(unsigned int)n_v3[5] )
-            return 0;
-        }
-        return SubrequirementOfType;
-      }
-      else
-      {
-        return 0;
-      }
-    }
-    return n_v3;
-  }
-  else
-  {
-    SubrequirementOfType_cold_1 = Util_getSubrequirementOfType_cold_1(0, n_a2);
-    return (_DWORD *)Util_hexDumpToStrHelper_cold_1(SubrequirementOfType_cold_1);
-  }
+  void_v2 = objc_msgSend(
+              (id)MEMORY[0x18D7A39D0](objc_msgSend(MEMORY[0x1E6707128], "defaultCenter")),
+              "addObserver:selector:name:object:",
+              rootController,
+              0x1FBF4B02DuLL,
+              *MEMORY[0x1E6776F90],
+              0);
+  MEMORY[0x18D7A38F0](void_v2);
+  defaultCenter = objc_msgSend(
+                    (id)MEMORY[0x18D7A39D0](objc_msgSend(MEMORY[0x1E6707128], "defaultCenter")),
+                    "addObserver:selector:name:object:",
+                    rootController,
+                    0x1FBF4B042uLL,
+                    *MEMORY[0x1E67770A8],
+                    0);
+  MEMORY[0x18D7A38F0](defaultCenter);
+  defaultCenter_2 = objc_msgSend(
+                      (id)MEMORY[0x18D7A39D0](objc_msgSend(MEMORY[0x1E6707128], "defaultCenter")),
+                      "addObserver:selector:name:object:",
+                      rootController,
+                      0x1FBF4DAD9uLL,
+                      *MEMORY[0x1E6777090],
+                      0);
+  MEMORY[0x18D7A38F0](defaultCenter_2);
+  rootController[185] = MEMORY[0x18D7A3730](MEMORY[0x1E66FA2A0]);
+  MEMORY[0x18D7A3990]();
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  return objc_msgSend(rootController, "setDelegate:", rootController);
 }
 ```
 
-The implementation shows:
-1. **ACMSEPControl** functions handle serialization/deserialization of account requirement data with logging and error handling
-2. **Util_getSubrequirement** functions navigate through requirement data structures to find specific sub-requirements
-3. The code uses **ACL (Account Kit Library)** functions for credential property access
-4
+The implementation centers on the `PSSystemPolicyManager` and `PSRootController` classes. 
+
+The `PSSystemPolicyManager` now includes a method to determine if journaling suggestions are required for a given bundle identifier. This is implemented by initializing an `LSApplicationRecord` for the target bundle and querying its support for journaling suggestions. This logic acts as a gatekeeper for the new privacy settings.
+
+The `PSRootController` has been updated with a `commonInit` method that registers the controller as an observer for several system-wide notifications, including application lifecycle events. This ensures that the settings UI correctly responds to changes in the application's active state. Additionally, the controller now supports initialization via `initWithNavigationBarClass:toolbarClass:` and `initWithTitle:identifier:`, allowing for more flexible construction of the settings hierarchy. The binary also includes new soft-linking logic to the `MomentsOnboardingAndSettings` framework, indicating that the settings UI for these features is dynamically loaded.
+
+## How to trigger this feature
+
+This feature is triggered when a user navigates to the Privacy & Security settings within the Preferences application. Specifically, the system checks for the presence of journaling-related bundle identifiers and invokes the `_journalingSuggestionsSettingsNeededForBundleID:` logic to populate the relevant specifiers in the UI. The `PSRootController` lifecycle methods are triggered automatically by the system when the Preferences application becomes active or resigns active status.
+
+## Vulnerability Assessment
+
+The changes appear to be functional additions rather than security patches. The introduction of `ACMSEPControl` symbols suggests an integration with the Secure Enclave (SEP) for handling sensitive requirement data, likely related to the "Moments" or "Journal" privacy requirements. No obvious memory safety issues or logic flaws were identified in the new code paths. The use of `na_safeAddObjectsFromArray:` and standard Objective-C initialization patterns suggests a focus on stability. The feature is gated by the `com.apple.developer.moments.allow` entitlement, which is a standard practice for restricting access to sensitive system-level journaling data.
+
+## Evidence
+
+- **Symbols**: `+[PSSystemPolicyManager _journalingSuggestionsSettingsNeededForBundleID:]`, `-[PSRootController commonInit]`, `_LibCall_ACMSEPControl`.
+- **Strings**: `MOSuggestionSheetPrivateAccessSettingsController`, `com.apple.journal`, `MomentsTesting`.
+- **Frameworks**: Soft-linked `MomentsOnboardingAndSettings.framework`.
+- **Entitlements**: `com.apple.developer.moments.allow`.
 
 ## AI Prioritisation Scoring System
 
-No actionable methods or prioritisation targets identified for this component.
+- **feature_analysis**
+  - **Tier**: TIER_2
+  - **Category**: privacy_framework_integration
+  - **Reasoning**: The changes implement a new privacy-sensitive settings subsystem for Journaling Suggestions. While it involves new IPC and SEP-related symbols, it is primarily a functional expansion of the Preferences app rather than a critical security fix.
 

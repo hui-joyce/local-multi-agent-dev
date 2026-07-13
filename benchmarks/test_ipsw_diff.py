@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
 
-from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
+from langgraph_orchestration.agents.gemini_factory import GeminiAgentFactory
 from langgraph_orchestration.core.state_utils import StateManager
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 from langgraph_orchestration.graphs.reverse_engineering import (
@@ -51,16 +51,16 @@ def build_ipsw_diff_case() -> IpswDiffCase:
             "Perform baseline comparison and feature inference.\n\n"
             # "Version 1: iPhone17,1_18.2_22C152_Restore.ipsw\n"
             # "Version 2: iPhone17,1_18.2.1_22C161_Restore.ipsw\n"
-            # "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
-            # "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
+            "Version 1: iPhone18,1_26.4.1_23E254_Restore.ipsw\n"
+            "Version 2: iPhone18,1_26.4.2_23E261_Restore.ipsw\n"
             # "Version 1: iPhone17,1_18.4_22E240_Restore.ipsw\n"
             # "Version 2: iPhone17,1_18.4.1_22E252_Restore.ipsw\n"
             # "Version 1: iPhone15,4_17.1_21B80_Restore.ipsw\n"
             # "Version 2: iPhone15,4_17.1.1_21B91_Restore.ipsw\n"
             # "Version 1: iPhone15,4_17.0.3_21A360_Restore.ipsw\n"
             # "Version 2: iPhone15,4_17.1_21B80_Restore.ipsw\n"
-            "Version 1: iPhone17,1_18.6.2_22G100_Restore.ipsw\n"
-            "Version 2: iPhone17,1_26.0_23A341_Restore.ipsw\n"
+            # "Version 1: iPhone17,1_18.6.2_22G100_Restore.ipsw\n"
+            # "Version 2: iPhone17,1_26.0_23A341_Restore.ipsw\n"
             "Perform a deep, static-only inspection of two provided dyld_shared_cache artifacts and produce a analysis of newly introduced classes and related changes.\n\n"
         ),
     )
@@ -143,7 +143,7 @@ def resolve_artifact_output_dir(final_state: AgentState, base_dir: Path) -> Path
                 return base_dir / parts[idx + 1]
     return base_dir
 
-def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFactory) -> dict[str, str]:
+def trigger_feature_analysis(diff_report_path: str | Path, factory: GeminiAgentFactory) -> dict[str, str]:
     diff_report_path = Path(diff_report_path)
 
     report_json_path: Path | None = None
@@ -186,7 +186,7 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: MLXAgentFact
 def main() -> None:
     load_dotenv()
 
-    factory = MLXAgentFactory() 
+    factory = GeminiAgentFactory() 
     graph = build_orchestration_graph(factory=factory)
 
     case = build_ipsw_diff_case()

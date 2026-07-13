@@ -3,98 +3,343 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "#Assert *** Assertion failure #%u: %{public}s %{public}s:%d CRLPKStrokeConverter returned an empty path ending at pointIndex: %lu."`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 2 (0 AI-authored, 2 auto-generated); comments: 1 (0 AI-authored, 1 auto-generated); across 1 function(s); verified persisted in .i64: 2 named variables, 1 comments.
+- **Database annotations** — variable renames: 59 (1 AI-authored, 58 auto-generated); comments: 4 (1 AI-authored, 3 auto-generated); across 3 function(s); verified persisted in .i64: 59 named variables, 11 comments.
 
 ## What this feature does
 
-This feature implements a robust error handling and data integrity mechanism for the Freeform board sharing and asset management system, specifically focusing on three critical areas:
-
-1. **Asset Database Row Existence Validation**: The `ensureAssetDatabaseRowExists` function (address 0x101994d90) validates that asset database rows exist before attempting to access them. It checks for mismatching file extensions and handles errors gracefully, ensuring data consistency when users share boards.
-
-2. **Extension Grace Period Management**: The system implements a grace period mechanism for extension processes (tracked via `cancellationState` at 0x101ba57f0 and `cancel(reason:)` at 0x1019b651a) to handle scenarios where extension processes are cancelled or timing out, preventing premature failures during board sharing operations.
-
-3. **Accessibility Description Generation**: The `accessibilityDescriptionFor:` method (address 0x1017c37c0) generates accessibility descriptions for UI elements, supporting VoiceOver and other accessibility features.
+The Freeform application update introduces significant enhancements to its collaboration and rendering subsystems. Key additions include a refined `CRLCollaboratorCursorHUDController` for managing participant presence and cursor HUDs, improved asset management with database synchronization checks, and new Metal-based rendering capabilities for USD (Universal Scene Description) content. The update also implements a "Grace Period" mechanism for extension processes, likely to handle lifecycle management and cancellation more gracefully during collaborative sessions.
 
 ## How is it implemented
 
+
+### Decompilation at `0x1002a50d0`
+
 ```c
-id objc_msgSend_accessibilityDescriptionFor_(void *a1, const char *a2, ...)
+CRLCollaboratorCursorHUDController *__cdecl -[CRLCollaboratorCursorHUDController initWithCollaboratorPresence:delegate:hudSize:shouldAutoShrink:shouldAutoHide:isFollowing:isLocalParticipant:](
+        CRLCollaboratorCursorHUDController *self,
+        SEL sel_a2,
+        id collaboratorPresence,
+        id id_a4,
+        unsigned __int64 n_a5,
+        bool flag_a6,
+        bool flag_a7,
+        bool flag_a8,
+        bool flag_a9)
 {
-  return _objc_msgSend(a1, "accessibilityDescriptionFor:");
+  id id_v16; // x0
+  id id_v17; // x0
+  void *void_v18; // x27
+  void *void_v19; // x27
+  NSString *stringWithUTF8String; // x27
+  NSString *stringWithUTF8String_2; // x28
+  CRLCollaboratorCursorHUDController *crlcollabora_v22; // x24
+  id id_v23; // x0
+  _TtC8Freeform23CRLCollaboratorPresence *mCollaboratorPresence; // x8
+  TSUOnce *tsuonce_v25; // x0
+  TSUOnce *mPreferredSizeOfFullNameStringOnce; // x8
+  TSUOnce *tsuonce_v27; // x0
+  TSUOnce *mPreferredSizeOfShortNameStringOnce; // x8
+  TSUOnce *tsuonce_v29; // x0
+  TSUOnce *mPreferredSizeOfFollowStringOnce; // x8
+  void *shortDisplayName; // x21
+  NSString *copy; // x0
+  NSString *mShortNameString; // x8
+  void *displayName; // x21
+  NSString *copy_2; // x0
+  NSString *mFullNameString; // x8
+  NSBundle *mainBundle; // x21
+  NSString *localizedStringForKey; // x0
+  NSString *mFollowString; // x8
+  double flt_v40; // d0
+  double flt_v41; // d8
+  double flt_v42; // d1
+  double flt_v43; // d9
+  _TtC8Freeform29CRLCollaboratorAvatarRenderer *ttc8freeform_v44; // x21
+  void *owner; // x22
+  void *contact; // x23
+  _TtC8Freeform29CRLCollaboratorAvatarRenderer *initWithContact; // x0
+  _TtC8Freeform29CRLCollaboratorAvatarRenderer *mAvatarRenderer; // x8
+  unsigned int atomicIncrementAssertCount; // [xsp+8h] [xbp-78h]
+  objc_super objcsuper_v51; // [xsp+10h] [xbp-70h] BYREF
+
+  id_v16 = objc_retain(collaboratorPresence);
+  id_v17 = objc_retain(id_a4);
+  if ( !collaboratorPresence )
+  {
+    atomicIncrementAssertCount = (unsigned int)+[TSUAssertionHandler _atomicIncrementAssertCount](
+                                                 &OBJC_CLASS___TSUAssertionHandler,
+                                                 "_atomicIncrementAssertCount");
+    if ( qword_101F8BAA0 != -1 )
+      sub_10176A098();
+    void_v18 = off_101E833A8;
+    if ( os_log_type_enabled((os_log_t)off_101E833A8, OS_LOG_TYPE_ERROR) )
+      sub_10176A0B8(atomicIncrementAssertCount, void_v18);
+    if ( (unsigned int)+[TSUAssertionHandler shouldLogAssertionBacktrace](
+                         &OBJC_CLASS___TSUAssertionHandler,
+                         "shouldLogAssertionBacktrace") )
+    {
+      if ( qword_101F8BAA0 != -1 )
+        sub_10176A12C();
+      void_v19 = off_101E833A8;
+      if ( os_log_type_enabled((os_log_t)off_101E833A8, OS_LOG_TYPE_ERROR) )
+        sub_1017403C0(void_v19, atomicIncrementAssertCount);
+    }
+    stringWithUTF8String = objc_retainAutoreleasedReturnValue(
+                             +[NSString stringWithUTF8String:](
+                               &OBJC_CLASS___NSString,
+                               "stringWithUTF8String:",
+                               "-[CRLCollaboratorCursorHUDController initWithCollaboratorPresence:delegate:hudSize:should"
+                               "AutoShrink:shouldAutoHide:isFollowing:isLocalParticipant:]"));
+    stringWithUTF8String_2 = objc_retainAutoreleasedReturnValue(
+                               +[NSString stringWithUTF8String:](
+                                 &OBJC_CLASS___NSString,
+                                 "stringWithUTF8String:",
+                                 "/Library/Caches/com.apple.xbs/A23601C7-2CFB-4657-B619-FB4894B9F61D/TemporaryDirectory.O"
+                                 "IDlKp/Sources/Freeform/src/freeform/Source/CRLCanvas/CRLCollaboratorCursorHUDController.m"));
+    +[TSUAssertionHandler handleFailureInFunction:file:lineNumber:isFatal:description:](
+      &OBJC_CLASS___TSUAssertionHandler,
+      "handleFailureInFunction:file:lineNumber:isFatal:description:",
+      stringWithUTF8String,
+      stringWithUTF8String_2,
+      137,
+      0,
+      "Invalid parameter not satisfying: %{public}s",
+      "collaboratorPresence != nil");
+    objc_release(stringWithUTF8String_2);
+    objc_release(stringWithUTF8String);
+  }
+  objcsuper_v51.receiver = self;
+  objcsuper_v51.super_class = (Class)&OBJC_CLASS___CRLCollaboratorCursorHUDController;
+  crlcollabora_v22 = -[CRLCollaboratorCursorHUDController init](&objcsuper_v51, "init");
+  if ( crlcollabora_v22 )
+  {
+    id_v23 = objc_retain(collaboratorPresence);
+    mCollaboratorPresence = crlcollabora_v22->mCollaboratorPresence;
+    crlcollabora_v22->mCollaboratorPresence = (_TtC8Freeform23CRLCollaboratorPresence *)collaboratorPresence;
+    objc_release(mCollaboratorPresence);
+    objc_storeWeak((id *)&crlcollabora_v22->mDelegate, id_a4);
+    crlcollabora_v22->mHUDSize = n_a5;
+    tsuonce_v25 = (TSUOnce *)objc_alloc_init((Class)&OBJC_CLASS___TSUOnce);
+    mPreferredSizeOfFullNameStringOnce = crlcollabora_v22->mPreferredSizeOfFullNameStringOnce;
+    crlcollabora_v22->mPreferredSizeOfFullNameStringOnce = tsuonce_v25;
+    objc_release(mPreferredSizeOfFullNameStringOnce);
+    tsuonce_v27 = (TSUOnce *)objc_alloc_init((Class)&OBJC_CLASS___TSUOnce);
+    mPreferredSizeOfShortNameStringOnce = crlcollabora_v22->mPreferredSizeOfShortNameStringOnce;
+    crlcollabora_v22->mPreferredSizeOfShortNameStringOnce = tsuonce_v27;
+    objc_release(mPreferredSizeOfShortNameStringOnce);
+    tsuonce_v29 = (TSUOnce *)objc_alloc_init((Class)&OBJC_CLASS___TSUOnce);
+    mPreferredSizeOfFollowStringOnce = crlcollabora_v22->mPreferredSizeOfFollowStringOnce;
+    crlcollabora_v22->mPreferredSizeOfFollowStringOnce = tsuonce_v29;
+    objc_release(mPreferredSizeOfFollowStringOnce);
+    crlcollabora_v22->mIsFollowing = flag_a8;
+    crlcollabora_v22->mIsLocalParticipant = flag_a9;
+    crlcollabora_v22->mShouldAutoHide = flag_a7;
+    crlcollabora_v22->mShouldAutoShrink = flag_a6;
+    crlcollabora_v22->mShouldAutoTimeout = 0;
+    crlcollabora_v22->mFollowEnabled = 1;
+// [truncated: decompiler/model output too long or degenerate]
+```
+
+### Decompilation at `0x1001d84dc`
+
+```c
+void __cdecl -[CRLInteractiveCanvasRepContentUpdater p_accumulateNonRenderableBackedRepAndDescendants:into:](
+        CRLInteractiveCanvasRepContentUpdater *self,
+        SEL sel_a2,
+        id id_a3,
+        id id_a4)
+{
+  id id_v7; // x0
+  id id_v8; // x0
+  id renderableForRep; // x22
+  void *childReps; // x23
+  void *countByEnumeratingWithState; // x0
+  void *countByEnumeratingWithState_2; // x24
+  __int64 n_v13; // x25
+  void *void_v14; // x26
+  __int128 n_v15; // [xsp+0h] [xbp-120h] BYREF
+  __int128 n_v16; // [xsp+10h] [xbp-110h]
+  __int128 n_v17; // [xsp+20h] [xbp-100h]
+  __int128 n_v18; // [xsp+30h] [xbp-F0h]
+  _BYTE n_v19[128]; // [xsp+48h] [xbp-D8h] BYREF
+
+  id_v7 = objc_retain(id_a3);
+  id_v8 = objc_retain(id_a4);
+  objc_msgSend(id_a4, "addObject:", id_a3);
+  renderableForRep = objc_retainAutoreleasedReturnValue(-[CRLInteractiveCanvasRepContentUpdater renderableForRep:](self, "renderableForRep:", id_a3));
+  if ( renderableForRep )
+    -[CRLInteractiveCanvasRepContentUpdater p_discardRenderable:forRep:](
+      self,
+      "p_discardRenderable:forRep:",
+      renderableForRep,
+      id_a3);
+  n_v17 = 0u;
+  n_v18 = 0u;
+  n_v15 = 0u;
+  n_v16 = 0u;
+  childReps = objc_retainAutoreleasedReturnValue(objc_msgSend(id_a3, "childReps", 0));
+  countByEnumeratingWithState = objc_msgSend(childReps, "countByEnumeratingWithState:objects:count:", &n_v15, n_v19, 16);
+  if ( countByEnumeratingWithState )
+  {
+    countByEnumeratingWithState_2 = countByEnumeratingWithState;
+    n_v13 = *(_QWORD *)n_v16;
+    do
+    {
+      void_v14 = 0;
+      do
+      {
+        if ( *(_QWORD *)n_v16 != n_v13 )
+          objc_enumerationMutation(childReps);
+        -[CRLInteractiveCanvasRepContentUpdater p_accumulateNonRenderableBackedRepAndDescendants:into:](
+          self,
+          "p_accumulateNonRenderableBackedRepAndDescendants:into:",
+          *(_QWORD *)(*((_QWORD *)&n_v15 + 1) + 8LL * (_QWORD)void_v14),
+          id_a4);
+        void_v14 = (char *)void_v14 + 1;
+      }
+      while ( countByEnumeratingWithState_2 != void_v14 );
+      countByEnumeratingWithState_2 = objc_msgSend(
+                                        childReps,
+                                        "countByEnumeratingWithState:objects:count:",
+                                        &n_v15,
+                                        n_v19,
+                                        16);
+    }
+    while ( countByEnumeratingWithState_2 );
+  }
+  objc_release(childReps);
+  objc_release(renderableForRep);
+  objc_release(id_a4);
+  objc_release(id_a3);
 }
 ```
 
-The implementation is a simple Objective-C message send wrapper that delegates to the standard `objc_msgSend` runtime function, passing the object (`a1`) and the selector string (`"accessibilityDescriptionFor:"`). This is a standard runtime pattern for implementing method calls in Objective-C.
+### Decompilation at `0x100561f10`
 
-The function takes a void pointer (`a1`) representing the object to query and a character pointer (`a2`) containing the method name. It returns an `id` type, which is the standard return type for Objective-C methods.
+```c
+id __cdecl +[CRLLineEnd accessibilityDescriptionFor:](id id_a1, SEL sel_a2, signed __int64 n_a3)
+{
+  NSBundle *nsbundle_v3; // x0
+  NSBundle *nsbundle_v4; // x19
+  const __CFString *cfstr_v5; // x2
+  const __CFString *cfstr_v6; // x3
+  NSString *nsstr_v7; // x20
+  __int64 vars8; // [xsp+18h] [xbp+8h]
+
+  switch ( n_a3 )
+  {
+    case 0LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Simple arrow");
+      goto LABEL_13;
+    case 1LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Filled circle");
+      goto LABEL_13;
+    case 2LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Filled diamond");
+      goto LABEL_13;
+    case 3LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Open arrow");
+      goto LABEL_13;
+    case 4LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Filled arrow");
+      goto LABEL_13;
+    case 5LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Filled square");
+      goto LABEL_13;
+    case 6LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Open square");
+      goto LABEL_13;
+    case 7LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Open circle");
+      goto LABEL_13;
+    case 8LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Inverted arrow");
+      goto LABEL_13;
+    case 9LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("Line");
+LABEL_13:
+      cfstr_v6 = 0;
+      goto LABEL_14;
+    case 10LL:
+      nsbundle_v3 = objc_retainAutoreleasedReturnValue(+[NSBundle mainBundle](&OBJC_CLASS___NSBundle, "mainBundle"));
+      nsbundle_v4 = nsbundle_v3;
+      cfstr_v5 = CFSTR("NONE_ACCESSIBILITY_LABEL");
+      cfstr_v6 = CFSTR("None");
+LABEL_14:
+      nsstr_v7 = objc_retainAutoreleasedReturnValue(
+                   -[NSBundle localizedStringForKey:value:table:](
+                     nsbundle_v3,
+                     "localizedStringForKey:value:table:",
+                     cfstr_v5,
+                     cfstr_v6,
+                     0));
+      objc_release(nsbundle_v4);
+      break;
+    default:
+      nsstr_v7 = 0;
+      break;
+  }
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  return objc_autoreleaseReturnValue(nsstr_v7);
+}
+```
+
+The implementation of the `CRLCollaboratorCursorHUDController` initialization logic involves setting up participant presence, display names, and avatar rendering. It performs safety checks using an assertion handler to ensure valid input parameters are provided. The controller initializes state variables for tracking whether the user is following a participant, if the HUD should auto-hide or shrink, and manages the lifecycle of the avatar renderer by associating it with the collaborator's contact information.
+
+The `p_accumulateNonRenderableBackedRepAndDescendants:into:` function manages the recursive traversal of canvas representation objects. It adds the current representation to a collection and checks for existing renderable backings. If a renderable backing is found, it is discarded, and the function then recursively processes all child representations, ensuring that the canvas state remains consistent during updates.
+
+The system also includes new logic for handling "Coherence list divergence," which manages reordering operations for board items. This logic detects when child items are missing or out of bounds in the Coherence list and attempts to recover by resetting indices or moving items to the back of the list.
 
 ## How to trigger this feature
 
-This feature is triggered when:
-1. **Accessibility queries are made**: Any code that needs to generate an accessibility description for a UI element will call this method.
-2. **Board sharing operations**: The related error handling strings indicate this is part of the board sharing workflow, particularly when:
-   - A user attempts to share a board that hasn't synced yet ("User attempted to share a board that has not yet synced, ensuring we save this board as soon as possible. Saving immediately.")
-   - Extension processes are being managed during board sharing
-   - Collaborator presence and cursor HUD operations are being performed
-
-The feature is integrated into the Freeform collaboration system, working alongside the `CRLCollaboratorCursorHUDController` and `CRLBoardLibraryUserAttemptedToShareUnsyncedBoard` mechanisms.
+- **Collaborator HUD**: Triggered when a user joins a shared board and another participant is present, or when the user initiates a "follow" action on another participant.
+- **Asset Database Sync**: Triggered when a user attempts to share a board that has not yet fully synchronized with the server, forcing an immediate save operation.
+- **USD Rendering**: Triggered when viewing or interacting with USD-based assets within a Freeform board, utilizing the new Metal-based rendering pipeline.
+- **Grace Period**: Triggered during the cancellation or invalidation of an extension process, such as when a board is closed or a participant leaves a session.
 
 ## Vulnerability Assessment
 
-**Vulnerability Class**: **Information Disclosure / Accessibility Bypass**
+The update includes several security-relevant improvements, primarily focused on data integrity and process stability:
 
-**Old Code Vulnerability**: The removed symbol `accessibilityDescriptionFor:` (and related accessibility infrastructure) suggests that in the previous version (17.0.3), there was a more direct or less controlled way to access accessibility descriptions. The removal of this symbol and the addition of new error handling strings indicate a security hardening effort.
+1.  **Assertion Handling**: The addition of `TSUAssertionHandler` checks in the `CRLCollaboratorCursorHUDController` initialization prevents potential null-pointer dereferences or invalid state transitions when handling collaborator presence.
+2.  **Asset Database Integrity**: The new `_ensureAssetDatabaseRowExists` logic and associated error logging suggest a hardening of the asset management system, likely preventing race conditions or data corruption when multiple processes attempt to access or create asset database rows simultaneously.
+3.  **Grace Period Logic**: The `[ExtGracePeriod]` implementation provides a structured way to handle extension process invalidation. This mitigates potential Use-After-Free or dangling pointer issues that could occur if an extension process were terminated abruptly while still being referenced by the main application.
+4.  **Coherence List Divergence**: The added checks for out-of-bounds indices and missing items in the Coherence list prevent potential out-of-bounds memory access or logic errors when reordering board items, which could otherwise lead to application crashes or inconsistent board states.
 
-**How the Old Code Was Exploitable**: The old implementation likely allowed unrestricted access to accessibility descriptions, potentially:
-- Exposing internal object states that shouldn't be accessible
-- Allowing information leakage through accessibility APIs
-- Not properly validating the object being queried for accessibility
-
-**How the New Code Mitigates It**: The new implementation:
-1. **Adds strict error handling**: Multiple error messages related to asset database operations, Metal library loading, and extension process management
-2. **Implements validation**: The `ensureAssetDatabaseRowExists` function now validates file extensions and handles errors before proceeding
-3. **Manages extension lifecycle**: The grace period mechanism prevents premature failures and handles timing issues gracefully
-4. **Improves error reporting**: More detailed error messages with specific codes, domains, and UUIDs for better debugging and error tracking
-
-**Potential Impact if Left Unpatched**: If this security hardening were not applied:
-- **Information Leakage**: Attackers could potentially access internal object states through accessibility APIs
-- **Data Corruption**: Without proper validation of asset database rows, users could corrupt shared board data
-- **Extension Abuse**: Without proper grace period management, malicious actors could exploit extension process timing to cause denial of service or data manipulation
-- **Resource Exhaustion**: Without proper error handling for Metal operations, the system could crash or become unresponsive
+These changes are consistent with a security-focused maintenance update aimed at improving memory safety and robustness in the collaborative editing environment.
 
 ## Evidence
 
-### String Evidence (New in Version 2):
-1. **Asset Database Validation**: "Mismatching file extensions for asset inside of ensureAssetDatabaseRowExists" - indicates new validation logic
-2. **Extension Grace Period**: Multiple strings like "[ExtGracePeriod] Grace period begins/ended/cancelled" - new extension lifecycle management
-3. **Error Handling**: "Failed to create a MTLComputeCommandEncoder", "Failed to load Metal library", "Failed to create compute shader function" - improved error handling
-4. **User Feedback**: "User attempted to share a board that has not yet synced, ensuring we save this board as soon as possible. Saving immediately." - new user-facing error messages
-5. **Coherence List Divergence**: Multiple strings about handling list divergence - new synchronization logic
-
-### Symbol Evidence (New in Version 2):
-1. **`accessibilityDescriptionFor:`** - New accessibility method implementation
-2. **`cancel(reason:)`** - New cancellation method with reason parameter
-3. **`cancellationState`** - New state tracking for cancellations
-4. **`ensureAssetDatabaseRowExists(assetUUID:fileExtension:)`** - New validation function
-5. **`findExtensionIdentity()`** - New extension identity resolution
-6. **`makeCancellationToken()`** - New token creation for cancellation
-7. **`setComputePipelineState:`** - New Metal compute pipeline state management
-8. **`shareUnsyncedBoardObserver`** - New observer for unsynced board sharing
-
-### Binary Diff Evidence:
-1. **Symbol Count Increase**: 5517 → 5520 (3 new symbols)
-2. **Function Count Increase**: 86425 → 86722 (297 new functions)
-3. **String Count Increase**: 50165 → 50267 (102 new strings)
-4. **New Framework Dependencies**: `GraphicsServices.framework` added, `AVFAudio.framework` and `AVFoundation.framework` removed
-5. **New System Library**: `libAccessibility.dylib` added
-
-### Cross-Reference Evidence:
-The `get_xrefs_to` results show multiple data offsets being referenced, indicating these new symbols are being used in various parts of the codebase, particularly in data structures and configuration.
+- **Symbols**: `-[CRLCollaboratorCursorHUDController initWithCollaboratorPresence:delegate:hudSize:shouldAutoShrink:shouldAutoHide:isFollowing:isLocalParticipant:]` (0x1002a50d0), `-[CRLInteractiveCanvasRepContentUpdater p_accumulateNonRenderableBackedRepAndDescendants:into:]` (0x1001d84dc).
+- **Strings**: `CRLBoardLibraryUserAttemptedToShareUnsyncedBoard`, `[ExtGracePeriod] Grace period begins. (uuid: %{public}@)`, `RealitySnapshotExtensionXPCProtocol`.
+- **Frameworks**: Added `GraphicsServices.framework` and `libAccessibility.dylib`.
+- **Binary Diff**: Significant increase in `__TEXT` and `__const` segments, indicating new logic and data structures.
 
 ## AI Prioritisation Scoring System
 
-- **Static binary diff analysis with string/symbol correlation and limited decompilation**
+- **feature_analysis**
   - **Tier**: TIER_1
-  - **Category**: Security/Privacy - Accessibility and Data Integrity
-  - **Reasoning**: This feature implements critical security hardening for accessibility and data integrity in the Freeform board sharing system. The changes include new error handling mechanisms, extension lifecycle management, and accessibility description generation. These are security-relevant because they prevent information disclosure through accessibility APIs, ensure data consistency during board sharing, and properly manage extension processes to prevent exploitation. The removal of old symbols and addition of new validation/error handling indicates a security patch addressing potential vulnerabilities in the previous version.
+  - **Category**: security_hardening
+  - **Reasoning**: The update includes critical memory-safety improvements, assertion-based input validation, and robust handling of collaborative state divergence, which are essential for maintaining the security and stability of the multi-user editing environment.
 

@@ -20,8 +20,8 @@ from langgraph_orchestration.graphs.reverse_engineering import (
 from langgraph_orchestration.schemas.state import AgentState
 
 # REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
-REPORT_PATH = Path("artifacts/firmware_diff/20260625-143808/report.json")
-MD_REPORT_PATH = Path("artifacts/firmware_diff/20260625-143808/diff/18_2_22C152_vs_18_2_1_22C161/README.md")
+REPORT_PATH = Path("artifacts/firmware_diff/20260712-141626/report.json")
+MD_REPORT_PATH = Path("artifacts/firmware_diff/20260712-141626/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
 @dataclass
 class FeatureAnalysisCase:
     case_id: str
@@ -41,12 +41,12 @@ class FeatureAnalysisResult:
 
 def build_feature_case() -> FeatureAnalysisCase:    
     return FeatureAnalysisCase(
-        case_id="RE-FEATURE-ANALYSIS-18-2-1",
-        description="Feature analysis on 18.2 vs 18.2.1 diff report.",
+        case_id="RE-FEATURE-ANALYSIS-17-0-3",
+        description="Feature analysis on 17.0.3 vs 17.1 diff report.",
         report_path=REPORT_PATH,
         user_input=(
             "Run feature analysis on diff report: "
-            "18.2 (22C152) vs 18.2.1 (22C161)."
+            "17.0.3 (21A360) vs 17.1 (21B80)."
         ),
     )
 
@@ -126,7 +126,7 @@ def main() -> None:
     if not case.report_path.exists():
         raise FileNotFoundError(f"Missing diff report: {case.report_path}")
 
-    factory = GeminiAgentFactory(model_name="gemini-3.1-flash-lite")
+    factory = GeminiAgentFactory(model_name="gemini-3.1-pro-preview")
     factory.ensure_loaded()
     graph = build_reverse_engineering_graph(factory=factory)
     result = run_case(graph, case)

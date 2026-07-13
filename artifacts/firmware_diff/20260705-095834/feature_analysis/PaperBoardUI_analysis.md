@@ -3,81 +3,228 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "Apr 17 2026 15:17:57"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
+- **Database annotations** — variable renames: 46 (1 AI-authored, 45 auto-generated); comments: 2 (1 AI-authored, 1 auto-generated); across 1 function(s); verified persisted in .i64: 46 named variables, 2 comments.
 
 ## What this feature does
 
-The `PaperBoardUI` framework is a UI component responsible for rendering and managing the PaperBoard interface. The diff indicates a version bump from `304.4.14.101.0` to `304.4.14.102.0`, suggesting a minor update.
-
-Key changes observed:
-- **Date String Update**: The string `"Mar  2 2026 21:28:33"` was removed and replaced with `"Apr 17 2026 15:17:57"`. This suggests a change in a timestamp or date-related display logic, possibly related to a scheduled event, notification, or initialization time.
-- **Framework Dependencies Removed**: The following frameworks and libraries were removed:
-  - `AVFoundation`
-  - `CoreFoundation`
-  - `libMobileGestalt`
-  - `libSystem`
-  - `libobjc`
-- **UUID Change**: The bundle identifier/UUID changed from `CE91B2C6-D8EE-343A-B59C-AFC7CF056DDE` to `6916F3D4-D4E1-3BF4-B7F1-5898351DDA3F`. This is a significant change that could affect app identification, entitlements, or inter-app communication.
-
-The removal of `AVFoundation` and `CoreFoundation` is particularly notable as these are core Apple frameworks. Their removal suggests that `PaperBoardUI` may have been refactored to reduce its dependency on these heavy frameworks, possibly to improve performance, reduce binary size, or because the functionality was moved to a different framework.
+The update to `PaperBoardUI` introduces a new timestamp-based cache invalidation or versioning mechanism for wallpaper assets. The binary now embeds a specific build timestamp ("Apr 17 2026 15:17:57") which is used to generate a hexadecimal-encoded string. This string is incorporated into the cache key generation logic for wallpaper views, ensuring that cached wallpaper configurations are invalidated or uniquely identified based on the specific build version of the framework.
 
 ## How is it implemented
 
-No functions were decompiled during this analysis due to tool budget limits. The implementation details are inferred from the binary diff and string evidence.
 
-The framework's functionality is primarily inferred from its name (`PaperBoardUI`) and the removed dependencies. The presence of `__TEXT.__objc_methlist`, `__TEXT.__objc_classname`, `__TEXT.__objc_methname`, and related Objective-C runtime sections indicates that `PaperBoardUI` is an Objective-C framework.
+### Decompilation at `9177449496`
 
-The removed dependencies suggest that the framework was previously tightly coupled with Apple's core frameworks but has been decoupled in this update. The new UUID indicates a complete re-identification of the framework, which could be part of a larger refactoring effort.
+```c
+__int64 __fastcall -[PBUIWallpaperView _cacheKeyForParameters:includingTint:downsampleFactor:traitCollection:](
+        __int64 n_a1,
+        __int64 n_a2,
+        __int64 n_a3,
+        int n_a4,
+        void *void_a5,
+        double flt_a6)
+{
+  void *cacheGroup; // x20
+  __int64 cacheUniqueIdentifier; // x21
+  void *length; // x0
+  __int64 n_v15; // x24
+  __int64 n_v16; // x8
+  void *userInterfaceStyle; // x0
+  __CFString *cfstr_v18; // x8
+  void *stringWithFormat; // x0
+  void *userInterfaceStyle_2; // x0
+  __CFString *cfstr_v21; // x8
+  double flt_v22; // d0
+  double flt_v23; // d1
+  double flt_v24; // d2
+  double flt_v25; // d3
+  __int64 n_v26; // x0
+  __int64 n_v27; // x0
+  __int64 n_v28; // x25
+  void *dataWithBytesNoCopy; // x0
+  void *timestamp_hex; // x26
+  __int64 substringToIndex; // x27
+  void *void_v32; // x27
+  __int64 variantCacheIdentifier; // x0
+  __CFString *cfstr_v34; // x8
+  __CFString *cfstr_v35; // x9
+  __CFString *cfstr_v36; // x10
+  __int64 n_v37; // x0
+  __int64 n_v38; // x0
+  __int64 n_v39; // x0
+  __int64 n_v40; // x0
+  __int64 n_v41; // x0
+  __int64 n_v42; // x0
+  __int64 n_v43; // x0
+  __int64 n_v45; // [xsp+8h] [xbp-C8h]
+  __int64 n_v46; // [xsp+10h] [xbp-C0h]
+  __int64 n_v47; // [xsp+18h] [xbp-B8h]
+  __int64 n_v48; // [xsp+20h] [xbp-B0h]
+  __int64 n_v49; // [xsp+28h] [xbp-A8h]
+  __int64 n_v50; // [xsp+30h] [xbp-A0h]
+  _BYTE n_v51[20]; // [xsp+54h] [xbp-7Ch] BYREF
+  __int64 n_v52; // [xsp+68h] [xbp-68h]
+  __int64 vars8; // [xsp+D8h] [xbp+8h]
+
+  n_v52 = *MEMORY[0x278A3C7F8];
+  MEMORY[0x226BCDD70]();
+  cacheGroup = (void *)MEMORY[0x226BCDD40](objc_msgSend((id)n_a1, "cacheGroup"));
+  cacheUniqueIdentifier = MEMORY[0x226BCDD40](objc_msgSend((id)n_a1, "cacheUniqueIdentifier"));
+  length = objc_msgSend(cacheGroup, "length");
+  if ( !length )
+    goto LABEL_38;
+  n_v15 = 0;
+  n_v16 = *(_QWORD *)(n_a3 + 56);
+  if ( n_v16 > 1 )
+  {
+    if ( n_v16 != 2 )
+    {
+      if ( n_v16 == 3 )
+      {
+        if ( (unsigned int)MEMORY[0x226BCDED0](MEMORY[0x278A3CC58], 16) )
+          -[PBUIWallpaperView _cacheKeyForParameters:includingTint:downsampleFactor:traitCollection:].cold.1(n_a2, n_a1);
+        __break(0);
+        JUMPOUT(0x22304C7ACLL);
+      }
+      goto LABEL_25;
+    }
+    userInterfaceStyle_2 = objc_msgSend(void_a5, "userInterfaceStyle");
+    cfstr_v21 = &stru_283901908;
+    if ( userInterfaceStyle_2 == (void *)2 )
+      cfstr_v21 = &stru_2839035E8;
+    stringWithFormat = objc_msgSend(
+                         MEMORY[0x27897ED98],
+                         "stringWithFormat:",
+                         &stru_283903628,
+                         cfstr_v21,
+                         n_v45,
+                         n_v46,
+                         n_v47,
+                         n_v48,
+                         n_v49,
+                         n_v50);
+    goto LABEL_24;
+  }
+  if ( !n_v16 )
+  {
+    if ( (n_a4 & 1) == 0 )
+    {
+      *(_QWORD *)(n_a3 + 8) = 0;
+      *(_QWORD *)(n_a3 + 16) = 0;
+    }
+    flt_v22 = *(double *)(n_a3 + 24);
+    if ( flt_v22 == 1.79769313e308 )
+    {
+      *(_QWORD *)(n_a3 + 24) = 0;
+      flt_v22 = 0.0;
+    }
+    flt_v23 = *(double *)(n_a3 + 32);
+    if ( flt_v23 == 1.79769313e308 )
+    {
+      *(_QWORD *)(n_a3 + 32) = 0;
+      flt_v23 = 0.0;
+    }
+    flt_v24 = *(double *)(n_a3 + 40);
+    if ( flt_v24 == 1.79769313e308 )
+    {
+      *(_QWORD *)(n_a3 + 40) = 0;
+      flt_v24 = 0.0;
+    }
+    flt_v25 = *(double *)(n_a3 + 48);
+    if ( flt_v25 == 1.79769313e308 )
+    {
+      *(_QWORD *)(n_a3 + 48) = 0;
+      flt_v25 = 0.0;
+    }
+    stringWithFormat = objc_msgSend(
+                         MEMORY[0x27897ED98],
+                         "stringWithFormat:",
+                         &stru_283903008,
+                         *(_QWORD *)n_a3,
+                         *(_QWORD *)(n_a3 + 8),
+                         *(_QWORD *)(n_a3 + 16),
+                         *(_QWORD *)&flt_v23,
+                         (unsigned int)(int)flt_v22,
+                         *(_QWORD *)&flt_v24,
+                         *(_QWORD *)&flt_v25);
+    goto LABEL_24;
+  }
+  if ( n_v16 == 1 )
+  {
+    userInterfaceStyle = objc_msgSend(void_a5, "userInterfaceStyle");
+    cfstr_v18 = &stru_283901908;
+    if ( userInterfaceStyle == (void *)2 )
+      cfstr_v18 = &stru_2839035E8;
+    stringWithFormat = objc_msgSend(
+                         MEMORY[0x27897ED98],
+                         "stringWithFormat:",
+                         &stru_283903608,
+                         cfstr_v18,
+                         n_v45,
+                         n_v46,
+                         n_v47,
+                         n_v48,
+                         n_v49,
+                         n_v50);
+LABEL_24:
+    n_v15 = MEMORY[0x226BCDD40](stringWithFormat);
+  }
+LABEL_25:
+  if ( *(_QWORD *)(n_a1 + 544) <= 1u )
+    n_v26 = 1;
+  else
+    n_v26 = *(_QWORD *)(n_a1 + 544);
+  n_v27 = PBUIStringForWallpaperMode(n_v26);
+  n_v28 = MEMORY[0x226BCDD40](n_v27);
+  MEMORY[0x226BCD1A0]("Apr 17 2026 15:17:57", 20, n_v51);
+  dataWithBytesNoCopy = objc_msgSend(
+                          (id)MEMORY[0x226BCDD40](
+                                objc_msgSend(
+                                  MEMORY[0x2789728F0],
+                                  "dataWithBytesNoCopy:length:freeWhenDone:",
+                                  n_v51,
+                                  20,
+                                  0)),
+                          "pf_hexadecimalEncodedString");
+  timestamp_hex = (void *)MEMORY[0x226BCDD40](dataWithBytesNoCopy);
+  MEMORY[0x226BCDCE0]();
+  if ( (unsigned __int64)objc_msgSend(timestamp_hex, "length") >= 9 )
+  {
+    substringToIndex = MEMORY[0x226BCDD40](objc_msgSend(timestamp_hex, "substringToIndex:", 8));
+    MEMORY[0x226BCDCD0]();
+    timestamp_hex = (void *)substringToIndex;
+  }
+  void_v32 = (void *)MEMORY[0x27897ED98];
+  variantCacheIdentifier = MEMORY[0x226BCDD40](objc_msgSend((id)n_a1, "variantCacheIdentifier"));
+  cfstr_v34 = &stru_283903068;
+  if ( n_a4 )
+    cfstr_v34 = &stru_283903048;
+  cfstr_v35 = &stru_283
+// [truncated: decompiler/model output too long or degenerate]
+```
+
+The implementation is located within the `-[PBUIWallpaperView _cacheKeyForParameters:includingTint:downsampleFactor:traitCollection:]` method. The function constructs a unique cache key by aggregating several parameters, including the cache group, unique identifier, user interface style, and wallpaper mode. 
+
+The critical change involves the integration of a hardcoded timestamp string. The code retrieves this timestamp, converts it into a byte array, and then uses a hexadecimal encoding utility (`pf_hexadecimalEncodedString`) to transform it into a string representation. This encoded string is then truncated to 8 characters and appended to the final cache key string. By including this build-specific identifier in the cache key, the system forces a cache miss or a new cache entry creation whenever the framework is updated, effectively preventing the reuse of stale wallpaper cache data across different build versions.
 
 ## How to trigger this feature
 
-The feature is triggered by the system when the `PaperBoardUI` framework is loaded. Given that it's a UI framework, it's likely triggered during app launch or when the PaperBoard interface is requested. The date string change suggests that there might be a time-based trigger or a scheduled event related to the PaperBoard functionality.
+This feature is triggered automatically by the system whenever the `PaperBoardUI` framework needs to generate or retrieve a cache key for a wallpaper view. This occurs during wallpaper initialization, trait collection changes, or when the wallpaper parameters (such as tint or downsample factor) are updated. Because the cache key is now tied to the build timestamp, any change in the framework version will naturally trigger the generation of a new, unique cache key.
 
 ## Vulnerability Assessment
 
-**Assessment**: This change appears to be a **refactoring update** rather than a security patch.
-
-**Analysis**:
-- The removal of `AVFoundation`, `CoreFoundation`, and other core frameworks is a significant architectural change that could introduce compatibility issues or functionality loss.
-- The UUID change is a breaking change that could affect apps that rely on the old UUID for identification or communication.
-- The date string change is minor and unlikely to have security implications.
-
-**Potential Impact**:
-- **Compatibility**: Apps that depend on the old UUID or the removed frameworks may break.
-- **Functionality**: If the removed frameworks provided essential functionality, that functionality may be lost or moved to a different location.
-- **Security**: No direct security vulnerability is evident from the diff. The changes are more related to framework refactoring and dependency management.
-
-**Likely Vulnerability Class**: None identified. This appears to be a routine maintenance/update cycle.
+This change is a maintenance and stability improvement rather than a security patch. By incorporating a build-specific timestamp into the cache key, the developers have implemented a robust mechanism to prevent cache collisions and ensure that wallpaper rendering logic remains consistent with the current framework version. There is no evidence of memory safety issues, privilege escalation, or unauthorized data access being addressed here. The change is strictly functional, aimed at ensuring cache integrity.
 
 ## Evidence
 
-1. **Date String Change**:
-   - Removed: `"Mar  2 2026 21:28:33"`
-   - Added: `"Apr 17 2026 15:17:57"`
-   - This suggests a change in a timestamp or date-related display logic.
-
-2. **Framework Dependencies Removed**:
-   - `AVFoundation`
-   - `CoreFoundation`
-   - `libMobileGestalt`
-   - `libSystem`
-   - `libobjc`
-
-3. **UUID Change**:
-   - Old: `CE91B2C6-D8EE-343A-B59C-AFC7CF056DDE`
-   - New: `6916F3D4-D4E1-3BF4-B7F1-5898351DDA3F`
-
-4. **Binary Diff**:
-   - Version bump from `304.4.14.101.0` to `304.4.14.102.0`
-   - Significant changes in section sizes and offsets
-
-5. **String References**:
-   - Found references to `AVFoundation`, `CoreFoundation`, `libMobileGestalt`, `libSystem`, and `libobjc` in the binary, confirming their presence in the old version.
+- **Binary**: `/System/Library/PrivateFrameworks/PaperBoardUI.framework/PaperBoardUI`
+- **New Timestamp String**: `"Apr 17 2026 15:17:57"` at address `0x22309e708`
+- **Key Function**: `-[PBUIWallpaperView _cacheKeyForParameters:includingTint:downsampleFactor:traitCollection:]`
+- **Logic**: The function uses `pf_hexadecimalEncodedString` on the timestamp bytes to generate a unique identifier for the cache key, ensuring version-specific cache isolation.
 
 ## AI Prioritisation Scoring System
 
-- **binary_diff_analysis**
-  - **Tier**: TIER_2
-  - **Category**: framework_refactoring
-  - **Reasoning**: The change involves significant framework dependency removals and UUID changes, which could impact app compatibility and functionality. However, no direct security vulnerability is evident, and the changes appear to be part of a routine refactoring effort.
+- **static_analysis**
+  - **Tier**: TIER_3
+  - **Category**: functional_update
+  - **Reasoning**: The change is a cache versioning mechanism using a build timestamp to ensure cache consistency across framework updates. It does not involve security-sensitive logic or privacy-impacting changes.
 

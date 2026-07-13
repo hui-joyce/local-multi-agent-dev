@@ -6,45 +6,33 @@
 - **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
 
 ## What this feature does
-
-The `com.apple.driver.AppleAVD` kernel extension is a core component of the Apple Video Decoder (AVD) framework, responsible for hardware-accelerated video decoding on iOS devices. It manages decode sessions, handles video frame processing, and interfaces with the hardware decoder (e.g., AVX, LGH decoders). The component also includes analytics and session management features for monitoring decoder performance and health.
-
-In the transition from iOS 17.0.3 to 17.1, the `AppleAVD` component has undergone significant changes, primarily involving the removal of several symbols, strings, and sections, along with minor adjustments to memory layout and function counts. These changes suggest a refactoring or optimization of the video decoding subsystem, possibly related to security hardening, performance improvements, or compatibility updates with newer hardware or software components.
+The update to `com.apple.driver.AppleAVD` introduces a comprehensive telemetry and analytics framework for video decoding sessions. The driver now tracks detailed session metrics, including codec types, chroma formats, color depth, and performance statistics (e.g., frame rates, slice counts, and hardware error rates). This infrastructure appears designed to monitor the health and efficiency of the Apple Video Decoder (AVD) subsystem across different hardware configurations and usage scenarios.
 
 ## How is it implemented
 
-The binary diff reveals that the `AppleAVD` component has been modified in the following ways:
 
-### Symbol and String Removals
-- **Removed Symbols**: Several symbols have been removed from the binary, including:
-  - `CAvdWrapCtrlDaisy` and `CAvdWrapCtrlTansy`: These likely relate to control logic for specific decoder hardware variants (Daisy and Tansy).
-  - `isAVDCoreIDValid`, `isChromaFormatValid`, `isCodecValid`, `isColorDepthValid`, `isCryptSchemeValid`, `isFilmGrainModeValid`, `isIChatUsageValid`, `isParsingModeValid`: These validation functions have been removed, suggesting that the corresponding checks are now handled elsewhere or are no longer necessary.
-  - `populateDecryptionRegisters`, `removeDecodeSession`, `removeFrameFromRefLists`, `roundedDivision`, `sampleFrameStats`, `sampleSessionType`, `sendCoreAnalyticsEvent`, `setClientID`, `setDecryption2Params`, `setEventEntryBoolean`, `setEventEntryNumber`, `setEventEntryString`, `setKeyParams`, `setupDecryption`, `startCommandSequence`, `startSession`: These functions are related to session management, decryption, and command handling.
-  - `ePQReturn PriorityQueue::enqueueEntry(sPQEntry *)` and `ePQReturn PriorityQueue::insertIntoQueue(sPQEntry &)`: These functions are part of a priority queue implementation, which is used for managing tasks or events.
-  - `hw.memsize` and `isSystemWiredLimitExceeded`: These symbols are related to memory management and system resource limits.
+_No decompilation was captured for this component (the analyzer did not call `decompile_function`); the description below is derived from the symbol-level diff evidence, not from decompiled code._
 
-- **Removed Strings**: A large number of strings have been removed, including:
-  - Long hexadecimal strings that were likely used for encryption keys or other binary data.
-  - Error and warning messages related to decoding sessions, memory allocation, and invalid parameters.
-  - Strings related to decoder hardware variants (e.g., "H13A descrambler is not supported").
-  - Strings related to analytics and session statistics (e.g., "CoreAnalyticsHub", "SessionDim_*").
+The binary diff reveals a significant expansion of the driver's logging and analytics capabilities. The `__TEXT.__cstring` section has grown by approximately 5KB, reflecting the addition of numerous new log strings and diagnostic messages. The function count has increased from 1593 to 1645, indicating the implementation of new classes and methods, such as `CoreAnalyticsHub` and various `SessionDim_*` and `SessionMeas_*` structures.
 
-### Section Changes
-- **Text Section (`__TEXT.__text`)**: The size of the text section has increased from `0xea2fc` to `0xee2f0`, indicating that some code has been added or modified.
-- **Data Sections (`__DATA.__data`, `__DATA.__common`, `__DATA.__bss`)**: The sizes of these sections have also changed, with `__DATA.__data` increasing from `0x244` to `0x2ac`, `__DATA.__common` remaining the same at `0x90`, and `__DATA.__bss` decreasing from `0x14` to `0x14`.
-- **Constant Sections (`__DATA_CONST.__auth_got`, `__DATA_CONST.__got`, `__DATA_CONST.__auth_ptr`, `__DATA_CONST.__const`, `__DATA_CONST.__kalloc_type`, `__DATA_CONST.__kalloc_var`)**: The sizes of these sections have changed, with `__DATA_CONST.__auth_got` increasing from `0x3a0` to `0x3c0`, `__DATA_CONST.__got` increasing from `0xc0` to `0xd0`, `__DATA_CONST.__const` increasing from `0x5568` to `0x5678`, `__DATA_CONST.__kalloc_type` increasing from `0x3700` to `0x3a00`, and `__DATA_CONST.__kalloc_var` increasing from `0x18b0` to `0x1a90`.
+The implementation relies on a new `CoreAnalyticsHub` to aggregate and report session data. The driver now includes logic to sample and record specific session dimensions (e.g., `SessionDim_CodecType`, `SessionDim_ColorDepth`) and measurements (e.g., `SessionMeas_DecodeRate_fps`, `SessionMeas_NumFramesHWErrFatal`). The presence of new error-handling strings suggests that the driver has been hardened with more granular validation checks for memory mapping, buffer sizes, and client ID management. The removal of older, less descriptive log strings and the addition of specific "resent" frame handling logic point to a refactoring of the command queue and session management flow to improve reliability.
 
-### Function Count Changes
-- The total number of functions in the binary has increased from `1593` to `1645`, indicating that new functions have been added or existing functions have been split into smaller units.
+## How to trigger this feature
+This feature is triggered automatically during standard video decoding operations initiated by user-space applications. The analytics collection occurs throughout the lifecycle of a decode session, specifically during `startSession`, `addDecodeSession`, and `finishSession` calls. The telemetry is likely reported to the system's analytics daemon whenever a session is completed or when a hardware-level error or timeout is encountered.
 
-### UUID Change
-- The UUID of the binary has changed from `2E1C3A2C-BD8E-3548-949D-5744E9857C73` to `8EC44F1B-5223-30C5-A170-E5A66D7E95EE`, which is a common practice when updating a binary to ensure that it is treated as a new version by the system.
+## Vulnerability Assessment
+The changes in `com.apple.driver.AppleAVD` are primarily focused on observability and stability rather than a direct security patch. However, the addition of numerous validation checks—such as those for `m_decodeSessionCount` overflows, invalid client IDs, and buffer size bounds—indicates a proactive effort to mitigate potential memory corruption or logic errors. By enforcing stricter validation on inputs from user-space (e.g., `userspacePtr` and `ioSurfID` checks), the driver reduces the attack surface for potential privilege escalation or denial-of-service vulnerabilities originating from malformed video streams or malicious IPC requests.
 
-### String Additions
-- Several new strings have been added, including:
-  - `"11211122222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
+## Evidence
+- **Binary Growth**: `__TEXT.__cstring` increased from 0xf881 to 0x10bce; `__TEXT_EXEC.__text` increased from 0xea2fc to 0xee2f0.
+- **New Symbols/Strings**: Addition of `CoreAnalyticsHub`, `SessionDim_*`, and `SessionMeas_*` strings.
+- **Logic Changes**: New error strings for `m_decodeSessionCount` overflow, `PriorityQueue` management, and `AVDDart` truncation checks.
+- **Function Count**: Increase of 52 functions, indicating new diagnostic and telemetry-related code paths.
 
 ## AI Prioritisation Scoring System
 
-No actionable methods or prioritisation targets identified for this component.
+- **binary_diff_analysis**
+  - **Tier**: TIER_2
+  - **Category**: telemetry_and_stability
+  - **Reasoning**: The update adds significant telemetry and diagnostic logging, along with improved input validation for session management, which enhances system stability and observability.
 

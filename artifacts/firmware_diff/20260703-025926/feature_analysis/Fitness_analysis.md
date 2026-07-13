@@ -3,121 +3,203 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "%s Failed to convert date for friend achievement %@"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
+- **Database annotations** — variable renames: 39 (1 AI-authored, 38 auto-generated); comments: 4 (1 AI-authored, 3 auto-generated); across 3 function(s); verified persisted in .i64: 39 named variables, 3 comments.
 
 ## What this feature does
 
-The Fitness app update introduces significant changes to activity tracking, particularly around location-based disambiguation for workout types, enhanced calendar/timezone handling, and new metrics for cycling cadence. The most critical changes involve:
-
-1. **Location Disambiguation for Activities**: New methods added to `FIWorkoutActivityType` for requiring location disambiguation (`requiresLocationDisambiguation`, `requiresSwimmingLocationDisambiguation`) and a new key `_FIWorkoutActivityTypeLocationKey`. This suggests improved handling of activities where location data is ambiguous or missing.
-
-2. **Enhanced Calendar/Timezone Support**: New Foundation calendar and timezone symbols indicate better date/time handling for activity snapshots and friend achievements.
-
-3. **New Cycling Cadence Metrics**: Strings like `WORKOUT_AVERAGE_CADENCE_TITLE_CYCLING` and `WORKOUT_AVERAGE_CADENCE_TITLE_PEDOMETER` suggest new cadence tracking capabilities for cycling workouts, with fallback to pedometer data.
-
-4. **Mindfulness Integration**: New strings related to mindfulness ("MindfulnessMuseSharingBackground", "HKPrivateMindfulnessType") indicate expanded wellness tracking features.
-
-5. **UI Improvements**: Removal of activity ring view constraints and background image names, along with new safe area padding modifiers, suggests UI refactoring for better display on newer devices.
+The update introduces enhanced disambiguation logic for workout activity types within the Fitness application. Specifically, it adds support for distinguishing between different workout locations (such as indoor vs. outdoor or specific swimming environments) and multi-sport activity configurations. This allows the system to better categorize workouts that might otherwise be ambiguous, ensuring that metrics like cadence, heart rate, and location-based data are correctly attributed to the specific activity context.
 
 ## How is it implemented
 
-Due to the tool call limit, I could not successfully decompile the functions or retrieve their pseudocode. However, based on the binary diff evidence, I can describe the implementation:
+
+### Decompilation at `0x25298e670`
 
 ```c
-// No decompiled pseudocode available - tool calls failed
+void *__fastcall -[FIWorkoutActivityType initWithActivityTypeIdentifier:location:isPartOfMultiSport:metadata:](
+        void *void_a1,
+        __int64 n_a2,
+        __int64 n_a3,
+        __int64 n_a4,
+        __int64 n_a5,
+        __int64 n_a6)
+{
+  return objc_msgSend(
+           void_a1,
+           "initWithActivityTypeIdentifier:location:isPartOfMultiSport:metadata:auxiliaryTypeIdentifier:",
+           n_a3,
+           n_a4,
+           n_a5,
+           n_a6,
+           *MEMORY[0x2789822E0]);
+}
 ```
 
-The implementation relies on:
-- New Objective-C methods in `FIWorkoutActivityType` for location disambiguation logic
-- Enhanced calendar/timezone utilities from Foundation framework
-- New activity type identifiers for cycling cadence tracking
-- Updated UI components with improved safe area handling
+### Decompilation at `0x25298e32c`
+
+```c
+_QWORD *__fastcall -[FIWorkoutActivityType initWithActivityTypeIdentifier:location:isPartOfMultiSport:metadata:auxiliaryTypeIdentifier:](
+        __int64 n_a1,
+        __int64 n_a2,
+        __int64 n_a3,
+        __int64 n_a4,
+        char char_a5,
+        void *void_a6,
+        __int64 n_a7)
+{
+  _QWORD *qword_v13; // x0
+  _QWORD *qword_v14; // x20
+  __int64 n_v15; // x9
+  __int64 n_v16; // x9
+  void *arrayWithObjects; // x21
+  __int64 n_v18; // x0
+  void *dictionary; // x22
+  void *countByEnumeratingWithState; // x0
+  void *countByEnumeratingWithState_2; // x23
+  __int64 n_v22; // x26
+  void *i; // x27
+  __int64 n_v24; // x24
+  void *objectForKeyedSubscript; // x0
+  __int64 n_v26; // x0
+  __int64 n_v27; // x0
+  __int64 n_v28; // x0
+  __int64 n_v29; // x0
+  __int64 n_v31; // x0
+  _QWORD n_v32[2]; // [xsp+0h] [xbp-160h] BYREF
+  __int128 n_v33; // [xsp+10h] [xbp-150h] BYREF
+  __int128 n_v34; // [xsp+20h] [xbp-140h]
+  __int128 n_v35; // [xsp+30h] [xbp-130h]
+  __int128 n_v36; // [xsp+40h] [xbp-120h]
+  _QWORD n_v37[7]; // [xsp+50h] [xbp-110h] BYREF
+  _BYTE n_v38[128]; // [xsp+88h] [xbp-D8h] BYREF
+  __int64 n_v39; // [xsp+108h] [xbp-58h]
+
+  n_v39 = *MEMORY[0x278A3C7F8];
+  MEMORY[0x255BDFCA0](n_a1, n_a2);
+  n_v32[0] = n_a1;
+  n_v32[1] = off_279E2D868;
+  qword_v13 = (_QWORD *)MEMORY[0x255BDFB00](n_v32, 0x1FB7FC150uLL);
+  qword_v14 = qword_v13;
+  if ( qword_v13 )
+  {
+    qword_v13[2] = n_a3;
+    qword_v13[3] = n_a7;
+    *((_BYTE *)qword_v13 + 9) = char_a5;
+    qword_v13[4] = n_a4;
+    *((_BYTE *)qword_v13 + 8) = n_a4 == 2;
+    if ( void_a6 && (qword_v13 = objc_msgSend(void_a6, "count")) != 0 )
+    {
+      n_v15 = *MEMORY[0x2789805F0];
+      n_v37[0] = *MEMORY[0x2789805B0];
+      n_v37[1] = n_v15;
+      n_v16 = *MEMORY[0x278980610];
+      n_v37[2] = *MEMORY[0x2789805F8];
+      n_v37[3] = n_v16;
+      n_v37[4] = &stru_2869445F0;
+      n_v37[5] = &stru_286944610;
+      n_v37[6] = &stru_286944630;
+      arrayWithObjects = (void *)MEMORY[0x255BDFC70](objc_msgSend(MEMORY[0x2789728C0], "arrayWithObjects:count:", n_v37, 7));
+      n_v18 = MEMORY[0x255BDFCD0]();
+      MEMORY[0x255BDFCA0](n_v18);
+      dictionary = (void *)MEMORY[0x255BDFC70](objc_msgSend(MEMORY[0x278972998], "dictionary"));
+      n_v33 = 0u;
+      n_v34 = 0u;
+      n_v35 = 0u;
+      n_v36 = 0u;
+      MEMORY[0x255BDFCD0]();
+      countByEnumeratingWithState = objc_msgSend(
+                                      arrayWithObjects,
+                                      "countByEnumeratingWithState:objects:count:",
+                                      &n_v33,
+                                      n_v38,
+                                      16);
+      if ( countByEnumeratingWithState )
+      {
+        countByEnumeratingWithState_2 = countByEnumeratingWithState;
+        n_v22 = *(_QWORD *)n_v34;
+        do
+        {
+          for ( i = 0; i != countByEnumeratingWithState_2; i = (char *)i + 1 )
+          {
+            if ( *(_QWORD *)n_v34 != n_v22 )
+              MEMORY[0x255BDFAC0](arrayWithObjects);
+            n_v24 = *(_QWORD *)(*((_QWORD *)&n_v33 + 1) + 8LL * (_QWORD)i);
+            objectForKeyedSubscript = (void *)MEMORY[0x255BDFC70](objc_msgSend(void_a6, "objectForKeyedSubscript:", n_v24));
+            if ( objectForKeyedSubscript )
+              objectForKeyedSubscript = objc_msgSend(
+                                          dictionary,
+                                          "setObject:forKeyedSubscript:",
+                                          objectForKeyedSubscript,
+                                          n_v24);
+            MEMORY[0x255BDFBE0](objectForKeyedSubscript);
+          }
+          countByEnumeratingWithState_2 = objc_msgSend(
+                                            arrayWithObjects,
+                                            "countByEnumeratingWithState:objects:count:",
+                                            &n_v33,
+                                            n_v38,
+                                            16);
+        }
+        while ( countByEnumeratingWithState_2 );
+      }
+      n_v26 = MEMORY[0x255BDFBA0]();
+      n_v27 = MEMORY[0x255BDFB80](n_v26);
+      n_v28 = MEMORY[0x255BDFBA0](n_v27);
+      qword_v14[5] = dictionary;
+      qword_v13 = (_QWORD *)MEMORY[0x255BDFC20](n_v28);
+    }
+    else
+    {
+      qword_v14[5] = MEMORY[0x278972A70];
+    }
+    qword_v13 = (_QWORD *)MEMORY[0x255BDFBA0](qword_v13);
+  }
+  n_v29 = MEMORY[0x255BDFB80](qword_v13);
+  if ( *MEMORY[0x278A3C7F8] == n_v39 )
+    return qword_v14;
+  n_v31 = MEMORY[0x255BDF7E0](n_v29);
+  return (_QWORD *)_EnergyFormatter(n_v31);
+}
+```
+
+### Decompilation at `0x25298cb6c`
+
+```c
+void *__fastcall -[FIWorkoutActivityType requiresLocationDisambiguation](void *activityType)
+{
+  void *result; // x0
+
+  result = objc_msgSend(
+             off_279E29A88,
+             "shouldDisambiguateOnLocationType:",
+             objc_msgSend(activityType, "effectiveTypeIdentifier"));
+  if ( (_DWORD)result )
+    return (void *)(objc_msgSend(activityType, "location") == (void *)1);
+  return result;
+}
+```
+
+The implementation centers on the `FIWorkoutActivityType` class, which has been updated to include a `location` property and new initialization methods. The primary initializer now accepts an `auxiliaryTypeIdentifier` and a `location` parameter, allowing for more granular metadata storage. 
+
+The disambiguation logic is handled by the `requiresLocationDisambiguation` and `requiresSwimmingLocationDisambiguation` methods. These methods query an external configuration provider (referenced via `off_279E29A88`) to determine if a specific `effectiveTypeIdentifier` requires further clarification based on its location. If disambiguation is required, the logic checks the `location` property of the `FIWorkoutActivityType` instance to return a boolean status. This ensures that the application can dynamically adjust its UI and data processing pipelines—such as selecting the correct background images or metric titles—based on the specific context of the workout.
 
 ## How to trigger this feature
 
-The new features appear to be triggered by:
-- **Location Disambiguation**: When an activity's location data is incomplete or ambiguous, the system prompts the user to confirm or correct the location
-- **Cycling Cadence Tracking**: Automatically enabled for cycling workouts when cadence data is available from the cycling computer or pedometer
-- **Mindfulness Tracking**: Integrated into the overall wellness dashboard, with background sharing capabilities
+This feature is triggered automatically by the Fitness application when a workout session is initialized or updated. It is specifically invoked when the system encounters an activity type that is flagged as requiring disambiguation (e.g., a generic "Swimming" or "Cycling" workout that needs to distinguish between pool/open water or indoor/outdoor environments). Users will trigger this by starting a workout that falls into these categories, at which point the application will use the updated `FIWorkoutActivityType` metadata to configure the workout view and data tracking.
 
 ## Vulnerability Assessment
 
-**Assessment: Security-Relevant Patch (Potential Vulnerability Fix)**
-
-**Likely Vulnerability Class**: Use-After-Free / Out-of-Bounds Access
-
-**How the old code was exploitable**:
-1. The removed `HKActivityRingView` class and related view constraints (`$__lazy_storage_$_workoutImageViewHeightConstraint`, `workoutImageViewWidthConstraint`) suggest the old implementation had hardcoded or poorly managed UI layout constraints
-2. The error string "Failed to create HKActivityRingView within ActivityRingsView" indicates the old code could crash or misbehave when trying to create views under certain conditions
-3. The removed `WORKOUT_AVERAGE_CADENCE_TITLE` string and related UI elements suggest the old cadence tracking had incomplete error handling
-
-**How the new code mitigates it**:
-1. **Location Disambiguation**: The new `requiresLocationDisambiguation` and `requiresSwimmingLocationDisambiguation` methods provide explicit checks before using location data, preventing use of invalid/missing location information
-2. **Enhanced Error Handling**: New error messages like "found unexpected _HKPrivateMindfulnessType %ld; falling back to false" and "bad sample value (out of bounds): %f" indicate proper validation and fallback mechanisms
-3. **UI Refactoring**: Removal of hardcoded constraints and lazy storage patterns suggests a more robust, dynamic UI implementation that's less prone to layout-related crashes
-
-**Potential Impact if Left Unpatched**:
-- **Crash Vulnerability**: The old code could crash when displaying activity rings under certain conditions (e.g., missing view data, invalid constraints)
-- **Data Corruption**: Improper handling of location data could lead to incorrect activity tracking or data corruption
-- **Privacy Issue**: The removed `HKPrivateMindfulnessType` handling suggests the old code might have exposed private health data improperly
-
-**Confidence**: Medium - The evidence strongly suggests the changes are defensive in nature, addressing potential crashes and data handling issues, but without being able to decompile the actual code, we cannot confirm the exact vulnerability being patched.
+The changes appear to be functional improvements rather than security patches. The introduction of explicit location and auxiliary type identifiers improves data integrity and reduces the likelihood of incorrect metric calculation or UI display errors. There are no obvious signs of memory safety fixes (such as bounds checking on user-supplied input) or privilege escalation mitigations. The "out of bounds" string found in the diff suggests improved error handling for data parsing, which is a positive stability improvement but does not indicate a critical security vulnerability.
 
 ## Evidence
 
-### New Symbols (Added in Version 2):
-- `_$s10Foundation8CalendarV8timeZoneAA04TimeD0Vvs` - Enhanced timezone handling
-- `_$s7SwiftUI23SafeAreaPaddingModifierV*` - New UI safe area handling
-- `_FIUIIsWorkoutTypePedestrianActivity` - New activity type classification
-- `_OBJC_CLASS_$_ACHTemplate` - New achievement template
-- `_OBJC_CLASS_$_UIDevice` - Device detection/classification
-- `configure(activitySummary:isWheelchairUser:isFriendDetail:isStandaloneFallback:)` - Enhanced configuration with wheelchair support
-- `hk_gregorianCalendarWithLocalTimeZone` - Localized calendar handling
-- `isStandaloneForCacheIndex:` - Improved caching logic
-- `requiresDisambiguation` / `requiresLocationDisambiguation` / `requiresSwimmingLocationDisambiguation` - Location validation methods
-
-### New CStrings (Added in Version 2):
-- `"%s Failed to convert date for friend achievement %@"` - Date conversion error handling
-- `"%s found unexpected _HKPrivateMindfulnessType %ld; falling back to false"` - Private data validation
-- `"DivingDataCalculator bad sample value (out of bounds): %f"` - Out-of-bounds data handling
-- `"MindfulnessMuseSharingBackground"` - New mindfulness feature
-- `"UNDERWATER_DIVE_WATER_TEMPERATURE_NOT_AVAILABLE"` - New diving metric
-- `"WORKOUT_AVERAGE_CADENCE_TITLE_CYCLING"` / `"WORKOUT_AVERAGE_CADENCE_TITLE_PEDOMETER"` - New cadence tracking
-- `"configure(activitySummary:isWheelchairUser:isFriendDetail:isStandaloneFallback:)"` - Enhanced configuration
-- `"_location"` - Location data key
-- `requiresLocationDisambiguation` - Location validation selector
-
-### Removed Symbols (Removed in Version 2):
-- `_$s11WorkoutCore13GoalPublisherC8progresss6UInt32Vvg` - Goal tracking refactored
-- `_$s7SwiftUI10_ShapeViewVyxq_GAA0D0AAMc` - SwiftUI shape view refactored
-- `_$s7SwiftUI5ShapeP*` - Multiple shape-related symbols removed
-- `_OBJC_CLASS_$_HKActivityRingView` - Activity ring view class removed
-- `__unnamed_array_storage.*` - Multiple array storage entries removed
-
-### Removed CStrings (Removed in Version 2):
-- `"Failed to create HKActivityRingView within ActivityRingsView"` - Error handling improved
-- `"FitnessApp/ActivityRingsView_iOS.swift"` - Source file reference removed
-- `"_setActivityRingViewBackgroundColor:"` / `"_setEmptyRingAlpha:"` - UI methods refactored
-- `"configure(activitySummary:isWheelchairUser:isFriendDetail:)"` - Configuration simplified
-- `"multipleMetricBackgroundImageName(for:)"` - Background image handling refactored
-
-### Binary Diff Summary:
-- **Text Segment Growth**: `__TEXT.__text` increased from 0x421014 to 0x426744 (+5736 bytes)
-- **Objective-C Segment Growth**: `__TEXT.__objc_methlist` increased from 0xb8dc to 0xb8ec (+20 bytes)
-- **Swift Segment Growth**: `__TEXT.__swift5_typeref` increased from 0x1e010 to 0x1f014 (+1000 bytes)
-- **Data Segment Growth**: `__DATA.__objc_const` increased from 0x3b6b0 to 0x3b6e8 (+40 bytes)
-- **BSS Segment Reduction**: `__DATA.__bss` decreased from 0x11f70 to 0x11d50 (-208 bytes)
-- **Function Count**: Decreased from 18971 to 18963 (-8 functions)
-- **Symbol Count**: Decreased from 4099 to 4090 (-9 symbols)
-- **String Count**: Increased from 10127 to 10141 (+14 strings)
-- **UUID Change**: Completely new UUID, indicating a new binary build
-
-The net effect is a slightly larger binary with more strings but fewer functions, suggesting code consolidation and refactoring rather than simple feature addition.
+- **Symbols Added**: `-[FIWorkoutActivityType initWithActivityTypeIdentifier:location:isPartOfMultiSport:metadata:auxiliaryTypeIdentifier:]`, `-[FIWorkoutActivityType requiresLocationDisambiguation]`, `-[FIWorkoutActivityType requiresSwimmingLocationDisambiguation]`.
+- **Strings Added**: `FIWorkoutActivityType(type=%@%@, isIndoor=%@, location=%@, partOfMultisport=%@, metadata=%@)`, `WORKOUT_AVERAGE_CADENCE_TITLE_CYCLING`, `WORKOUT_AVERAGE_CADENCE_TITLE_PEDOMETER`.
+- **Logic**: The `requiresLocationDisambiguation` method now performs a conditional check against the `location` property, confirming that the application is now actively using this metadata to drive runtime behavior.
 
 ## AI Prioritisation Scoring System
 
-- **binary_diff_analysis**
+- **feature_analysis**
   - **Tier**: TIER_2
-  - **Category**: feature_update
-  - **Reasoning**: The changes represent significant UI and activity tracking improvements with location disambiguation, enhanced calendar handling, and new cycling cadence metrics. While not a critical security patch, the refactoring of activity ring views and improved error handling for location data and private health information (mindfulness type validation) have observable runtime behavior and moderate security relevance. The evidence shows defensive coding patterns addressing potential crashes and data validation issues.
+  - **Category**: functional_update
+  - **Reasoning**: The changes represent a significant update to the workout tracking subsystem, improving data granularity and UI configuration. While not a security patch, it impacts core business logic and user-facing data accuracy.
 

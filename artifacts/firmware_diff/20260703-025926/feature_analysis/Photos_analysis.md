@@ -3,366 +3,191 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "@\"<PHAssetResourceOwning>\""`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 0 (0 AI-authored, 0 auto-generated); across 0 function(s); verified persisted in .i64: 0 named variables, 0 comments.
+- **Database annotations** — variable renames: 33 (2 AI-authored, 31 auto-generated); comments: 7 (2 AI-authored, 5 auto-generated); across 5 function(s); verified persisted in .i64: 33 named variables, 5 comments.
 - **Apple Security Notes**: matches advisory component `Photos` — Apple confirms a security-relevant change here; this analysis examines the likely vulnerability patch.
 
 ## What this feature does
 
-This update introduces significant enhancements to the Photos framework's asset resource management and HDR (High Dynamic Range) image processing capabilities. The primary changes focus on:
-
-1. **New HDR Processing Options**: Added support for `hdrGain` and `targetHDRHeadroom` parameters in image decoder options, enabling fine-grained control over HDR image processing.
-
-2. **Enhanced Asset Resource Request Handling**: Introduced `PHContentEditingInputRequestContext` with a new method `contentEditingInputRequestContextForAsset:requestID:managerID:networkAccessAllowed:downloadIntent:progressHandler:resultHandler:` that provides a more sophisticated context for requesting content editing inputs from assets.
-
-3. **Improved Unsupported Format Detection**: Added `PHResourceLocalAvailabilityRequest isKnownUnsupportedFormatForAsset:` method to better identify and handle unsupported media formats.
-
-4. **Wallpaper Suggestion System**: New `PHSuggestion` class methods for managing shuffle wallpaper album suggestions, including `allShuffleWallpaperAlbumSuggestionSubtypes`, `predicateForAllShuffleWallpaperAlbumSuggestions`, and related suggestion management utilities.
-
-5. **Cloud Photo Library Management**: Added new methods for managing cloud photo library pause states and internal clients.
-
-6. **Removed Photo Stream Publishing**: The `PHAssetCreationPhotoStreamPublishingRequest` class and related photo stream publishing functionality have been completely removed, suggesting a shift away from the photo stream publishing feature.
+The updates to the `Photos.framework` in this release introduce granular control over media resource requests, specifically targeting how the system handles RAW image assets and HDR (High Dynamic Range) display parameters. The changes include new mechanisms to prevent fallback to adjustment bases, support for HDR headroom configuration, and improved management of cloud synchronization budgets. These updates appear designed to provide more precise control over media processing pipelines, likely to improve performance and visual fidelity in photo editing and display workflows.
 
 ## How is it implemented
 
-```c
-// PHContentEditingInputRequestContext contentEditingInputRequestContextForAsset:requestID:managerID:networkAccessAllowed:downloadIntent:progressHandler:resultHandler:
-// This method creates a content editing input request context for a specific asset with detailed parameters
-// Parameters:
-//   asset - The asset to create the request context for
-//   requestID - Unique identifier for the request
-//   managerID - Identifier for the asset resource manager
-//   networkAccessAllowed - Whether network access is permitted for this request
-//   downloadIntent - The intent for downloading the asset
-//   progressHandler - Block to receive progress updates
-//   resultHandler - Block to receive the final result or error
-// Returns: A PHContentEditingInputRequestContext instance configured for the asset
-// This replaces the simpler PHAssetResourceRequest with a more feature-rich context that supports
-// network access control, download intents, and progress tracking.
-```
+
+### Decompilation at `0x19d87b1f4`
 
 ```c
-// PHContentEditingInputRequestContext shouldUseRAWResourceAsUnadjustedBaseForAsset:options:
-// Determines whether to use the original RAW resource as an unadjusted base for an asset
-// Parameters:
-//   asset - The asset to check
-//   options - Processing options that may affect the decision
-// Returns: BOOL indicating whether the RAW resource should be used as unadjusted base
-// This method provides logic for deciding between using the original RAW data versus
-// a processed version when generating content editing inputs.
+void __fastcall +[PHContentEditingInputRequestContext contentEditingInputRequestContextForAsset:requestID:managerID:networkAccessAllowed:downloadIntent:progressHandler:resultHandler:](
+        void *void_a1,
+        __int64 n_a2,
+        __int64 n_a3,
+        __int64 n_a4,
+        __int64 n_a5,
+        __int64 n_a6,
+        __int64 n_a7,
+        __int64 n_a8,
+        __int64 n_a9)
+{
+  __int64 n_v16; // x0
+  __int64 n_v17; // x0
+  void *requestOptions; // x23
+  __int64 n_v19; // x0
+  __int64 n_v20; // x0
+  __int64 vars8; // [xsp+58h] [xbp+8h]
+
+  n_v16 = MEMORY[0x19F9A5780](void_a1, n_a2);
+  n_v17 = MEMORY[0x19F9A57D0](n_v16);
+  MEMORY[0x19F9A5760](n_v17);
+  requestOptions = (void *)MEMORY[0x19F9A54C0](off_1E73BA6E0);
+  objc_msgSend(requestOptions, "setNetworkAccessAllowed:", n_a6);
+  objc_msgSend(requestOptions, "setDownloadIntent:", n_a7);
+  objc_msgSend(requestOptions, "setCanHandleAdjustmentData:", &__block_literal_global_39530);
+  MEMORY[0x19F9A56B0](objc_msgSend(requestOptions, "setProgressHandler:", n_a8));
+  objc_msgSend(requestOptions, "setForceReturnFullLivePhoto:", 1);
+  objc_msgSend(requestOptions, "setSkipDisplaySizeImage:", 1);
+  objc_msgSend(requestOptions, "setSkipLivePhotoImageAndAVAsset:", 1);
+  objc_msgSend(requestOptions, "setDisallowFallbackAdjustmentBase:", 1);
+  MEMORY[0x19F9A5730](
+    objc_msgSend(
+      off_1E73BA9F8,
+      "contentEditingInputRequestContextWithRequestID:managerID:asset:options:useRAWAsUnadjustedBase:resultHandler:",
+      n_a4,
+      n_a5,
+      n_a3,
+      requestOptions,
+      objc_msgSend(void_a1, "shouldUseRAWResourceAsUnadjustedBaseForAsset:options:", n_a3, requestOptions),
+      n_a9));
+  n_v19 = MEMORY[0x19F9A5660]();
+  n_v20 = MEMORY[0x19F9A5640](n_v19);
+  MEMORY[0x19F9A5690](n_v20);
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  JUMPOUT(0x19F9A5500LL);
+}
 ```
 
-```c
-// PHResourceLocalAvailabilityRequest isKnownUnsupportedFormatForAsset:
-// Checks if a specific asset format is known to be unsupported
-// Parameters:
-//   asset - The asset to check
-// Returns: BOOL indicating whether the asset's format is unsupported
-// This method uses cached information about unsupported codecs (H264, HEVC) to quickly
-// determine if an asset's format can be processed.
-```
+### Decompilation at `0x19d7cbf78`
 
 ```c
-// PHImageDecoderOptions hdrGain
-// Getter for the HDR gain value in image decoder options
-// Returns: The current HDR gain value
-// This property controls the gain applied during HDR image processing.
+void __fastcall -[PHPhotoLibrary(CloudPhotoLibrary) overrideSystemBudgetsForSyncSession:pauseReason:systemBudgets:completionHandler:](
+        void *void_a1,
+        __int64 n_a2,
+        __int64 n_a3,
+        __int64 n_a4,
+        __int64 n_a5,
+        __int64 n_a6)
+{
+  __int64 n_v11; // x0
+  __int64 overrideSystemBudgetsForSyncSession; // x0
+  void *cloudClient; // [xsp+8h] [xbp-38h]
+  __int64 vars8; // [xsp+48h] [xbp+8h]
+
+  n_v11 = MEMORY[0x19F9A5760](void_a1, n_a2);
+  MEMORY[0x19F9A5790](n_v11);
+  cloudClient = (void *)MEMORY[0x19F9A5730](objc_msgSend(void_a1, "_cloudInternalClient"));
+  overrideSystemBudgetsForSyncSession = MEMORY[0x19F9A5640](
+                                          objc_msgSend(
+                                            cloudClient,
+                                            "overrideSystemBudgetsForSyncSession:pauseReason:systemBudgets:completionHandler:",
+                                            n_a3,
+                                            n_a4,
+                                            n_a5,
+                                            n_a6));
+  MEMORY[0x19F9A5670](overrideSystemBudgetsForSyncSession);
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  JUMPOUT(0x19F9A5620LL);
+}
 ```
 
-```c
-// PHImageDecoderOptions setHdrGain:
-// Setter for the HDR gain value in image decoder options
-// Parameters:
-//   value - The HDR gain value to set
-// Returns: Void
-// This method allows setting the HDR gain parameter for image decoding.
-```
+### Decompilation at `0x19d87b498`
 
 ```c
-// PHImageDecoderOptions setTargetHDRHeadroom:
-// Setter for the target HDR headroom value in image decoder options
-// Parameters:
-//   value - The target HDR headroom value to set
-// Returns: Void
-// This method configures the target headroom for HDR image processing.
+void *__fastcall +[PHContentEditingInputRequestContext shouldUseRAWResourceAsUnadjustedBaseForAsset:options:](
+        __int64 n_a1,
+        __int64 n_a2,
+        void *void_a3,
+        void *void_a4)
+{
+  __int64 n_v6; // x0
+  void *shouldUseRAWResourceWithOriginalResourceChoice; // x21
+  void *void_v8; // x0
+  __int64 n_v9; // x0
+
+  n_v6 = MEMORY[0x19F9A5760](n_a1, n_a2);
+  MEMORY[0x19F9A5780](n_v6);
+  if ( PHDeviceSupportsRAW_onceToken != -1 )
+    sub_19D8F0890(&PHDeviceSupportsRAW_onceToken, &__block_literal_global_19918);
+  if ( PHDeviceSupportsRAW_deviceSupportsRAW == 1 && ((unsigned int)objc_msgSend(void_a4, "dontAllowRAW") & 1) == 0 )
+  {
+    if ( (unsigned int)objc_msgSend(void_a4, "shouldForceOriginalChoice") )
+      void_v8 = objc_msgSend(void_a4, "originalChoice");
+    else
+      void_v8 = objc_msgSend(void_a3, "originalResourceChoice");
+    shouldUseRAWResourceWithOriginalResourceChoice = objc_msgSend(
+                                                       void_a3,
+                                                       "shouldUseRAWResourceWithOriginalResourceChoice:",
+                                                       void_v8);
+  }
+  else
+  {
+    shouldUseRAWResourceWithOriginalResourceChoice = 0;
+  }
+  n_v9 = MEMORY[0x19F9A5660]();
+  MEMORY[0x19F9A5640](n_v9);
+  return shouldUseRAWResourceWithOriginalResourceChoice;
+}
 ```
 
-```c
-// PHImageDecoderOptions targetHDRHeadroom
-// Getter for the target HDR headroom value in image decoder options
-// Returns: The current target HDR headroom value
-// This property specifies the desired headroom level for HDR processing.
-```
+### Decompilation at `0x19d78e054`
 
 ```c
-// PHSuggestion allShuffleWallpaperAlbumSuggestionSubtypes
-// Returns all suggestion subtypes for shuffle wallpaper albums
-// Returns: NSArray of suggestion subtype identifiers
-// This class method provides access to all available subtypes for the shuffle
-// wallpaper album suggestion feature.
+__int64 __fastcall -[PHContentEditingInputRequestOptions disallowFallbackAdjustmentBase](__int64 n_a1)
+{
+  return *(unsigned __int8 *)(n_a1 + 10);
+}
 ```
 
-```c
-// PHSuggestion predicateForAllShuffleWallpaperAlbumSuggestions
-// Creates a predicate to filter all shuffle wallpaper album suggestions
-// Returns: NSPredicate for filtering suggestions
-// This method generates a predicate that can be used to query all suggestions
-// related to the shuffle wallpaper album feature.
-```
+### Decompilation at `0x19d661bc0`
 
 ```c
-// PHPhotoLibrary(CloudPhotoLibrary) _cloudInternalClient
-// Internal client for cloud photo library operations
-// Returns: The internal cloud client instance
-// This is a private accessor for the cloud photo library's internal client,
-// used for internal cloud synchronization operations.
+__int64 __fastcall -[PHImageRequestOptions setTargetHDRHeadroom:](__int64 result, double flt_a2)
+{
+  *(double *)(result + 80) = flt_a2;
+  return result;
+}
 ```
 
-```c
-// PHPhotoLibrary(CloudPhotoLibrary) overrideSystemBudgetsForSyncSession:pauseReason:systemBudgets:completionHandler:
-// Overrides system budgets for a cloud sync session
-// Parameters:
-//   session - The sync session to override budgets for
-//   pauseReason - Reason for pausing the session
-//   systemBudgets - The system budgets to apply
-//   completionHandler - Block to execute when operation completes
-// Returns: Void
-// This method allows applications to override system-imposed resource budgets
-// for cloud synchronization, with support for pausing and resuming.
-```
+The implementation introduces several new properties and methods across the `PHContentEditingInputRequestContext`, `PHContentEditingInputRequestOptions`, and `PHImageRequestOptions` classes.
 
-```c
-// PHPhotoLibrary(CloudPhotoLibrary) setCloudPhotoLibraryPauseState:reason:
-// Sets the pause state for the cloud photo library
-// Parameters:
-//   state - The new pause state (paused/unpaused)
-//   reason - The reason for changing the pause state
-// Returns: Void
-// This method controls whether the cloud photo library is paused or active.
-```
+In `+[PHContentEditingInputRequestContext contentEditingInputRequestContextForAsset:requestID:managerID:networkAccessAllowed:downloadIntent:progressHandler:resultHandler:]`, the framework now explicitly configures request options to disallow fallback to adjustment bases. It also dynamically determines whether to use a RAW resource as an unadjusted base by invoking `shouldUseRAWResourceAsUnadjustedBaseForAsset:options:`. This helper method checks device capabilities and specific request flags (such as `dontAllowRAW`) to decide if a RAW resource is appropriate for the current request context.
 
-```c
-// PHAssetResourceManager assetResourceRequestDidRequestRetryWithContentEditingInputLoaded:
-// Handler called when an asset resource request needs to retry with content editing input loaded
-// Parameters:
-//   request - The asset resource request that needs retrying
-// Returns: Void
-// This callback is invoked when the system needs to retry a resource request
-// after loading content editing input, suggesting a retry mechanism for
-// failed or incomplete requests.
-```
+For HDR support, the framework has added `targetHDRHeadroom` and `hdrGain` properties to `PHImageDecoderOptions` and `PHImageRequestOptions`. These allow callers to specify the desired HDR headroom, which is then stored directly in the request options object.
 
-```c
-// PHAssetResourceRequest configureWithError:
-// Configures an error for the asset resource request
-// Parameters:
-//   error - The error to configure
-// Returns: Void
-// This method sets an error state on the request, used for error handling.
-```
+Finally, the `PHPhotoLibrary` category for `CloudPhotoLibrary` has been extended with `overrideSystemBudgetsForSyncSession:pauseReason:systemBudgets:completionHandler:`. This method acts as a bridge to the internal cloud client, allowing the system to override default synchronization budgets during specific sessions, providing a mechanism to manage background sync activity more effectively.
 
-```c
-// PHAssetResourceWriteRequest _lazyDataRequest
-// Lazy data request for asset resource write operations
-// Returns: The lazy data request instance
-// This internal method manages lazy loading of data for asset resource writes.
-```
+## How to trigger this feature
 
-```c
-// PHAssetResourceWriteRequest assetResourceRequestDidRequestRetryWithContentEditingInputLoaded:
-// Handler called when an asset resource write request needs to retry
-// Parameters:
-//   request - The asset resource write request that needs retrying
-// Returns: Void
-// Similar to the read request retry handler, this manages retry logic for
-// write operations when content editing input is loaded.
-```
+This feature is triggered when an application or system service initiates a content editing input request or an image request through the `Photos` framework. Specifically:
+- The RAW resource logic is triggered when requesting content editing input for an asset that may have RAW data available.
+- The HDR headroom configuration is triggered when an application sets the `targetHDRHeadroom` property on `PHImageRequestOptions` before passing those options to an image manager request.
+- The cloud budget override is triggered by internal system processes managing photo library synchronization sessions, particularly when a specific pause reason or budget constraint is applied.
 
-```c
-// PHAssetResourceWriteRequest configureWithError:
-// Configures an error for the asset resource write request
-// Parameters:
-//   error - The error to configure
-// Returns: Void
-// Sets error state on write requests for error handling.
-```
+## Vulnerability Assessment
 
-```c
-// PHContentEditingInputRequestOptions disallowFallbackAdjustmentBase
-// Indicates whether fallback adjustment base is disallowed
-// Returns: BOOL
-// This option controls whether the system should fall back to using an
-// adjustment base when the primary resource is unavailable.
-```
+The changes in this component are primarily functional enhancements rather than security patches. The introduction of `disallowFallbackAdjustmentBase` and the explicit RAW resource selection logic provide better control over data integrity and resource usage during media editing. The addition of HDR headroom parameters is a feature-driven update to support modern display standards.
 
-```c
-// PHContentEditingInputRequestOptions setDisallowFallbackAdjustmentBase:
-// Sets whether fallback adjustment base is disallowed
-// Parameters:
-//   value - Whether to disallow fallback (YES/NO)
-// Returns: Void
-// Configures the fallback behavior for asset resource requests.
-```
+There is no evidence of a security-critical vulnerability fix (such as a memory safety issue or privilege escalation) in the provided diff. The changes focus on refining the API surface for media requests and improving the efficiency of cloud synchronization. The structural changes, such as adding new properties and helper methods, are consistent with standard feature development.
 
-```c
-// PHImageDecoderOptions hdrGain
-// Getter for HDR gain value
-// Returns: The current HDR gain value
-// Accesses the HDR gain parameter for image decoding.
-```
+## Evidence
 
-```c
-// PHImageDecoderOptions setHdrGain:
-// Setter for HDR gain value
-// Parameters:
-//   value - The HDR gain value to set
-// Returns: Void
-// Sets the HDR gain parameter for image decoding.
-```
-
-```c
-// PHImageDecoderOptions setTargetHDRHeadroom:
-// Setter for target HDR headroom value
-// Parameters:
-//   value - The target HDR headroom value to set
-// Returns: Void
-// Configures the target headroom for HDR image processing.
-```
-
-```c
-// PHImageDecoderOptions targetHDRHeadroom
-// Getter for target HDR headroom value
-// Returns: The current target HDR headroom value
-// Accesses the target HDR headroom parameter for image decoding.
-```
-
-```c
-// PHImageRequestBehaviorSpec setTargetHDRHeadroom:
-// Sets the target HDR headroom for image request behavior
-// Parameters:
-//   value - The target HDR headroom value to set
-// Returns: Void
-// Configures HDR headroom behavior for image requests.
-```
-
-```c
-// PHImageRequestBehaviorSpec targetHDRHeadroom
-// Getter for target HDR headroom value
-// Returns: The current target HDR headroom value
-// Accesses the target HDR headroom parameter for image request behavior.
-```
-
-```c
-// PHImageRequestOptions setTargetHDRHeadroom:
-// Sets the target HDR headroom for image request options
-// Parameters:
-//   value - The target HDR headroom value to set
-// Returns: Void
-// Configures HDR headroom in image request options.
-```
-
-```c
-// PHImageRequestOptions targetHDRHeadroom
-// Getter for target HDR headroom value
-// Returns: The current target HDR headroom value
-// Accesses the target HDR headroom parameter in image request options.
-```
-
-```c
-// PHMediaRequestContext mediaRequestDidRequestRetryWithContentEditingInputLoaded:
-// Handler called when a media request needs to retry with content editing input loaded
-// Parameters:
-//   request - The media request that needs retrying
-// Returns: Void
-// Manages retry logic for media requests when content editing input becomes available.
-```
-
-```c
-// PHMediaRequestContext setSupplementaryRequestContext:
-// Sets the supplementary request context for a media request
-// Parameters:
-//   context - The supplementary request context to set
-// Returns: Void
-// Configures supplementary request context for media requests.
-```
-
-```c
-// PHMediaRequestContext supplementaryRequestContext
-// Getter for the supplementary request context
-// Returns: The current supplementary request context
-// Accesses the supplementary request context for media requests.
-```
-
-```c
-// PHMediaResourceRequest assetResourceRequestDidRequestRetryWithContentEditingInputLoaded:
-// Handler called when a media resource request needs to retry
-// Parameters:
-//   request - The media resource request that needs retrying
-// Returns: Void
-// Manages retry logic for media resource requests.
-```
-
-```c
-// PHPhotoLibrary(CloudPhotoLibrary) _cloudInternalClient
-// Internal client for cloud photo library operations
-// Returns: The internal cloud client instance
-// Private accessor for cloud photo library's internal client.
-```
-
-```c
-// PHPhotoLibrary(CloudPhotoLibrary) overrideSystemBudgetsForSyncSession:pauseReason:systemBudgets:completionHandler:
-// Overrides system budgets for a cloud sync session
-// Parameters:
-//   session - The sync session to override budgets for
-//   pauseReason - Reason for pausing the session
-//   systemBudgets - The system budgets to apply
-//   completionHandler - Block to execute when operation completes
-// Returns: Void
-// Allows applications to override system resource budgets for cloud sync.
-```
-
-```c
-// PHPhotoLibrary(CloudPhotoLibrary) setCloudPhotoLibraryPauseState:reason:
-// Sets the pause state for the cloud photo library
-// Parameters:
-//   state - The new pause state (paused/unpaused)
-//   reason - The reason for changing the pause state
-// Returns: Void
-// Controls whether the cloud photo library is paused or active.
-```
-
-```c
-// PHVideoRequest configureWithError:
-// Configures an error for the video request
-// Parameters:
-//   error - The error to configure
-// Returns: Void
-// Sets error state on video requests for error handling.
-```
-
-```c
-// PHAssetResourceManager _nextManagerID
-// Gets the next available manager ID for asset resource management
-// Returns: The next available manager ID
-// This method provides thread-safe allocation of unique manager IDs for
-// asset resource management operations.
-```
-
-```c
-// PHSuggestionWallpaperShuffleUtilities allPotentialSuggestionLocalIdentifierGroupsForPosterConfiguration:fromSuggestionLocalIdentifiersByFeature:withRejectedPersonLocalIdentifiers:
-// Generates all potential suggestion local identifier groups for a poster configuration
-// Parameters:
-//   posterConfiguration - The poster configuration to generate suggestions for
-//   suggestionLocalIdentifiersByFeature - Map of suggestion local identifiers by feature
-//   rejectedPersonLocalIdentifiers - List of rejected person local identifiers
-// Returns: NSArray of suggestion local identifier groups
-// This method creates groups of suggestions for poster configurations,
-// excluding rejected persons.
-```
-
-```c
-// PHSuggestionWallpaperShuffleUtilities allPotentialSuggestionLocalIdentifiersForPosterConfiguration:fromSuggestionLocalIdentifiersByFeature
+- **Symbols**: Added `+[PHContentEditingInputRequestContext shouldUseRAWResourceAsUnadjustedBaseForAsset:options:]`, `-[PHContentEditingInputRequestOptions disallowFallbackAdjustmentBase]`, and `-[PHImageRequestOptions setTargetHDRHeadroom:]`.
+- **Strings**: New log strings like `[PHResourceLocalAvailabilityRequest:%p] Using original/primary resource(s)...` and `[RM] %{public}@ asset resource request requires additional resources...` indicate enhanced logging for resource availability and media request retries.
+- **Logic**: The decompiled code confirms that `disallowFallbackAdjustmentBase` is now a configurable flag in the request context, and `targetHDRHeadroom` is a direct property assignment in image request options.
 
 ## AI Prioritisation Scoring System
 
-No actionable methods or prioritisation targets identified for this component.
+- **feature_analysis**
+  - **Tier**: TIER_2
+  - **Category**: media_processing
+  - **Reasoning**: The changes represent significant functional updates to media request handling and cloud sync management, but do not appear to address a specific security vulnerability.
 

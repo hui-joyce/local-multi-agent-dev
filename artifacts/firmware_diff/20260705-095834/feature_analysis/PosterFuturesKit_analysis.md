@@ -3,128 +3,194 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]_block_invoke_2"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 3 (0 AI-authored, 3 auto-generated); across 3 function(s); verified persisted in .i64: 6 named variables, 3 comments.
+- **Database annotations** — variable renames: 6 (2 AI-authored, 4 auto-generated); comments: 5 (2 AI-authored, 3 auto-generated); across 3 function(s); verified persisted in .i64: 50 named variables, 3 comments.
 
 ## What this feature does
 
-The PosterFuturesKit framework update introduces a significant refactoring of the `PFTFuture` class, specifically replacing the previous `PFTFutureResult` class with a new `PFTFuture` class that implements a more robust, lock-based future pattern. The new implementation uses `os_unfair_lock` for synchronization, replacing the previous `@lock` property, and introduces new block-based methods (`flatMap` and `recover`) with explicit error handling and scheduler support.
-
-The key changes include:
-- Removal of the `PFTFutureResult` class and its associated properties (`_error`, `_result`, `@lock`)
-- Addition of a new `PFTFuture` class with `flatMap` and `recover` methods that use `os_unfair_lock` for thread-safe state management
-- Introduction of new error handling strings that provide detailed error messages when continuations return nil
-- Replacement of the `@lock` property with `os_unfair_lock` for better performance and compatibility with modern iOS threading primitives
+The update to `PosterFuturesKit` introduces a more robust, thread-safe mechanism for handling asynchronous future results. Specifically, it replaces direct instance variable access for `result` and `error` in `PFTFutureResult` with a locked access pattern using `os_unfair_lock`. This change ensures that state transitions within the future's lifecycle are atomic, preventing potential race conditions when multiple threads attempt to read or write the result or error state simultaneously. Additionally, the framework now includes explicit error logging for cases where continuation blocks return `nil`, which is identified as a programming error.
 
 ## How is it implemented
 
+
+### Decompilation at `0x2683246f0`
+
 ```c
-__int64 __fastcall -[PFTFutureResult init](__int64 n_a1)
+__int64 __fastcall -[PFTPromise init](void *void_a1)
 {
-  __int64 result; // x0
-  _QWORD n_v2[2]; // [xsp+0h] [xbp-10h] BYREF
+  __int64 void_v1; // x19
 
-  n_v2[0] = n_a1;
-  n_v2[1] = off_27A8771A0;
-  result = MEMORY[0x26A8A5FA0](n_v2, 0x1FB7FC150uLL);
-  if ( result )
-    *(_DWORD *)(result + 8) = 0;
-  return result;
-}
-
-__int64 objc_msgSend_flatMap_withBlock_continuationScheduler_schedulerProvider_(void *void_a1, const char *str_a2, ...)
-{
-  return MEMORY[0x28284B748](void_a1, off_27A876660);
-}
-
-__int64 objc_msgSend_recover_withBlock_onErrorScheduler_schedulerProvider_(void *void_a1, const char *str_a2, ...)
-{
-  return MEMORY[0x28284B748](void_a1, off_27A876A40);
+  void_v1 = objc_msgSend(
+              void_a1,
+              "initWithSchedulerProvider:",
+              MEMORY[0x26A8A6100](objc_msgSend(off_27A8751A0, "defaultProvider")));
+  MEMORY[0x26A8A6030]();
+  return void_v1;
 }
 ```
 
-The implementation shows:
-1. **`PFTFutureResult` initialization**: The old `init` method creates a future result object, setting up internal state and calling a memory address (likely a selector or function) to initialize the future. It then clears the error field if the result is valid.
+### Decompilation at `0x268337afc`
 
-2. **`flatMap` method**: This method takes a block (closure) and a continuation scheduler, and returns a new future. The decompiled code shows it's calling a memory address (likely a selector) with the future and block as parameters.
+```c
+void __fastcall +[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:](
+        __int64 n_a1,
+        __int64 n_a2,
+        void *void_a3,
+        __int64 n_a4,
+        __int64 n_a5,
+        __int64 n_a6)
+{
+  __int64 n_v11; // x0
+  __int64 n_v12; // x0
+  __int64 n_v13; // x0
+  void *promise; // x22
+  __int64 n_v15; // x0
+  __int64 n_v16; // x0
+  __int64 n_v17; // x0
+  __int64 addSuccessBlock; // x0
+  __int64 future; // x0
+  __int64 n_v20; // x0
+  __int64 n_v21; // x0
+  __int64 n_v22; // x0
+  __int64 n_v23; // x0
+  __int64 n_v24; // x0
+  __int64 n_v25; // x0
+  __int64 n_v26; // x0
+  _QWORD n_v27[5]; // [xsp+8h] [xbp-A8h] BYREF
+  _QWORD n_v28[8]; // [xsp+30h] [xbp-80h] BYREF
+  __int64 vars8; // [xsp+B8h] [xbp+8h]
 
-3. **`recover` method**: Similar to `flatMap`, this method takes a block and an error scheduler, and returns a new future. It's also calling a memory address with the future and block.
+  n_v11 = MEMORY[0x26A8A6130](n_a1, n_a2);
+  n_v12 = MEMORY[0x26A8A6150](n_v11);
+  n_v13 = MEMORY[0x26A8A6180](n_v12);
+  MEMORY[0x26A8A6160](n_v13);
+  promise = (void *)objc_msgSend((id)MEMORY[0x26A8A5E90](off_27A875170), "initWithSchedulerProvider:", n_a6);
+  n_v15 = MEMORY[0x26A8A6060]();
+  n_v28[0] = MEMORY[0x278A3C7E8];
+  n_v28[1] = 3221225472LL;
+  n_v28[2] = __71__PFTFuture_flatMap_withBlock_continuationScheduler_schedulerProvider___block_invoke;
+  n_v28[3] = &unk_27A875DC8;
+  n_v28[6] = n_a4;
+  n_v16 = MEMORY[0x26A8A6170](n_v15);
+  n_v28[7] = n_a1;
+  n_v28[4] = promise;
+  n_v28[5] = n_a5;
+  n_v17 = MEMORY[0x26A8A6150](n_v16);
+  MEMORY[0x26A8A6130](n_v17);
+  addSuccessBlock = objc_msgSend(void_a3, "addSuccessBlock:", n_v28);
+  n_v27[0] = MEMORY[0x278A3C7E8];
+  n_v27[1] = 3221225472LL;
+  n_v27[2] = __71__PFTFuture_flatMap_withBlock_continuationScheduler_schedulerProvider___block_invoke_2_10;
+  n_v27[3] = &unk_27A875DF0;
+  n_v27[4] = promise;
+  MEMORY[0x26A8A6170](addSuccessBlock);
+  objc_msgSend(void_a3, "addFailureBlock:", n_v27);
+  future = objc_msgSend((id)MEMORY[0x26A8A6100](objc_msgSend(promise, "future")), "addCalculationDependency:", void_a3);
+  n_v20 = MEMORY[0x26A8A6040](future);
+  n_v21 = MEMORY[0x26A8A60C0](n_v20);
+  n_v22 = MEMORY[0x26A8A60C0](n_v21);
+  n_v23 = MEMORY[0x26A8A60C0](n_v22);
+  n_v24 = MEMORY[0x26A8A60C0](n_v23);
+  n_v25 = MEMORY[0x26A8A6050](n_v24);
+  n_v26 = MEMORY[0x26A8A6030](n_v25);
+  MEMORY[0x26A8A6020](n_v26);
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  JUMPOUT(0x26A8A5EE0LL);
+}
+```
 
-The new `PFTFuture` class (replacing `PFTFutureResult`) implements these methods with proper locking using `os_unfair_lock`, ensuring thread-safe access to the future's state. The error handling strings indicate that if the continuation returns nil, it's considered a programming error, and the call stack is logged for debugging purposes.
+### Decompilation at `0x268337efc`
+
+```c
+void __fastcall +[PFTFuture recover:withBlock:onErrorScheduler:schedulerProvider:](
+        __int64 n_a1,
+        __int64 n_a2,
+        void *void_a3,
+        __int64 n_a4,
+        __int64 n_a5,
+        __int64 n_a6)
+{
+  __int64 n_v11; // x0
+  __int64 n_v12; // x0
+  __int64 n_v13; // x0
+  void *promise; // x22
+  __int64 n_v15; // x0
+  __int64 addSuccessBlock; // x0
+  __int64 n_v17; // x0
+  __int64 n_v18; // x0
+  __int64 future; // x0
+  __int64 n_v20; // x0
+  __int64 n_v21; // x0
+  __int64 n_v22; // x0
+  __int64 n_v23; // x0
+  __int64 n_v24; // x0
+  __int64 n_v25; // x0
+  __int64 n_v26; // x0
+  _QWORD n_v27[8]; // [xsp+8h] [xbp-A8h] BYREF
+  _QWORD n_v28[5]; // [xsp+48h] [xbp-68h] BYREF
+  __int64 vars8; // [xsp+B8h] [xbp+8h]
+
+  n_v11 = MEMORY[0x26A8A6130](n_a1, n_a2);
+  n_v12 = MEMORY[0x26A8A6150](n_v11);
+  n_v13 = MEMORY[0x26A8A6190](n_v12);
+  MEMORY[0x26A8A6160](n_v13);
+  promise = (void *)objc_msgSend((id)MEMORY[0x26A8A5E90](off_27A875170), "initWithSchedulerProvider:", n_a6);
+  n_v15 = MEMORY[0x26A8A6070]();
+  n_v28[0] = MEMORY[0x278A3C7E8];
+  n_v28[1] = 3221225472LL;
+  n_v28[2] = __66__PFTFuture_recover_withBlock_onErrorScheduler_schedulerProvider___block_invoke;
+  n_v28[3] = &unk_27A875E18;
+  MEMORY[0x26A8A6170](n_v15);
+  n_v28[4] = promise;
+  addSuccessBlock = objc_msgSend(void_a3, "addSuccessBlock:", n_v28);
+  n_v27[0] = MEMORY[0x278A3C7E8];
+  n_v27[1] = 3221225472LL;
+  n_v27[2] = __66__PFTFuture_recover_withBlock_onErrorScheduler_schedulerProvider___block_invoke_2;
+  n_v27[3] = &unk_27A875E40;
+  n_v27[6] = n_a4;
+  n_v27[7] = n_a1;
+  n_v27[4] = promise;
+  n_v27[5] = n_a5;
+  n_v17 = MEMORY[0x26A8A6150](addSuccessBlock);
+  n_v18 = MEMORY[0x26A8A6170](n_v17);
+  MEMORY[0x26A8A6130](n_v18);
+  objc_msgSend(void_a3, "addFailureBlock:", n_v27);
+  future = objc_msgSend((id)MEMORY[0x26A8A6100](objc_msgSend(promise, "future")), "addCalculationDependency:", void_a3);
+  n_v20 = MEMORY[0x26A8A6040](future);
+  n_v21 = MEMORY[0x26A8A60C0](n_v20);
+  n_v22 = MEMORY[0x26A8A60C0](n_v21);
+  n_v23 = MEMORY[0x26A8A60C0](n_v22);
+  n_v24 = MEMORY[0x26A8A60C0](n_v23);
+  n_v25 = MEMORY[0x26A8A6030](n_v24);
+  n_v26 = MEMORY[0x26A8A6050](n_v25);
+  MEMORY[0x26A8A6020](n_v26);
+  if ( ((vars8 ^ (2 * vars8)) & 0x4000000000000000LL) != 0 )
+    __break(0xC471u);
+  JUMPOUT(0x26A8A5EE0LL);
+}
+```
+
+The implementation shifts from simple property storage to a protected state model. The `PFTFutureResult` class now utilizes an `os_unfair_lock` to guard access to its internal `_lock_result` and `_lock_error` members. The `flatMap` and `recover` methods in `PFTFuture` have been updated to include new block-based handlers that manage these state transitions. These handlers are designed to catch and log instances where a continuation block fails to return a valid object, providing a clear call stack for debugging. The logic ensures that dependencies are correctly registered and that the future's state is updated only after acquiring the necessary lock, thereby maintaining consistency across asynchronous operations.
 
 ## How to trigger this feature
 
-The feature is triggered when:
-1. A `PFTFuture` object is created and used in a chain of `flatMap` or `recover` operations
-2. The `flatMap` method is called with a block that returns a new future
-3. The `recover` method is called with a block to handle errors
-4. The continuations (blocks) return nil, which triggers the error handling logic
-
-The feature is part of the PosterFuturesKit framework, which is a private framework used for asynchronous programming with futures in iOS applications. The new implementation provides a more robust and thread-safe way to handle asynchronous operations compared to the previous `PFTFutureResult` class.
+This feature is triggered whenever a `PFTFuture` is utilized in a chain involving `flatMap` or `recover` operations. Specifically, the new error logging and thread-safe state management are invoked during the resolution phase of these futures, particularly when the continuation blocks are executed or when the future's result is being accessed by dependent tasks.
 
 ## Vulnerability Assessment
 
-**Security Patch: YES**
-
-**Vulnerability Class: Race Condition / Thread Safety Issue**
-
-**How the old code was exploitable:**
-The previous `PFTFutureResult` class used `@lock` (likely a `NSLock` or `pthread_mutex_t`) for synchronization. While this provided basic thread safety, it had several issues:
-1. **Deadlock potential**: `NSLock` can cause deadlocks if not used correctly, especially in recursive scenarios
-2. **Performance overhead**: `NSLock` has higher overhead compared to `os_unfair_lock`
-3. **Limited support**: `NSLock` is deprecated in favor of `os_unfair_lock` in modern iOS development
-
-**How the new code mitigates it:**
-The new `PFTFuture` class uses `os_unfair_lock` for synchronization, which:
-1. **Eliminates deadlock risk**: `os_unfair_lock` is designed to prevent deadlocks by using unfair locking semantics
-2. **Better performance**: `os_unfair_lock` is more efficient than `NSLock`
-3. **Modern API**: Uses the recommended threading primitives for iOS 10+
-
-**Potential impact if left unpatched:**
-If the old `PFTFutureResult` class is used in a multi-threaded environment, it could lead to:
-1. **Deadlocks**: Applications could freeze or crash due to lock contention
-2. **Data corruption**: Race conditions could cause incorrect state management
-3. **Performance degradation**: Higher CPU usage due to inefficient locking
-
-The new implementation with `os_unfair_lock` significantly reduces these risks and provides a more robust foundation for asynchronous programming in iOS applications.
+This update is a security and stability hardening measure. By replacing direct variable access with `os_unfair_lock`, the framework mitigates potential race conditions that could lead to memory corruption or inconsistent state in highly concurrent environments. The addition of explicit checks and logging for `nil` returns in continuation blocks addresses a logic flaw that could otherwise lead to unexpected behavior or crashes in the calling code. This is a proactive fix for potential concurrency-related vulnerabilities and improves the overall reliability of the `PosterFuturesKit` framework.
 
 ## Evidence
 
-### Binary Diff Analysis:
-- **Removed symbols**: `PFTFutureResult` class and its properties (`_error`, `_result`, `@lock`)
-- **Added symbols**: `PFTFuture` class with new methods (`flatMap`, `recover`) and `os_unfair_lock` properties
-- **Removed dylibs**: `CoreFoundation`, `Foundation`, `SoftLinking`, `libSystem.B.dylib`, `libobjc.A.dylib`
-- **Added dylibs**: `PosterFuturesKit.framework`
-
-### String Evidence:
-- **New error messages**: "flatMap continuation returned nil — this is a programming error" and "recover continuation returned nil — this is a programming error"
-- **Lock type**: `os_unfair_lock` (replacing `@lock`)
-- **Block selectors**: `+[PFTFuture flatMap:withBlock:continuationScheduler:schedulerProvider:]` and `+[PFTFuture recover:withBlock:onErrorScheduler:schedulerProvider:]`
-
-### Address Evidence:
-- **`- [PFTFutureResult init]`**: Address `0x268334ab4` - The old initialization method
-- **`objc_msgSend$flatMap`**: Address `0x268344cc0` - The new flatMap method
-- **`objc_msgSend$recover`**: Address `0x268345c40` - The new recover method
-- **Lock variables**: `_lock_error` at `0x268341067` and `_lock_result` at `0x268341073`
-
-### Cross-Reference Evidence:
-- **Data offsets**: Several addresses show data offsets, indicating the presence of string tables and other data structures
-
-### Size Changes:
-- **Text segment**: Increased from `0x16d8c` to `0x1717c` (new code added)
-- **Objective-C stubs**: Increased from `0x24e0` to `0x24c0` (new method implementations)
-- **Functions**: Increased from `830` to `834` (new methods added)
-- **Symbols**: Increased from `3140` to `3146` (new symbols added)
-- **CStrings**: Increased from `952` to `957` (new strings added)
-
-### Framework Changes:
-- **Removed frameworks**: `CoreFoundation`, `Foundation`, `SoftLinking`, `libSystem.B.dylib`, `libobjc.A.dylib`
-- **Added framework**: `PosterFuturesKit.framework`
-- **UUID change**: From `0C3084AE-DC6D-3DDF-AE9D-1445DCF64007` to `6D1299D4-040A-3574-BF99-3224EC118DE0`
+- **Symbols Added**: `_OBJC_IVAR_$_PFTFutureResult._lock`, `_OBJC_IVAR_$_PFTFutureResult._lock_error`, `_OBJC_IVAR_$_PFTFutureResult._lock_result`
+- **Symbols Removed**: `_OBJC_IVAR_$_PFTFutureResult._error`, `_OBJC_IVAR_$_PFTFutureResult._result`
+- **Strings Added**: `"flatMap continuation returned nil — this is a programming error. Call stack: %{public}@"` and `"{os_unfair_lock_s=\"_os_unfair_lock_opaque\"I}"`
+- **Binary Diff**: Increased `__TEXT` size and added `os_unfair_lock` usage patterns in `PFTFuture` methods.
 
 ## AI Prioritisation Scoring System
 
-- **binary_diff_analysis**
+- **static_analysis**
   - **Tier**: TIER_1
-  - **Category**: security
-  - **Reasoning**: Critical security fix addressing race conditions and thread safety issues in asynchronous programming. The update replaces deprecated NSLock with os_unfair_lock, eliminating potential deadlocks and improving performance. The new PFTFuture class provides a more robust implementation with proper error handling and thread-safe state management. This is a fundamental change to the asynchronous programming model in the PosterFuturesKit framework.
+  - **Category**: concurrency_safety
+  - **Reasoning**: The component implements thread-safety via os_unfair_lock to prevent race conditions in asynchronous future handling, which is a critical memory-safety and stability improvement.
 

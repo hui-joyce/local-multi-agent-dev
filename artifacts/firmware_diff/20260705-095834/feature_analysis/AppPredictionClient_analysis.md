@@ -3,162 +3,74 @@
 - **Reason**: semantic added/removed line present
 - **Deciding evidence**: `+ "&G3"`
 - **Analysis mode**: decompiled
-- **Database annotations** — variable renames: 0 (0 AI-authored, 0 auto-generated); comments: 20 (0 AI-authored, 20 auto-generated); across 20 function(s); verified persisted in .i64: 36 named variables, 20 comments.
+- **Database annotations** — variable renames: 2 (2 AI-authored, 0 auto-generated); comments: 6 (2 AI-authored, 4 auto-generated); across 4 function(s); verified persisted in .i64: 4 named variables, 4 comments.
 
 ## What this feature does
 
-The `AppPredictionClient` framework has undergone a significant refactoring of its notification handling and prediction logic, specifically targeting the transition from a legacy `ATXPBUserNotification` structure to a new `ATXPBUserNotification` structure. The primary change involves replacing the direct storage of notification content (`body`, `subtitle`, `title`) with length-based metadata (`bodyLength`, `subtitleLength`, `titleLength`). This suggests a shift towards a more efficient, length-prefixed notification format, likely to optimize memory usage and parsing speed for notification stacks. Additionally, new ranking and logging mechanisms (`ATXMissedNotificationRankingBiomeStream`, `ATXUserNotificationDigestBiomeStream`, `ATXUserNotificationLoggingEvent`) have been introduced, indicating enhanced notification management and observability capabilities.
+This update to the `AppPredictionClient` framework introduces a more efficient data representation for notification-related telemetry and logging. Specifically, it replaces full string storage for notification titles, subtitles, and bodies with length-based metadata (integer counts). Additionally, it adds new functionality to the Biome stream management system to support the bulk deletion of events for missed notification rankings and notification digests.
 
 ## How is it implemented
 
+
+### Decompilation at `0x1c19806b8`
+
 ```c
-void __fastcall sub_1c198fcd4(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
+void *__fastcall -[ATXFaceGalleryBiomeStream deleteAllEvents](__int64 stream_instance)
+{
+  return objc_msgSend(*(id *)(stream_instance + 8), "pruneWithPredicateBlock:", &__block_literal_global_5);
 }
 ```
 
+### Decompilation at `0x1c19cb3e4`
+
 ```c
-void __fastcall sub_1c19cd90c(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
+__int64 __fastcall -[ATXPBUserNotification hasSubtitleLength](__int64 n_a1)
+{
+  return (*(unsigned __int8 *)(n_a1 + 216) >> 6) & 1;
 }
 ```
 
+### Decompilation at `0x1c19cb380`
+
 ```c
-void __fastcall sub_1c19cb320(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
+__int64 __fastcall -[ATXPBUserNotification hasTitleLength](__int64 n_a1)
+{
+  return *(_BYTE *)(n_a1 + 217) & 1;
 }
 ```
 
+### Decompilation at `0x1c19cb320`
+
 ```c
-void __fastcall sub_1c19cb3e4(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
+__int64 __fastcall -[ATXPBUserNotification hasBodyLength](__int64 pb_user_notification)
+{
+  return (*(unsigned __int8 *)(pb_user_notification + 216) >> 2) & 1;
 }
 ```
 
-```c
-void __fastcall sub_1c19cb380(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
+The implementation shifts from storing the actual content of notification strings to storing their lengths. This is reflected in the `ATXPBUserNotification` class, where the previous `NSString` properties for body, subtitle, and title have been removed in favor of `unsigned long long` length properties. The class now uses bitmask-based flags to track whether these lengths are present, allowing for more compact serialization.
 
-```c
-void __fastcall sub_1c19cb2d4(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c19cb2f8(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c19cb3bc(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c19cb398(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c19cb334(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1a92e64(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1a92e5c(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1a92e4c(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1a137f0(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c199d338(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1b7bcc0(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1b76920(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1b78fe0(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-```c
-void __fastcall sub_1c1b79400(void *v0, void *v1) {
-    // Implementation details would be here if decompiled
-}
-```
-
-The implementation details for the decompiled functions are not available in the provided tool results. However, based on the symbol names and the diff, we can infer the following:
-
-1. **Notification Structure Refactoring**: The `ATXPBUserNotification` class has been replaced with `ATXPBUserNotification`, which now uses length-based fields (`bodyLength`, `subtitleLength`, `titleLength`) instead of direct content storage (`body`, `subtitle`, `title`). This change is likely aimed at improving memory efficiency and simplifying the parsing of notification data.
-
-2. **New Notification Ranking and Logging**: The introduction of `ATXMissedNotificationRankingBiomeStream` and `ATXUserNotificationDigestBiomeStream` suggests the addition of new mechanisms for ranking and digesting notifications. These classes likely implement algorithms to prioritize and summarize notifications based on various criteria such as timestamp, priority, and user interaction history.
-
-3. **Enhanced Logging**: The `ATXUserNotificationLoggingEvent` class has been added, which probably provides a structured way to log notification-related events for debugging and analytics purposes.
-
-4. **Objective-C Method Swizzling**: The presence of `_objc_msgSend` calls in the diff indicates that the framework may be using method swizzling or dynamic method resolution to handle notifications. This could be used for runtime introspection, hooking, or other advanced features.
-
-5. **Data Serialization**: The `unsignedLongLongValue` method and the JSON-like string suggest that the framework is involved in serializing notification data, possibly for storage or transmission over a network.
+The Biome stream management updates involve the addition of `deleteAllEvents` methods for `ATXMissedNotificationRankingBiomeStream` and `ATXUserNotificationDigestBiomeStream`. These methods leverage existing pruning infrastructure by invoking a predicate-based cleanup process on the underlying data stream, ensuring that historical notification ranking and digest data can be cleared efficiently.
 
 ## How to trigger this feature
 
-The feature is triggered by the presence of the `AppPredictionClient` framework in the system. The framework is responsible for handling and managing notifications, including their display, ranking, and logging. The changes in the diff indicate that the framework has been updated to support a new notification format and enhanced functionality.
+The length-based notification logging is triggered whenever the system processes or logs a notification event through the `ATXPBUserNotification` protocol, which now automatically captures the length of the notification components instead of the full text. The `deleteAllEvents` functionality is triggered by system-level maintenance tasks or user-initiated actions that request the clearing of notification history or ranking data within the Biome framework.
 
 ## Vulnerability Assessment
 
-The changes in the `AppPredictionClient` framework do not appear to introduce any obvious security vulnerabilities. The refactoring of the notification structure and the addition of new ranking and logging mechanisms are likely aimed at improving performance and functionality rather than addressing security issues. However, the introduction of new Objective-C methods and the use of method swizzling could potentially introduce runtime vulnerabilities if not implemented carefully. For example, if the method swizzling is used to inject malicious code or manipulate notification behavior, it could lead to privilege escalation or information disclosure.
+This change appears to be a privacy-focused optimization rather than a security patch. By storing only the length of notification strings rather than the full content, the framework reduces the amount of sensitive user data persisted in logs and telemetry streams. This minimizes the risk of accidental exposure of private notification content (e.g., message bodies or titles) in diagnostic logs or backups. No evidence of memory corruption or privilege escalation mitigation was observed; the changes are structural and data-handling related.
 
 ## Evidence
 
-1. **Symbol Changes**: The diff shows the addition of new symbols (`ATXMissedNotificationRankingBiomeStream`, `ATXPBUserNotification`, `ATXUserNotificationDigestBiomeStream`, `ATXUserNotificationLoggingEvent`) and the removal of old symbols (`ATXPBUserNotification`, `ATXUserNotification`). This indicates a significant refactoring of the notification handling logic.
-
-2. **String Changes**: The diff shows the addition of new strings related to notification lengths (`bodyLength`, `subtitleLength`, `titleLength`) and the removal of old strings related to notification content (`body`, `subtitle`, `title`). This confirms the shift from content-based to length-based notification handling.
-
-3. **Binary Diff**: The binary diff shows changes in the size and layout of the `AppPredictionClient` framework, including the removal of the `Contacts` framework dependency and the addition of new UUID. This suggests that the framework has been updated to support the new notification format and functionality.
-
-4. **Tool Results**: The `find_address` tool results show the memory addresses of the new and old symbols, as well as the data symbols and string data. This provides evidence of the changes in the binary and the relationships between different components.
+- **Symbols Added**: `-[ATXPBUserNotification bodyLength]`, `-[ATXPBUserNotification subtitleLength]`, `-[ATXPBUserNotification titleLength]`, `-[ATXMissedNotificationRankingBiomeStream deleteAllEvents]`, `-[ATXUserNotificationDigestBiomeStream deleteAllEvents]`.
+- **Symbols Removed**: `-[ATXPBUserNotification body]`, `-[ATXPBUserNotification subtitle]`, `-[ATXPBUserNotification title]`.
+- **Data Structure**: The `ATXPBUserNotification` class now uses a bitfield structure to track the presence of length metadata, replacing the previous string-based storage.
+- **Binary Diff**: Increase in `__objc_methlist` and `__objc_ivar` sections consistent with the addition of new property accessors and instance variables.
 
 ## AI Prioritisation Scoring System
 
-- **Symbol and String Analysis**
+- **feature_analysis**
   - **Tier**: TIER_2
-  - **Category**: Framework Refactoring
-  - **Reasoning**: The changes involve a significant refactoring of the notification handling logic, including the introduction of new ranking and logging mechanisms. While not a critical security fix, these changes have observable runtime behavior and could impact notification delivery and user experience.
+  - **Category**: privacy_optimization
+  - **Reasoning**: The changes represent a significant privacy-focused refactor of data logging, reducing the persistence of sensitive user content in telemetry, which is a core functional and privacy-impacting update.
 
