@@ -16,8 +16,20 @@ from langgraph_orchestration.prompts.supervisor import (
 class SupervisorAgent(SyncBaseAgent):
     DOMAIN_OPTIONS = ("software_dev", "reverse_engineering")
     LABEL_OPTIONS = ("SOFTWARE_DEV", "REVERSE_ENGINEERING", "BOTH")
-    # clear cache when it reaches this size to cap memory usage
     _CACHE_MAX_SIZE = 1000
+
+    # detected deterministically before the model classifier
+    _FIRMWARE_KEYWORDS = (
+        "ipsw", "firmware", "download", "extract", "dyld_shared_cache",
+        "kernelcache", "kernel cache", "binary analysis", "entitlement",
+        "framework diff", "symbol analysis",
+    )
+    _FIRMWARE_HINT_RE = re.compile(
+        r"\b(?:ios|ipados|macos|watchos|tvos|bridgeos)\b\s*v?\d+(?:\.\d+)+"
+        r"|\b(?:iphone|ipad|appletv|watch)\d+,\d+\b"
+        r"|\b(?:sepos|iboot)\b",
+        re.IGNORECASE,
+    )
 
     def __init__(self, inference_engine: Optional[MLXInferenceEngine] = None):
         super().__init__(
@@ -125,7 +137,7 @@ class SupervisorAgent(SyncBaseAgent):
         """Extract domain-specific subtasks from a multi-domain request"""
         normalized_input = re.sub(r"\s+", " ", user_input).strip()
 
-        # prefer deterministic splits for explicit "and then" requests.
+        # prefer deterministic splits for explicit "and then" requests
         split_markers = (
             r"\band then\b",
             r"\bthen\b",
@@ -220,6 +232,19 @@ class SupervisorAgent(SyncBaseAgent):
             "split_tasks": split_tasks or {},
         }
 
+    def _cache_decision(self, user_input: str, decision: dict) -> dict:
+        if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
+            self._decision_cache.clear()
+        self._decision_cache[user_input] = decision
+        return decision
+
+    def _looks_like_firmware(self, user_input: str) -> bool:
+        """Deterministic firmware/RE routing before the model classifier."""
+        lowered = user_input.lower()
+        if any(keyword in lowered for keyword in self._FIRMWARE_KEYWORDS):
+            return True
+        return bool(self._FIRMWARE_HINT_RE.search(user_input))
+
     def invoke(
         self,
         user_input: str,
@@ -228,18 +253,11 @@ class SupervisorAgent(SyncBaseAgent):
         if user_input in self._decision_cache:
             return self._decision_cache[user_input]
 
-        ipsw_keywords = [
-            "ipsw", "firmware", "download", "extract", "dyld_shared_cache",
-            "kernelcache", "kernel cache", "binary analysis", "entitlement", "framework diff",
-            "symbol analysis"
-        ]
-        user_input_lower = user_input.lower()
-        if any(keyword in user_input_lower for keyword in ipsw_keywords):
-            decision = self._build_decision("reverse_engineering", ["reverse_engineering"])
-            if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
-                self._decision_cache.clear()
-            self._decision_cache[user_input] = decision
-            return decision
+        if self._looks_like_firmware(user_input):
+            return self._cache_decision(
+                user_input,
+                self._build_decision("reverse_engineering", ["reverse_engineering"]),
+            )
 
         if self.inference_engine is None:
             raise RuntimeError(
@@ -283,11 +301,8 @@ class SupervisorAgent(SyncBaseAgent):
                     decision = self._build_decision("software_dev", ["software_dev", "reverse_engineering"], split_tasks)
                 else:
                     continue
-                
-                if len(self._decision_cache) >= self._CACHE_MAX_SIZE:
-                    self._decision_cache.clear()
-                self._decision_cache[user_input] = decision
-                return decision
+
+                return self._cache_decision(user_input, decision)
             except Exception:
                 continue
 

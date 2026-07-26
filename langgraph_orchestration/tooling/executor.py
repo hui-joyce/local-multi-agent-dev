@@ -1,19 +1,22 @@
-"""Tool-call executor for the agent tool loop.
-
-Dispatches each ToolRequest to its handler and records the ToolResult. For
-decompile_function it also tags the result with metadata["decompile_address"] so
-the RE graph can inject that pseudocode into the report deterministically."""
+"""Tool executor. Dispatches requests and records results"""
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Optional
 
 from langgraph_orchestration.tooling.parser import parse_agent_output
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
+
+_SEARCH_EXCLUDE_DIRS = (
+    ".git", ".ipsw_downloads", ".ipsw_extracted", ".ipsw_features",
+    "__pycache__", ".venv", "venv", "node_modules",
+)
+_SEARCH_TIMEOUT_SECONDS = 30
 from ipsw_service.cli import (
     IpswCliRunner,
     build_download_args,
@@ -162,51 +165,72 @@ class VSCodeToolExecutor(BaseToolExecutor):
         max_results = int(req.arguments.get("max_results", 50))
         is_regexp = bool(req.arguments.get("is_regexp", False))
 
-        cmd = ["rg", "--line-number", "--with-filename", "--color", "never"]
+        cmd = self._build_search_command(str(pattern), include_glob, is_regexp)
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=_SEARCH_TIMEOUT_SECONDS
+            )
+        except subprocess.TimeoutExpired:
+            return ToolResult(
+                tool_name="search_repository",
+                success=False,
+                output="",
+                error=f"search_repository timed out after {_SEARCH_TIMEOUT_SECONDS}s",
+            )
+
+        # grep-family exit code 1 means "no matches" -> a successful, empty search
+        if proc.returncode not in (0, 1):
+            return ToolResult(
+                tool_name="search_repository",
+                success=False,
+                output="",
+                error=proc.stderr.strip() or "search_repository failed",
+            )
+
+        lines = [line for line in proc.stdout.splitlines() if line]
+        limited = lines[:max_results]
+        return ToolResult(
+            tool_name="search_repository",
+            success=True,
+            output="\n".join(limited),
+            metadata={
+                "match_count": len(lines),
+                "limited": len(lines) > max_results,
+                "backend": cmd[0],
+            },
+        )
+
+    def _build_search_command(self, pattern: str, include_glob: str, is_regexp: bool) -> list[str]:
+        """Fastest search backend"""
+        has_glob = bool(include_glob) and include_glob != "*"
+
+        if shutil.which("rg"):
+            cmd = ["rg", "--line-number", "--with-filename", "--color", "never"]
+            if not is_regexp:
+                cmd.append("-F")
+            cmd.extend(["-g", include_glob or "*", pattern, self.workspace_root])
+            return cmd
+
+        # Fallback to git grep (honours .gitignore)
+        if os.path.isdir(os.path.join(self.workspace_root, ".git")):
+            cmd = ["git", "-C", self.workspace_root, "grep",
+                   "--line-number", "--no-color", "-I", "--untracked"]
+            if not is_regexp:
+                cmd.append("-F")
+            cmd.extend(["-e", pattern])
+            if has_glob:
+                cmd.extend(["--", include_glob])
+            return cmd
+
+        # Plain grep fallback
+        cmd = ["grep", "-r", "-n", "-I"]
         if not is_regexp:
             cmd.append("-F")
-        cmd.extend(["-g", include_glob, str(pattern), self.workspace_root])
-
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            if proc.returncode not in (0, 1):
-                return ToolResult(
-                    tool_name="search_repository",
-                    success=False,
-                    output="",
-                    error=proc.stderr.strip() or "search_repository failed",
-                )
-
-            lines = [line for line in proc.stdout.splitlines() if line]
-            limited = lines[:max_results]
-            return ToolResult(
-                tool_name="search_repository",
-                success=True,
-                output="\n".join(limited),
-                metadata={"match_count": len(lines), "limited": len(lines) > max_results},
-            )
-        except FileNotFoundError:
-            grep_cmd = ["grep", "-R", "-n", str(pattern), self.workspace_root]
-            proc = subprocess.run(grep_cmd, capture_output=True, text=True, timeout=10)
-            if proc.returncode not in (0, 1):
-                return ToolResult(
-                    tool_name="search_repository",
-                    success=False,
-                    output="",
-                    error=proc.stderr.strip() or "search_repository failed",
-                )
-            lines = [line for line in proc.stdout.splitlines() if line]
-            limited = lines[:max_results]
-            return ToolResult(
-                tool_name="search_repository",
-                success=True,
-                output="\n".join(limited),
-                metadata={
-                    "match_count": len(lines),
-                    "limited": len(lines) > max_results,
-                    "backend": "grep",
-                },
-            )
+        cmd += [f"--exclude-dir={name}" for name in _SEARCH_EXCLUDE_DIRS]
+        if has_glob:
+            cmd.append(f"--include={include_glob}")
+        cmd.extend([pattern, self.workspace_root])
+        return cmd
 
     def _get_errors(self, req: ToolRequest) -> ToolResult:
         path = req.arguments.get("path") or req.target
@@ -354,7 +378,7 @@ _TOOL_ERROR_SENTINELS = (
 
 
 def _looks_like_error(text: Any) -> bool:
-    """True when a decompiler tool returns an error str instead of output"""
+    """Check if output is an error string."""
     if not isinstance(text, str):
         return False
     lowered = text.strip().lower()
@@ -461,7 +485,7 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(tool_name="find_address", success=False, output="", error=output)
             
         if isinstance(output, dict):
-            # tell the agent exactly what it found so it can use the correct follow-up tool
+            # Guide agent to correct follow-up tool
             result_str = json.dumps(output, indent=2)
             if output["type"] in ("symbol", "symbol_fuzzy"):
                 result_str += "\n\nNOTE: This is a CODE symbol. You MUST use `decompile_function` on this address."
@@ -487,8 +511,7 @@ class IDAToolExecutor(BaseToolExecutor):
         success = rename_local_variable.invoke({"func_address": addr_int, "old_name": old_name, "new_name": new_name})
         if success:
             return ToolResult(tool_name="rename_local_variable", success=True, output="Variable renamed successfully.")
-        # fetch available names so the model knows exactly what to pass as old_name
-        # self correction called on failure of rename_local_variable
+        # On failure, fetch available names for model self-correction
         available = get_local_variables.invoke({"func_address": addr_int})
         return ToolResult(
             tool_name="rename_local_variable",
@@ -666,9 +689,7 @@ class IDAToolExecutor(BaseToolExecutor):
             flag = str(artifact)
             normalized_extra = [flag if flag.startswith("--") else f"--{flag}"]
         if not output_dir:
-            # match IpswExtractorAgent's layout so both paths converge on
-            # .ipsw_extracted/<ipsw-stem>/<build>__<device>/ instead of
-            # extracting the dyld_shared_cache a second time at the top level.
+            # Match IpswExtractorAgent output layout
             stem = os.path.basename(str(ipsw_path))
             if stem.endswith(".ipsw"):
                 stem = stem[: -len(".ipsw")]
@@ -699,8 +720,7 @@ class IDAToolExecutor(BaseToolExecutor):
         json_output = bool(req.arguments.get("json", False))
         timeout = int(req.arguments.get("timeout", 180))
 
-        # Auto-resolve: if the model omitted explicit paths (sent only a target label),
-        # scan .ipsw_downloads/ for two IPSWs and pick old=first, new=last by mtime.
+        # Auto-resolve: old=first, new=last by mtime
         if not old_dsc and not new_dsc and not old_ipsw and not new_ipsw:
             import glob as _glob
             downloads_dir = os.path.join(self.workspace_root, ".ipsw_downloads")
@@ -710,7 +730,7 @@ class IDAToolExecutor(BaseToolExecutor):
             )
             if len(candidates) >= 2:
                 old_ipsw, new_ipsw = candidates[0], candidates[-1]
-            # also accept pre-extracted DSC pairs from .ipsw_extracted/
+            # Support pre-extracted DSC pairs
             if not old_ipsw:
                 dsc_candidates = sorted(
                     _glob.glob(os.path.join(self.workspace_root, ".ipsw_extracted", "**", "dyld_shared_cache_arm64e"), recursive=True),
@@ -867,8 +887,7 @@ def tool_executor_node(state: AgentState) -> AgentState:
                     source="executor",
                 )
 
-        # tag decompilations with their address so the report compiler can inject
-        # the real pseudocode deterministically (the model must never hand-write it)
+        # Tag decompilations for deterministic injection
         if tool_request.tool_name == "decompile_function" and result.success and result.output:
             result.metadata = dict(result.metadata or {})
             result.metadata["decompile_address"] = tool_request.arguments.get("address")

@@ -8,9 +8,6 @@ Goals:
 - Export structured benchmark artifacts for documentation.
 """
 
-
-# TO-DO: add additional unit test for code analysis - analyse class object relation in repo codebase, purpose of certain functions etc 
-
 from __future__ import annotations
 
 import json

@@ -32,3 +32,6 @@ class IpswDownloadsClient:
     def get_device_firmwares(self, identifier: str, firmware_type: str = "ipsw") -> ApiResponse:
         params = {"type": firmware_type} if firmware_type else {}
         return self._get_json(f"/device/{identifier}", params=params)
+
+    def get_version_firmwares(self, version: str) -> ApiResponse:
+        return self._get_json(f"/ipsw/{version}")

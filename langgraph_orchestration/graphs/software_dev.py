@@ -123,6 +123,14 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
             return prompt
         return f"{prompt}\n\n{observation}"
     
+    def _files_written(state: AgentState) -> list[str]:
+        """Paths successfully written this run (proof codegen produced files, not prose)"""
+        return [
+            (result.metadata or {}).get("path") or result.output
+            for result in state.tool_results
+            if result.success and result.tool_name in ("create_file", "edit_file")
+        ]
+
     # define node functions
     def code_generation_node(state: AgentState) -> AgentState:
         state.dev_iteration += 1
@@ -130,6 +138,12 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
             user_input=state.user_input,
             attempt=state.dev_iteration,
         )
+        if state.dev_iteration > 1 and not _files_written(state):
+            prompt += (
+                "\n\nPREVIOUS ATTEMPT WROTE NO FILES. You described code in prose but emitted "
+                "no create_file tool call. You MUST now emit a <tool_call> with create_file for "
+                "every file, each containing the complete, runnable file contents."
+            )
         output = code_gen_agent.invoke(
             user_input=_augment_prompt_with_tools(prompt, state),
             context=state.dev_context,
@@ -197,6 +211,14 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     def route_after_codegen_tools(state: AgentState) -> str:
         if should_continue_tool_loop(state):
             return "code_generation"
+        # A dev request is only "done" once files actually land on disk. If codegen
+        # produced only prose, retry (bounded by max_dev_iterations) before moving on
+        if (
+            "code_generation" in state.dev_task_plan
+            and not _files_written(state)
+            and state.dev_iteration < state.max_dev_iterations
+        ):
+            return "code_generation"
         return _next_step_from_plan(state.dev_task_plan, "code_generation")
 
     def route_after_testing_tools(state: AgentState) -> str:
@@ -210,18 +232,21 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return "synthesize"
     
     def synthesize_output(state: AgentState) -> AgentState:
-        final = f"""# Software Development Analysis
-
-## User Request
-{state.user_input}
-
-## Generated Solutions
-{StateManager.format_agent_outputs(state)}
-
-## Summary
-Development workflow completed in {state.dev_iteration} attempt(s).
-Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.
-"""
+        files = sorted(set(_files_written(state)))
+        if "code_generation" not in state.dev_task_plan:
+            file_status = "No code generation requested."
+        elif files:
+            file_status = "Files written: " + ", ".join(files)
+        else:
+            file_status = "WARNING: no files were written to the repository."
+        final = (
+            "### Generated Solutions\n"
+            f"{StateManager.format_agent_outputs(state)}\n\n"
+            "### Summary\n"
+            f"- Development workflow completed in {state.dev_iteration} attempt(s).\n"
+            f"- Latest test status: {'PASS' if state.dev_test_passed else 'N/A'}.\n"
+            f"- {file_status}\n"
+        )
         state.branch_outputs["software_dev"] = StateManager.sanitize_output(final)
         state.agent_chain.append("software_dev_synthesize")
         return state
