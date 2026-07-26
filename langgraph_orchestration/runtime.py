@@ -7,6 +7,7 @@ runs it through the same supervisor-routed orchestration graph.
 
 from __future__ import annotations
 
+import contextvars
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -17,7 +18,6 @@ from langgraph_orchestration.graphs.orchestration import build_orchestration_gra
 from langgraph_orchestration.schemas.state import AgentState
 
 DEFAULT_RECURSION_LIMIT = 1000
-
 
 class OrchestrationRuntime:
     def __init__(
@@ -89,8 +89,9 @@ class OrchestrationRuntime:
         config: Optional[dict] = None,
     ) -> AgentState:
         self.ensure_ready()
+        ctx = contextvars.copy_context()
         future = self._executor.submit(
-            self._invoke, user_input, seed_intermediate, recursion_limit, config
+            ctx.run, self._invoke, user_input, seed_intermediate, recursion_limit, config
         )
         return future.result()
 
@@ -98,10 +99,8 @@ class OrchestrationRuntime:
         final_state = self.run(user_input, **kwargs)
         return StateManager.sanitize_output(final_state.final_output or "")
 
-
 _default_runtime: Optional[OrchestrationRuntime] = None
 _default_lock = threading.Lock()
-
 
 def get_runtime() -> OrchestrationRuntime:
     global _default_runtime

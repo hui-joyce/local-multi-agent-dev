@@ -5,7 +5,7 @@ from typing import Optional
 from dataclasses import dataclass, asdict
 
 class RAGManager:
-    def __init__(self, retriever, cache_size: int = 128):
+    def __init__(self, retriever):
         self.retriever = retriever
 
     def retrieve_for_agent(
@@ -152,7 +152,6 @@ class RAGConfig:
     default_top_k: int
     score_threshold: float
     enable_fallback: bool
-    cache_size: int
     enable_logging: bool
     log_level: str
     
@@ -171,7 +170,6 @@ class RAGConfig:
             default_top_k=int(os.getenv("RAG_DEFAULT_TOP_K", "5")),
             score_threshold=float(os.getenv("RAG_SCORE_THRESHOLD", "0.3")),
             enable_fallback=os.getenv("RAG_ENABLE_FALLBACK", "true").lower() == "true",
-            cache_size=int(os.getenv("RAG_CACHE_SIZE", "128")),
             enable_logging=os.getenv("RAG_ENABLE_LOGGING", "true").lower() == "true",
             log_level=os.getenv("RAG_LOG_LEVEL", "INFO"),
         )
@@ -192,9 +190,6 @@ class RAGConfig:
         
         if not (0 <= self.score_threshold <= 1):
             errors.append("score_threshold must be between 0 and 1")
-        
-        if self.cache_size < 0:
-            errors.append("cache_size must be >= 0")
         
         if self.log_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
             errors.append(f"Invalid log_level: {self.log_level}")
@@ -275,7 +270,7 @@ class RAGConfigManager:
         if manager._rag_manager is None:
             retriever = manager.get_retriever()
             config = manager._config
-            manager._rag_manager = RAGManager(retriever, cache_size=config.cache_size)
+            manager._rag_manager = RAGManager(retriever)
         
         return manager._rag_manager
     

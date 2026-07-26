@@ -64,8 +64,6 @@ IF markers found → Determine TASK ORDER. Otherwise → Assume PARALLEL tasks.
 
 # OUTPUT CONTRACT
 
-Reference: [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules) — follow Mandatory Output Rules for concealment and presentation requirements.
-
 **RULE: If only ONE domain is present in request (not truly multi-domain), return JSON with only that key:**
 
 ```json

@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Optional
 from fastapi import FastAPI, HTTPException
@@ -11,6 +12,8 @@ from langgraph_orchestration.runtime import get_runtime
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult
 
 load_dotenv()
+logger = logging.getLogger("mad.api")
+
 
 def get_cached_graph():
     graph = get_runtime().ensure_ready()
@@ -125,12 +128,10 @@ async def invoke_orchestration(request: AgentRequest):
             tool_results=final_state.tool_results,
             analysis_notes=final_state.analysis_notes,
         )
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Orchestration failed: {str(e)}"
-        )
+
+    except Exception:
+        logger.exception("Orchestration failed")
+        raise HTTPException(status_code=500, detail="Orchestration failed")
 
 @app.get("/domains")
 async def list_domains():
@@ -208,11 +209,9 @@ async def get_graph_structure():
                 for edge in graph_obj.edges
             ] if hasattr(graph_obj, 'edges') else [],
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get graph structure: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Failed to get graph structure")
+        raise HTTPException(status_code=500, detail="Failed to get graph structure")
 
 @app.get("/graph/schema")
 async def get_graph_schema():
@@ -236,11 +235,9 @@ async def get_graph_schema():
             },
             "required": ["user_input"]
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get graph schema: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Failed to get graph schema")
+        raise HTTPException(status_code=500, detail="Failed to get graph schema")
 
 @app.post("/langgraph")
 async def invoke_langgraph(request: AgentRequest):
@@ -255,11 +252,9 @@ async def invoke_langgraph(request: AgentRequest):
             },
         )
         return final_state.model_dump()
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Graph invocation failed: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Graph invocation failed")
+        raise HTTPException(status_code=500, detail="Graph invocation failed")
 
 @app.get("/test-graph")
 async def test_graph():
@@ -274,11 +269,9 @@ async def test_graph():
             "has_get_graph": hasattr(graph, 'get_graph'),
             "message": "Graph is properly registered and ready for LangSmith Studio"
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Graph verification failed: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Graph verification failed")
+        raise HTTPException(status_code=500, detail="Graph verification failed")
 
 @app.get("/assistants/{assistant_id}")
 async def get_assistant(assistant_id: str):
@@ -343,8 +336,9 @@ async def rag_add(doc: AddDocumentRequest):
         admin = RAGConfigManager.get_admin_service()
         result = admin.add_document(doc.text, doc.domain, metadata=doc.metadata)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("rag_add failed")
+        raise HTTPException(status_code=500, detail="Request failed")
 
 
 @app.post("/rag/search")
@@ -354,8 +348,9 @@ async def rag_search(req: SearchRequest):
         rag = RAGConfigManager.get_rag_manager()
         results = rag.retrieve_for_agent(req.query, domain=req.domain, top_k=req.top_k)
         return {"results": results, "count": len(results)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("rag_search failed")
+        raise HTTPException(status_code=500, detail="Request failed")
 
 
 @app.get("/rag/stats")
@@ -364,8 +359,9 @@ async def rag_stats():
         RAGConfigManager.initialize()
         admin = RAGConfigManager.get_admin_service()
         return admin.get_statistics()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("rag_stats failed")
+        raise HTTPException(status_code=500, detail="Request failed")
 
 @app.post("/threads/{thread_id}/messages")
 async def send_message(thread_id: str, request: AgentRequest):
@@ -384,27 +380,32 @@ async def send_message(thread_id: str, request: AgentRequest):
                 analysis_notes=final_state.analysis_notes,
             )
         }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Message failed: {str(e)}"
-        )
+
+    except Exception:
+        logger.exception("Message handling failed")
+        raise HTTPException(status_code=500, detail="Message failed")
 
 if __name__ == "__main__":
     import uvicorn
-    
+
+    from langgraph_orchestration.security import enforce_bind_policy
+
     port = int(os.getenv("API_PORT", "8000"))
     host = os.getenv("API_HOST", "127.0.0.1")
-    
+
+    enforce_bind_policy(host, surface="FastAPI service")
+
+    reload = os.getenv("API_RELOAD", "false").lower() == "true"
+
     print(f"\n{'='*60}")
     print(f"  Server: http://{host}:{port}")
+    print(f"  Bind:   loopback-only, no request auth (local tool)")
     print(f"{'='*60}\n")
-    
+
     uvicorn.run(
         "api:app",
         host=host,
         port=port,
-        reload=True,
+        reload=reload,
         log_level="info",
     )

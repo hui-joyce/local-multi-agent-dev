@@ -49,8 +49,6 @@ Use semantic intent understanding (not fixed keyword matching).
 
 ## OUTPUT CONTRACT
 
-Reference: [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules) — follow Mandatory Output Rules. 
-
 **CRITICAL: Output MUST be exactly one of these three tokens, nothing else:**
 - SOFTWARE_DEV
 - REVERSE_ENGINEERING

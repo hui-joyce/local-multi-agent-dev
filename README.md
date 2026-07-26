@@ -221,6 +221,7 @@ python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements-dev.txt   # pytest, ruff, pip-audit
 ```
 
 Copy and fill in environment variables:
@@ -288,30 +289,89 @@ print(final_state.final_output)
 
 ### 3) Gradio chat interface
 
+The chat UI is the primary way for end users to talk to the model. Your conversation is **saved to disk and reloaded on
+restart**.
+
 ```bash
 source venv/bin/activate
 python3 app.py
 ```
 
-Open: `http://127.0.0.1:7860`
+Open: `http://127.0.0.1:7860`.
 
 ---
 
 ## API Surface
+
+The FastAPI service is a separate, optional surface for programmatic callers. It is a
+local-only tool with no request authentication and **refuses to start unless bound to
+loopback** (`127.0.0.1`); see [FastAPI service](#fastapi-service-apipy). Endpoints marked
+(exec) execute code, spawn processes, or mutate durable state, so keep the bind local.
+
 - `GET /` health check
 - `GET /info` service metadata and configured agents
 - `GET /domains` available domains and descriptions
-- `POST /invoke` run orchestration with `user_input` and optional `domain`
+- `POST /invoke` (exec) run orchestration with `user_input` and optional `domain`
 - `GET /assistants` LangSmith Studio assistants list
 - `POST /assistants/search` LangSmith Studio search endpoint
 - `GET /assistants/{assistant_id}` assistant details
 - `GET /assistants/{assistant_id}/schemas` input/output schemas
 - `GET /graph` graph nodes and edges
 - `GET /graph/schema` runnable schema
-- `POST /langgraph` LangSmith invocation
+- `POST /langgraph` (exec) LangSmith invocation
 - `GET /test-graph` LangSmith registration check
 - `GET /threads` list threads placeholder
-- `POST /threads/{thread_id}/messages` send a message
+- `POST /threads/{thread_id}/messages` (exec) send a message
+- `POST /rag/add` (exec) add a document to the vector DB (mutates durable state)
+- `POST /rag/search` (exec) semantic search
+- `GET /rag/stats` (exec) collection statistics
+
+---
+
+### Gradio chat (`app.py`)
+
+```bash
+python3 app.py                 # http://127.0.0.1:7860
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `APP_HOST` | `127.0.0.1` | Bind address. `127.0.0.1` = this machine only |
+| `APP_PORT` | `7860` | Bind port |
+
+<a id="chat-memory-persistence"></a>
+#### Chat memory (persistence)
+
+The conversation is saved to a single JSON file and reloaded when the app starts. It is display-only.
+"Clear history" wipes the file.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CHAT_HISTORY_FILE` | *(unset)* | Explicit path to the transcript JSON file |
+| `CHAT_HISTORY_DIR` | *(unset)* | Directory to hold `chat_history.json` |
+| *(neither set)* | `~/.local/share/local-multi-agent-dev/chat_history.json` | Default location (outside the repo) |
+
+### FastAPI service (`api.py`)
+
+The service is local-only and has no request authentication. Its endpoints can read and
+write files and spawn processes on the host, so it **refuses to start unless `API_HOST`
+is a loopback address** — keep it on `127.0.0.1`.
+
+```bash
+export API_HOST=127.0.0.1   # loopback only; a network address is rejected at startup
+python3 api.py
+
+# Call an endpoint
+curl -X POST http://127.0.0.1:8000/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"user_input":"Implement an API auth flow and inspect it for vulnerabilities"}'
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `API_HOST` | `127.0.0.1` | Bind address; must be loopback (service refuses non-loopback) |
+| `API_PORT` | `8000` | Bind port |
+| `API_RELOAD` | `false` | Uvicorn auto-reload — dev only |
 
 ---
 
@@ -321,9 +381,9 @@ Embedding Model: [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedd
 
 | Purpose | Where It Is Active |
 |---|---|
-| General docs (base model) | Used during ingestion for shared knowledge base; used at runtime to embed `agents_shared` queries |
-| Code retrieval (base model) | Used during ingestion for `agents_software_dev`; used at runtime for semantic code search |
-| Reverse engineering (fine-tuned model) | Used during ingestion for RE corpus; used at runtime for `agents_reverse_engineering` queries |
+| General docs | Used during ingestion for shared knowledge base; used at runtime to embed `agents_shared` queries |
+| Code retrieval | Used during ingestion for `agents_software_dev`; used at runtime for semantic code search |
+| Reverse engineering | Used during ingestion for RE corpus; used at runtime for `agents_reverse_engineering` queries |
 
 Qdrant storage layout (embedded local DB):
 ```text
@@ -370,10 +430,9 @@ What gets stored:
 ## Dev And Benchmarks
 
 ```bash
-# One-time: install dev/test tooling (pytest, ruff, pip-audit)
 pip install -r requirements-dev.txt
 
-# Unit tests (fast; no MLX / IDA / firmware required)
+# Unit tests
 pytest
 
 # Syntax check

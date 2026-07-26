@@ -293,7 +293,7 @@ class GeminiInferenceEngine:
         import urllib.error
         import json
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         generation_config = {
             "maxOutputTokens": config.max_tokens,
@@ -311,7 +311,11 @@ class GeminiInferenceEngine:
             "generationConfig": generation_config,
         }
         
-        req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json', 'x-goog-api-key': self.api_key},
+        )
         
         max_retries = 3
         retry_delay = 5
