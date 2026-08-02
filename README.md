@@ -54,7 +54,7 @@ The reverse engineering domain includes a dedicated, stage-gated firmware analys
 | 5 | `feature_analysis_select` → `prepare_decompiler` → `unified_feature_analysis` | LLM-driven per-component analysis with IDA decompilation |
 | 6 | `cleanup_decompiler` | Saves IDA database (`.i64`) then shuts down IDA |
 | 7 | `feature_analysis_compile` | Writes per-component markdown reports |
-| 8 | `reverse_engineering_synthesize` | Aggregates all findings into a final report |
+| 8 | `synthesize` | Aggregates all findings into a final report |
 
 ### Firmware Diff Service (`ipsw_service/`)
 
@@ -157,14 +157,14 @@ IDA listens on `localhost:18861`. The client uses a 360-second RPC timeout (larg
 
 The `prepare_decompiler_node` uses the following extraction strategy (in priority order):
 
-1. **Pre-extracted binary** — checks this comparison's `.ipsw_features/<comparison>/` folder for an already-extracted Mach-O.
-2. **DSC extraction** — `ipsw dyld extract <dsc_path> <binary_path> -o .ipsw_features/<comparison>/` (fastest, no DMG mount).
-3. **Existing DMG mount** — scans `/private/tmp/*.mount` for binaries left by `ipsw diff`.
-4. **IPSW archive extraction** — `ipsw extract <ipsw> --files --pattern <name>` (fallback for daemons and apps not in the DSC).
+1. **Pre-extracted binary** - checks this comparison's `.ipsw_features/<comparison>/` folder for an already-extracted Mach-O.
+2. **DSC extraction** - `ipsw dyld extract <dsc_path> <binary_path> -o .ipsw_features/<comparison>/` (fastest, no DMG mount).
+3. **Existing DMG mount** - scans `/private/tmp/*.mount` for binaries left by `ipsw diff`.
+4. **IPSW archive extraction** - `ipsw extract <ipsw> --files --pattern <name>` (fallback for daemons and apps not in the DSC).
 
 ### Feature Analysis Targets
 
-The pipeline does not analyze every changed binary. `_build_feature_targets` filters the diff report down to **high-signal components** — those that carry meaningful cstring or symbol evidence. Only these are queued for IDA-assisted decompilation.
+The pipeline does not analyze every changed binary. `_build_feature_targets` filters the diff report down to **high-signal components**, i.e. those that carry meaningful cstring or symbol evidence. Only these are queued for IDA-assisted decompilation.
 
 Each feature analysis report (`<component>_analysis.md`) follows this structure:
 ```
@@ -179,37 +179,25 @@ Each feature analysis report (`<component>_analysis.md`) follows this structure:
 
 ## Benchmark Harnesses
 
-### `benchmarks/test_ipsw_diff.py` — Full pipeline benchmark
+| Script | What it does | Output |
+|---|---|---|
+| `benchmarks/test_ipsw_diff.py` | Full pipeline: firmware diff → feature analysis end to end | `benchmarks/results/test_ipsw_diff/` |
+| `benchmarks/test_feature_analysis.py` | Feature analysis only against an existing `report.json` (skips diff stage) | `benchmarks/results/test_feature_analysis/` |
 
-Runs the complete orchestration graph (firmware diff + feature analysis) end to end.
+### `test_ipsw_diff.py` - internals
 
-```bash
-source venv/bin/activate
-python3 benchmarks/test_ipsw_diff.py
-```
+1. Builds an `IpswDiffCase` for a fixed pair of IPSWs.
+2. Runs `build_orchestration_graph` → invokes the full pipeline.
+3. On completion, calls `trigger_feature_analysis` on the generated `report.json`.
 
-- Builds an `IpswDiffCase` for a fixed pair of IPSWs.
-- Runs `build_orchestration_graph` → invokes the full pipeline.
-- On completion, calls `trigger_feature_analysis` on the generated `report.json`.
-- Writes benchmark results to `benchmarks/results/test_ipsw_diff/`.
+`trigger_feature_analysis` searches up to 3 directory levels from the README path to locate `report.json`. It feeds `report.json` (not the raw diff markdown) to the LLM. See the [context size note](#firmware-diff-service-ipsw_service).
 
-> **Note:** `trigger_feature_analysis` uses `report.json` (not the raw `README.md`) to avoid OOM on local MLX. It searches up to 3 directory levels from the README path to locate `report.json`.
+### `test_feature_analysis.py` - internals
 
-### `benchmarks/test_feature_analysis.py` — Feature analysis only
+Seeds `firmware_diff_report` directly in state, so the graph routes straight to `feature_analysis_select_node` (the firmware diff stage is skipped entirely).
 
-Runs feature analysis directly against an existing diff report without re-running the firmware diff stage. Useful when the diff artifacts already exist and you want to iterate on the LLM analysis.
-
-```bash
-source venv/bin/activate
-python3 benchmarks/test_feature_analysis.py
-```
-
-- Reads the README.md from a fixed path (edit `REPORT_PATH` at the top of the file).
+- Edit `REPORT_PATH` at the top of the file to point at your diff artifacts.
 - Pre-filters the report to dylib-relevant sections before injecting into state.
-- Streams graph chunks and prints node-by-node progress.
-- Writes results to `benchmarks/results/test_feature_analysis/`.
-
-> **Note:** This benchmark directly seeds `firmware_diff_report` in state, so the graph routes straight to `feature_analysis_select_node`. The firmware diff stage is skipped entirely.
 
 ---
 
@@ -227,12 +215,11 @@ python3 -m pip install -r requirements-dev.txt   # pytest, ruff, pip-audit
 Copy and fill in environment variables:
 ```bash
 cp .env.example .env
-# Edit .env — set IDA_PATH, IDA_RPC_SCRIPT_PATH, and optionally LANGSMITH_API_KEY
+# Edit .env: set IDA_PATH, IDA_RPC_SCRIPT_PATH, and optionally LANGSMITH_API_KEY
 ```
 
 Run the example script:
 ```bash
-source venv/bin/activate
 python3 examples.py
 ```
 
@@ -242,37 +229,15 @@ API default address: `http://localhost:8000` (`API_HOST` and `API_PORT` are conf
 
 ## How To Communicate With The Model
 
-1. CLI via API (`curl` to FastAPI `POST /invoke`)
-2. Direct Python graph invocation
-3. Gradio chat interface (interactive local UI)
+All three interfaces route through a single shared entry point: `OrchestrationRuntime`.
 
-### 1) CLI via API endpoint
+| Interface | Entry point | Details |
+|---|---|---|
+| **Gradio chat** | `python3 app.py` | [Gradio chat section](#gradio-chat-apppy) |
+| **FastAPI** | `python3 api.py` | [FastAPI section](#fastapi-service-apipy). Use `curl` or any HTTP client |
+| **Python** | `get_runtime().run(...)` | Direct graph invocation (see below) |
 
-```bash
-source venv/bin/activate
-python3 api.py
-```
-
-```bash
-curl -X POST http://localhost:8000/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"user_input":"Implement an API auth flow and inspect it for vulnerabilities"}'
-```
-
-Example response shape:
-```json
-{
-  "selected_domain": "software_dev",
-  "agent_chain": ["retrieve_dev_context", "code_generation", "unit_testing"],
-  "final_output": "...",
-  "intermediate_outputs": ["..."]
-}
-```
-
-### 2) Direct Python graph invocation
-
-All three interfaces (`examples.py`, `app.py`, `api.py`) route through a single
-shared entry point — `OrchestrationRuntime` 
+### Direct Python graph invocation
 
 ```python
 from langgraph_orchestration.runtime import get_runtime
@@ -287,103 +252,64 @@ print(final_state.agent_chain)
 print(final_state.final_output)
 ```
 
-### 3) Gradio chat interface
-
-The chat UI is the primary way for end users to talk to the model. Your conversation is **saved to disk and reloaded on
-restart**.
-
-```bash
-source venv/bin/activate
-python3 app.py
-```
-
-Open: `http://127.0.0.1:7860`.
-
 ---
-
-## API Surface
-
-The FastAPI service is a separate, optional surface for programmatic callers. It is a
-local-only tool with no request authentication and **refuses to start unless bound to
-loopback** (`127.0.0.1`); see [FastAPI service](#fastapi-service-apipy). Endpoints marked
-(exec) execute code, spawn processes, or mutate durable state, so keep the bind local.
-
-- `GET /` health check
-- `GET /info` service metadata and configured agents
-- `GET /domains` available domains and descriptions
-- `POST /invoke` (exec) run orchestration with `user_input` and optional `domain`
-- `GET /assistants` LangSmith Studio assistants list
-- `POST /assistants/search` LangSmith Studio search endpoint
-- `GET /assistants/{assistant_id}` assistant details
-- `GET /assistants/{assistant_id}/schemas` input/output schemas
-- `GET /graph` graph nodes and edges
-- `GET /graph/schema` runnable schema
-- `POST /langgraph` (exec) LangSmith invocation
-- `GET /test-graph` LangSmith registration check
-- `GET /threads` list threads placeholder
-- `POST /threads/{thread_id}/messages` (exec) send a message
-- `POST /rag/add` (exec) add a document to the vector DB (mutates durable state)
-- `POST /rag/search` (exec) semantic search
-- `GET /rag/stats` (exec) collection statistics
-
----
-
-### Gradio chat (`app.py`)
-
-```bash
-python3 app.py                 # http://127.0.0.1:7860
-```
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `APP_HOST` | `127.0.0.1` | Bind address. `127.0.0.1` = this machine only |
-| `APP_PORT` | `7860` | Bind port |
-
-<a id="chat-memory-persistence"></a>
-#### Chat memory (persistence)
-
-The conversation is saved to a single JSON file and reloaded when the app starts. It is display-only.
-"Clear history" wipes the file.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `CHAT_HISTORY_FILE` | *(unset)* | Explicit path to the transcript JSON file |
-| `CHAT_HISTORY_DIR` | *(unset)* | Directory to hold `chat_history.json` |
-| *(neither set)* | `~/.local/share/local-multi-agent-dev/chat_history.json` | Default location (outside the repo) |
 
 ### FastAPI service (`api.py`)
 
-The service is local-only and has no request authentication. Its endpoints can read and
-write files and spawn processes on the host, so it **refuses to start unless `API_HOST`
-is a loopback address** — keep it on `127.0.0.1`.
+Local-only, no request authentication. **Refuses to start unless `API_HOST` is a
+loopback address.** Endpoints marked ★ execute code, spawn processes, or mutate durable state.
 
 ```bash
-export API_HOST=127.0.0.1   # loopback only; a network address is rejected at startup
 python3 api.py
 
-# Call an endpoint
 curl -X POST http://127.0.0.1:8000/invoke \
   -H "Content-Type: application/json" \
   -d '{"user_input":"Implement an API auth flow and inspect it for vulnerabilities"}'
 ```
 
+#### Endpoints
+
+| Group | Endpoint | Purpose |
+|---|---|---|
+| **Core** | `GET /` | Health check |
+| | `GET /info` | Service metadata and configured agents |
+| | `GET /domains` | Available domains and descriptions |
+| | `POST /invoke` ★ | Run orchestration (`user_input`, optional `domain`) |
+| **RAG** | `POST /rag/add` ★ | Add a document to the vector DB |
+| | `POST /rag/search` ★ | Semantic search |
+| | `GET /rag/stats` | Collection statistics |
+| **LangSmith** | `GET /assistants` | Assistants list |
+| | `POST /assistants/search` | Search assistants |
+| | `GET /assistants/{id}` | Assistant details |
+| | `GET /assistants/{id}/schemas` | Input/output schemas |
+| | `GET /graph` | Graph nodes and edges |
+| | `GET /graph/schema` | Runnable schema |
+| | `POST /langgraph` ★ | LangSmith Studio invocation |
+| | `GET /test-graph` | Registration check |
+| **Threads** | `GET /threads` | List threads (placeholder) |
+| | `POST /threads/{id}/messages` ★ | Send a message |
+
+Example response from `POST /invoke`:
+```json
+{
+  "selected_domain": "software_dev",
+  "agent_chain": ["retrieve_dev_context", "code_generation", "unit_testing"],
+  "final_output": "...",
+  "intermediate_outputs": ["..."]
+}
+```
+
 | Variable | Default | Purpose |
 |---|---|---|
-| `API_HOST` | `127.0.0.1` | Bind address; must be loopback (service refuses non-loopback) |
+| `API_HOST` | `127.0.0.1` | Bind address; must be loopback |
 | `API_PORT` | `8000` | Bind port |
-| `API_RELOAD` | `false` | Uvicorn auto-reload — dev only |
+| `API_RELOAD` | `false` | Uvicorn auto-reload (dev only) |
 
 ---
 
 ## Embedding Models And Retrieval
 
-Embedding Model: [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
-
-| Purpose | Where It Is Active |
-|---|---|
-| General docs | Used during ingestion for shared knowledge base; used at runtime to embed `agents_shared` queries |
-| Code retrieval | Used during ingestion for `agents_software_dev`; used at runtime for semantic code search |
-| Reverse engineering | Used during ingestion for RE corpus; used at runtime for `agents_reverse_engineering` queries |
+All collections use [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) for both ingestion and runtime queries.
 
 Qdrant storage layout (embedded local DB):
 ```text
@@ -396,7 +322,7 @@ Qdrant storage layout (embedded local DB):
 ### Ingesting Documents
 
 Use the helper script in `scripts/`:
-- `scripts/load_documents_to_qdrant.py` — load `.md`, `.markdown`, `.txt`, or `.jsonl` files into a collection.
+- `scripts/load_documents_to_qdrant.py` - load `.md`, `.markdown`, `.txt`, or `.jsonl` files into a collection.
 
 Chunking behaviour (defaults):
 - Markdown-aware chunking: splits on headers and groups content into chunks.
@@ -421,11 +347,10 @@ What gets stored:
 
 - Inference uses MLX/MLX-LM and expects a compatible local model on Apple Silicon.
 - LangSmith tracing is enabled when `LANGSMITH_TRACING=true`.
-- API host and port are controlled by `API_HOST` and `API_PORT`.
 - If you see `Model type qwen3_5 not supported`, upgrade `mlx-lm` or select a model supported by your current runtime.
 - The firmware pipeline requires `ipsw` to be installed and on `PATH` (`brew install blacktop/tap/ipsw`).
-- IDA Pro integration requires IDA 9.1+ with Hex-Rays decompiler and a valid license. The RPC server uses `rpyc` — install with `pip install rpyc`.
-- GPU OOM crashes during MLX inference are caused by oversized context payloads. The pipeline is designed to pass `report.json` (~11KB) rather than the raw diff markdown to the LLM.
+- IDA Pro integration requires IDA 9.1+ with Hex-Rays decompiler and a valid license. The RPC server uses `rpyc` (install with `pip install rpyc`).
+- GPU OOM during MLX inference: see the [`report.json` note](#firmware-diff-service-ipsw_service) on context size limits.
 
 ## Dev And Benchmarks
 

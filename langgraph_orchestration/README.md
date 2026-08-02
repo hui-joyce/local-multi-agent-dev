@@ -23,8 +23,8 @@ through one shared entry point: [`OrchestrationRuntime`](runtime.py).
    user_input ──▶   │            OrchestrationRuntime              │
                     │ (single MLX thread · builds + caches graph)  │
                     └───────────────────────┬──────────────────────┘
-                                             │ AgentState
-                                             ▼
+                                            │ AgentState
+                                            ▼
                                       ┌──────────────┐
                                       │  supervisor  │  label → domains + split_tasks
                                       └──────┬───────┘
