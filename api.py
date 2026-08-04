@@ -7,15 +7,21 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
-from langgraph_orchestration.retrievers import add_document, get_statistics, retrieve_context  # noqa: E402
+from langgraph_orchestration.retrievers import (  # noqa: E402
+    add_document,
+    get_statistics,
+    retrieve_context,
+)
 from langgraph_orchestration.runtime import get_runtime  # noqa: E402
 from langgraph_orchestration.tooling.tool import ToolRequest, ToolResult  # noqa: E402
+
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("mad.api")
 

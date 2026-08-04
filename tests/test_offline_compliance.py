@@ -190,6 +190,14 @@ def test_entry_points_load_env_before_huggingface_hub(entry):
     import subprocess
     import sys
 
+    # Entry points are split across branches, and HF_HUB_OFFLINE reaches the
+    # process through .env, which is untracked. Skip rather than fail when
+    # either is missing from the checkout.
+    if not (PROJECT_ROOT / f"{entry}.py").is_file():
+        pytest.skip(f"{entry}.py is not in this checkout")
+    if not (PROJECT_ROOT / ".env").is_file():
+        pytest.skip("no .env in this checkout; HF_HUB_OFFLINE is read from it")
+
     module = Path(entry).name
     extra_path = str(PROJECT_ROOT / Path(entry).parent) if "/" in entry else ""
     code = (
