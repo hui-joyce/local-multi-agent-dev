@@ -1,0 +1,86 @@
+pipeline {
+    agent any
+
+    triggers {
+        // hourly 
+        pollSCM('H * * * *')
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        PROJECT_DIR = '/Users/user/Documents/GitHub/local-multi-agent-dev'
+        PYTHON      = "${PROJECT_DIR}/venv/bin/python3"
+        PATH        = "${PROJECT_DIR}/venv/bin:/opt/homebrew/bin:${env.PATH}"
+    }
+
+    stages {
+        stage('Dependency consistency') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh "${PYTHON} -m pip check"
+                }
+            }
+        }
+
+        stage('Lint') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh "${PYTHON} -m ruff check ."
+                }
+            }
+        }
+
+        stage('Format') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh "${PYTHON} -m ruff format --check ."
+                }
+            }
+        }
+
+        stage('Offline compliance') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh "${PYTHON} -m pytest tests/test_offline_compliance.py -q"
+                }
+            }
+        }
+
+        stage('Unit tests') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh "${PYTHON} -m pytest --junitxml=.jenkins_pipeline/pytest-report.xml"
+                }
+            }
+            post {
+                always {
+                    dir("${PROJECT_DIR}") {
+                        junit(
+                            testResults: '.jenkins_pipeline/pytest-report.xml',
+                            allowEmptyResults: true
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('Dependency audit') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    sh '''
+                        if command -v pip-audit >/dev/null 2>&1; then
+                            pip-audit || true
+                        else
+                            echo "pip-audit not installed; run: venv/bin/pip install -r requirements-dev.txt"
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+}
