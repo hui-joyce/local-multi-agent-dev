@@ -16,14 +16,14 @@ LOW_SIGNAL = "LOW_SIGNAL"
 # Build metadata that carries no behavioral meaning. Anchored at the +/- marker.
 _METADATA_RE = re.compile(
     r"^[+\-]\s*("
-    r"UUID:\s*[0-9A-Fa-f\-]+"             # UUID drift
+    r"UUID:\s*[0-9A-Fa-f\-]+"  # UUID drift
     r'|"?\d+(?:\.\d+)+[A-Za-z0-9\-_]*"?'  # version string e.g. 1450.500.221.2.9
-    r"|__TEXT\.__"                        # section sizes
+    r"|__TEXT\.__"  # section sizes
     r"|__LINKEDIT"
-    r"|__DATA\.__"                        # data section sizes (metadata churn)
+    r"|__DATA\.__"  # data section sizes (metadata churn)
     r"|__const"
     r"|__got"
-    r"|/usr/lib/"                         # dylib deps
+    r"|/usr/lib/"  # dylib deps
     r"|/System/Library/"
     r"|/usr/local/lib/"
     r")"
@@ -34,6 +34,7 @@ _TIMESTAMP_RE = re.compile(
     r'|^[+\-]\s*"?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{4}"?\s*$',
     re.IGNORECASE,
 )
+
 
 @dataclass(frozen=True)
 class TriageResult:
@@ -68,7 +69,3 @@ def triage_evidence_explained(evidence: str) -> TriageResult:
         )
 
     return TriageResult(LOW_SIGNAL, "only metadata/timestamp churn detected")
-
-
-def triage_evidence(evidence: str) -> str:
-    return triage_evidence_explained(evidence).signal

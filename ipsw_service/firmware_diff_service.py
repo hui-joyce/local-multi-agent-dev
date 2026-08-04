@@ -1,27 +1,39 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
-from datetime import datetime, timezone
-import re
-from typing import Optional
+from collections.abc import Iterable
+from datetime import UTC, datetime
 
-from ipsw_service.agents.framework_diff_engine import FrameworkDiffEngine
-from ipsw_service.agents.kernel_analysis_engine import KernelAnalysisEngine
-from ipsw_service.classifiers import ChangeClassifier
 from ipsw_service.cli import IpswCliRunner, build_dyld_diff_args
-from ipsw_service.models import FirmwareDiffArtifacts, FirmwareDiffRequest, FirmwareDiffResult, FirmwareDiffSummary
+from ipsw_service.ipsw_commands import (
+    FrameworkDiffEngine,
+    KernelAnalysisEngine,
+    MachoAnalysisEngine,
+)
+from ipsw_service.models import (
+    DiffCounts,
+    EvidenceItem,
+    Finding,
+    FirmwareDiffArtifacts,
+    FirmwareDiffRequest,
+    FirmwareDiffResult,
+    FirmwareDiffSummary,
+)
 from ipsw_service.parsing import (
+    ensure_dir,
     extract_cstring_diffs,
     extract_symbol_diffs,
     parse_diff_markdown,
     parse_dyld_diff_output,
     parse_simple_list_output,
+    read_text,
     strip_ansi,
+    write_json,
+    write_text,
 )
-from ipsw_service.agents.macho_analysis_engine import MachoAnalysisEngine
-from ipsw_service.utils import ensure_dir, read_text, write_json, write_text
 
 
 def _force_rmtree(path: str) -> None:
@@ -41,13 +53,13 @@ def _force_rmtree(path: str) -> None:
 
 # define noise filters for non-analyzable binaries
 IGNORE_PATTERNS = [
-    r"\.metallib$",                       # metal compiled shaders
-    r"\.g18p(?:_a0)?$",                   # apple Silicon ISP microcode
-    r"\.appex/",                          # UI Extensions (Widgets, watch faces)
-    r"/VideoProcessors/",                 # video processing bundles
+    r"\.metallib$",  # metal compiled shaders
+    r"\.g18p(?:_a0)?$",  # apple Silicon ISP microcode
+    r"\.appex/",  # UI Extensions (Widgets, watch faces)
+    r"/VideoProcessors/",  # video processing bundles
     r"/NanoTimeKit/FaceBundles/",
-    r"/Applications/Kaleidoscope",        # specific noisy apps
-    r"CoreImage\.framework.*_bin"         # precompiled CoreImage archives
+    r"/Applications/Kaleidoscope",  # specific noisy apps
+    r"CoreImage\.framework.*_bin",  # precompiled CoreImage archives
 ]
 
 _METADATA_ONLY_PATTERNS = (
@@ -68,6 +80,7 @@ _METAL_HINTS = (".metallib", ".g18p")
 _MACHO_DIFF_DIRS = ("MACHOS/", "DYLIBS/")
 _UUID_RE = re.compile(r"\bUUID:\s*([0-9A-Fa-f-]+)")
 
+
 def _dedupe_stripped(items: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -87,8 +100,8 @@ def _is_noisy_binary(path: str) -> bool:
 class FirmwareDiffService:
     def __init__(
         self,
-        runner: Optional[IpswCliRunner] = None,
-        workspace_root: Optional[str] = None,
+        runner: IpswCliRunner | None = None,
+        workspace_root: str | None = None,
     ):
         self.workspace_root = workspace_root or os.getcwd()
         self.runner = runner or IpswCliRunner(cwd=self.workspace_root)
@@ -102,7 +115,7 @@ class FirmwareDiffService:
         command: str,
         stdout: str,
         stderr: str,
-        parsed_items: Optional[list[str]] = None,
+        parsed_items: list[str] | None = None,
     ) -> str:
         lines = [f"[{label}]", f"command: {command}"]
         if parsed_items is not None:
@@ -118,7 +131,7 @@ class FirmwareDiffService:
             lines.append(stderr.rstrip())
         return "\n".join(lines).strip() + "\n"
 
-    def _format_component_diff(self, label: str, items: list[str], note: Optional[str] = None) -> str:
+    def _format_component_diff(self, label: str, items: list[str], note: str | None = None) -> str:
         lines = [f"[{label}]", f"item_count: {len(items)}"]
         if note:
             lines.append(f"note: {note}")
@@ -132,11 +145,12 @@ class FirmwareDiffService:
     def run(self, request: FirmwareDiffRequest) -> FirmwareDiffResult:
         def _extract_version(path: str) -> str:
             import os
+
             base = os.path.basename(path)
-            parts = base.split('_')
+            parts = base.split("_")
             if len(parts) >= 3:
-                return f"{parts[1]}_{parts[2]}".replace('.', '_')
-            return base.replace('.ipsw', '')
+                return f"{parts[1]}_{parts[2]}".replace(".", "_")
+            return base.replace(".ipsw", "")
 
         output_dir = request.output_dir or self._timestamped_output_dir()
         ensure_dir(output_dir)
@@ -149,6 +163,7 @@ class FirmwareDiffService:
         low_memory = os.getenv("IPSW_DIFF_LOW_MEMORY") == "1"
 
         import tempfile
+
         temp_diff_dir_obj = tempfile.TemporaryDirectory()
         temp_diff_dir = temp_diff_dir_obj.name
 
@@ -172,30 +187,38 @@ class FirmwareDiffService:
             actual_diff_dir = os.path.dirname(diff_report_path)
             diff_report_text = self._consolidate_readme(actual_diff_dir, diff_report_path)
 
-        diff_data = parse_diff_markdown(diff_report_text) if diff_report_text else {
-            "added_binaries": [],
-            "modified_binaries": [],
-            "entitlement_changes": [],
-            "sandbox_changes": [],
-            "kext_changes": [],
-            "framework_changes": [],
-            "launchd_changes": [],
-            "firmware_added": [],
-            "firmware_modified": [],
-            "iboot_added": [],
-            "iboot_modified": [],
-            "cstring_changes": [],
-            "symbol_changes": [],
-        }
+        diff_data = (
+            parse_diff_markdown(diff_report_text)
+            if diff_report_text
+            else {
+                "added_binaries": [],
+                "modified_binaries": [],
+                "entitlement_changes": [],
+                "sandbox_changes": [],
+                "kext_changes": [],
+                "framework_changes": [],
+                "launchd_changes": [],
+                "firmware_added": [],
+                "firmware_modified": [],
+                "iboot_added": [],
+                "iboot_modified": [],
+                "cstring_changes": [],
+                "symbol_changes": [],
+            }
+        )
         diff_report_root = temp_diff_dir
-        
+
         if diff_report_text:
             diff_data["cstring_changes"] = extract_cstring_diffs(diff_report_text)
             diff_data["symbol_changes"] = extract_symbol_diffs(diff_report_text)
         macho_note = None
         if diff_report_path:
             # ipsw diff now inlines MachO diffs directly into the README.md, so the MACHOS dir is no longer generated
-            if diff_report_text and "## MachO" not in diff_report_text and "## Mach-O" not in diff_report_text:
+            if (
+                diff_report_text
+                and "## MachO" not in diff_report_text
+                and "## Mach-O" not in diff_report_text
+            ):
                 macho_note = (
                     "MachO diff artifacts missing; filesystem diff likely failed or was skipped."
                 )
@@ -216,15 +239,21 @@ class FirmwareDiffService:
             dyld_diff_path = os.path.join(artifacts_dir, "dyld_diff.txt")
             if dyld_result.success:
                 dyld_change_list = parse_dyld_diff_output(dyld_result.stdout)
-                
-                filtered_dyld_change_list = self._filter_modified_binaries(dyld_change_list, diff_report_root)
-                diff_data["framework_changes"] = list(dict.fromkeys(
-                    diff_data.get("framework_changes", []) + filtered_dyld_change_list
-                ))
-                diff_data["modified_binaries"] = list(dict.fromkeys(
-                    diff_data.get("modified_binaries", []) + filtered_dyld_change_list
-                ))
-                
+
+                filtered_dyld_change_list = self._filter_modified_binaries(
+                    dyld_change_list, diff_report_root
+                )
+                diff_data["framework_changes"] = list(
+                    dict.fromkeys(
+                        diff_data.get("framework_changes", []) + filtered_dyld_change_list
+                    )
+                )
+                diff_data["modified_binaries"] = list(
+                    dict.fromkeys(
+                        diff_data.get("modified_binaries", []) + filtered_dyld_change_list
+                    )
+                )
+
             write_text(
                 dyld_diff_path,
                 self._format_tool_output(
@@ -240,22 +269,29 @@ class FirmwareDiffService:
         else:
             gaps.append("dyld_shared_cache paths missing; dyld diff skipped")
 
-
         # compute explicit cstring count across candidate binaries
         macho_engine = MachoAnalysisEngine(self.runner)
         cstring_count = 0
         try:
             seen: set[tuple[str, str]] = set()
             cstring_count += self._count_cstrings_for_items(
-                diff_data.get("added_binaries", []), diff_report_root, request.new_dyld, macho_engine, seen
+                diff_data.get("added_binaries", []),
+                diff_report_root,
+                request.new_dyld,
+                macho_engine,
+                seen,
             )
             cstring_count += self._count_cstrings_for_items(
-                diff_data.get("modified_binaries", []), diff_report_root, request.new_dyld, macho_engine, seen
+                diff_data.get("modified_binaries", []),
+                diff_report_root,
+                request.new_dyld,
+                macho_engine,
+                seen,
             )
         except Exception as e:
             gaps.append(f"CString counting partially failed: {str(e)}")
 
-        ent_diff_path: Optional[str] = None
+        ent_diff_path: str | None = None
         if request.include_entitlements:
             ent_result = self.framework_diff_engine.entitlements_diff(
                 request.old_ipsw,
@@ -267,7 +303,9 @@ class FirmwareDiffService:
                 ent_files = ent_result.get("files", [])
                 ent_diff_path = ent_files[0] if ent_files else None
             else:
-                gaps.append(f"entitlements diff failed: {ent_result.get('stderr') or 'unknown error'}")
+                gaps.append(
+                    f"entitlements diff failed: {ent_result.get('stderr') or 'unknown error'}"
+                )
 
         kext_diff_path = None
         sandbox_diff_path = None
@@ -276,7 +314,9 @@ class FirmwareDiffService:
         kernel_change_list: list[str] = []
         if request.old_kernelcache and request.new_kernelcache:
             if request.include_kexts:
-                kext_result = self.kernel_engine.diff_kexts(request.old_kernelcache, request.new_kernelcache)
+                kext_result = self.kernel_engine.diff_kexts(
+                    request.old_kernelcache, request.new_kernelcache
+                )
                 kext_diff_path = os.path.join(artifacts_dir, "kext_diff.txt")
                 if not kext_result.get("success"):
                     gaps.append(f"kext diff failed: {kext_result.get('stderr') or 'unknown error'}")
@@ -293,10 +333,14 @@ class FirmwareDiffService:
                     ),
                 )
             if request.include_sandbox:
-                sandbox_result = self.kernel_engine.diff_sandbox_ops(request.old_kernelcache, request.new_kernelcache)
+                sandbox_result = self.kernel_engine.diff_sandbox_ops(
+                    request.old_kernelcache, request.new_kernelcache
+                )
                 sandbox_diff_path = os.path.join(artifacts_dir, "sandbox_diff.txt")
                 if not sandbox_result.get("success"):
-                    gaps.append(f"sandbox diff failed: {sandbox_result.get('stderr') or 'unknown error'}")
+                    gaps.append(
+                        f"sandbox diff failed: {sandbox_result.get('stderr') or 'unknown error'}"
+                    )
                 else:
                     sandbox_change_list = parse_simple_list_output(sandbox_result.get("diff", ""))
                 write_text(
@@ -376,27 +420,29 @@ class FirmwareDiffService:
         gaps = list(dict.fromkeys(gaps))
         notes = list(dict.fromkeys([n for n in notes if n not in gaps]))
 
-        report_payload = self._build_report_payload(diff_data, cstring_count, gaps, notes, security_findings)
-        
+        report_payload = self._build_report_payload(
+            diff_data, cstring_count, gaps, notes, security_findings
+        )
+
         md_content = []
         if gaps:
             md_content.append("## Gaps & Warnings\n")
             for g in gaps:
                 md_content.append(f"- {g}")
             md_content.append("\n")
-            
+
         if notes:
             md_content.append("## Analysis Notes\n")
             for n in notes:
                 md_content.append(f"- {n}")
             md_content.append("\n")
-            
+
         if md_content:
             diff_report_text += "\n\n" + "\n".join(md_content)
-        
+
         # save the inlined README report
         write_text(readme_output_path, diff_report_text)
-        
+
         write_json(report_json_path, report_payload)
 
         # cleanup temp directory
@@ -414,65 +460,73 @@ class FirmwareDiffService:
             return [item for item in items if any(kw in item.lower() for kw in keywords)]
 
         notes: list[str] = []
-        
+
         for component, keywords in [
             ("filesystem", ("filesystem",)),
-            ("enclaveOS", ("enclaveos", "enclave"))
+            ("enclaveOS", ("enclaveos", "enclave")),
         ]:
             for comp_type in ("added", "modified"):
                 key = f"firmware_{comp_type}"
                 items = diff_data.get(key, [])
                 filtered = _filter_by_keywords(items, keywords)
                 if filtered:
-                    counts = {t: len(_filter_by_keywords(diff_data.get(f"firmware_{t}", []), keywords)) 
-                             for t in ("added", "modified")}
+                    counts = {
+                        t: len(_filter_by_keywords(diff_data.get(f"firmware_{t}", []), keywords))
+                        for t in ("added", "modified")
+                    }
                     notes.append(
                         f"{component} components: "
                         f"added={counts['added']}, modified={counts['modified']} "
-                        f"(see framework diff report for paths)"                    
+                        f"(see framework diff report for paths)"
                     )
                     break
         return notes
 
     def _build_report_payload(
-        self, 
-        diff_data: dict[str, list[str]], 
+        self,
+        diff_data: dict[str, list[str]],
         cstring_count: int,
         gaps: list[str],
         notes: list[str],
-        security_findings: list[Finding]
+        security_findings: list[Finding],
     ) -> dict[str, object]:
         # gather all specialized paths so we can subtract them
-        specialized_paths = set(_dedupe_stripped([
-            *diff_data.get("framework_changes", []),
-            *diff_data.get("kext_changes", []),
-            *diff_data.get("launchd_changes", []),
-        ]))
+        specialized_paths = set(
+            _dedupe_stripped(
+                [
+                    *diff_data.get("framework_changes", []),
+                    *diff_data.get("kext_changes", []),
+                    *diff_data.get("launchd_changes", []),
+                ]
+            )
+        )
 
         # gather raw userland binaries
-        raw_standard = _dedupe_stripped([
-            *diff_data.get("added_binaries", []),
-            *diff_data.get("modified_binaries", []),
-        ])
+        raw_standard = _dedupe_stripped(
+            [
+                *diff_data.get("added_binaries", []),
+                *diff_data.get("modified_binaries", []),
+            ]
+        )
 
-        # filter out the duplicates 
+        # filter out the duplicates
         standard_binaries = [bin for bin in raw_standard if bin not in specialized_paths]
 
-        base_firmware_changes = _dedupe_stripped([
-            *diff_data.get("firmware_added", []),
-            *diff_data.get("firmware_modified", []),
-            *diff_data.get("iboot_added", []),
-            *diff_data.get("iboot_modified", []),
-        ])
+        base_firmware_changes = _dedupe_stripped(
+            [
+                *diff_data.get("firmware_added", []),
+                *diff_data.get("firmware_modified", []),
+                *diff_data.get("iboot_added", []),
+                *diff_data.get("iboot_modified", []),
+            ]
+        )
 
         analysis_notes = {"notes": notes}
         if gaps != notes:
             analysis_notes["gaps"] = gaps
 
         return {
-            "summary_metrics": {
-                "total_cstring_changes": cstring_count 
-            },
+            "summary_metrics": {"total_cstring_changes": cstring_count},
             "boundary_changes": {
                 "entitlements": diff_data.get("entitlement_changes", []),
                 "sandbox": diff_data.get("sandbox_changes", []),
@@ -486,7 +540,7 @@ class FirmwareDiffService:
             "base_firmware_changes": base_firmware_changes,
             "cstring_context": diff_data.get("cstring_changes", []),
             "symbol_context": diff_data.get("symbol_changes", []),
-            "analysis_notes": analysis_notes
+            "analysis_notes": analysis_notes,
         }
 
     def _filter_modified_binaries(self, items: list[str], diff_dir: str) -> list[str]:
@@ -532,7 +586,7 @@ class FirmwareDiffService:
                 filtered.append(item)
         return filtered
 
-    def _binary_identity(self, label: str, link: Optional[str], diff_dir: str) -> str:
+    def _binary_identity(self, label: str, link: str | None, diff_dir: str) -> str:
         uuid = None
         if link:
             diff_path = os.path.join(diff_dir, link)
@@ -543,14 +597,14 @@ class FirmwareDiffService:
         normalized = label.replace("\\", "/").strip().lower()
         return f"path:{normalized}"
 
-    def _extract_uuid(self, diff_path: str) -> Optional[str]:
+    def _extract_uuid(self, diff_path: str) -> str | None:
         diff_text = read_text(diff_path)
         match = _UUID_RE.search(diff_text)
         if match:
             return match.group(1).upper()
         return None
 
-    def _split_markdown_link(self, item: str) -> tuple[str, Optional[str]]:
+    def _split_markdown_link(self, item: str) -> tuple[str, str | None]:
         match = re.search(r"\[(.*?)\]\((.*?)\)", item)
         if match:
             return match.group(1), match.group(2)
@@ -578,7 +632,7 @@ class FirmwareDiffService:
         self,
         items: list[str],
         diff_dir: str,
-        dyld_cache_path: Optional[str],
+        dyld_cache_path: str | None,
         macho_engine: MachoAnalysisEngine,
         seen: set[tuple[str, str]],
     ) -> int:
@@ -651,7 +705,11 @@ class FirmwareDiffService:
             cleaned_lines: list[str] = []
             for d_line in inner_lines:
                 stripped = d_line.strip()
-                if stripped.startswith("-sha") or stripped.startswith("+sha") or stripped in ("sha256:", "sha1:"):
+                if (
+                    stripped.startswith("-sha")
+                    or stripped.startswith("+sha")
+                    or stripped in ("sha256:", "sha1:")
+                ):
                     continue
                 if " sha256:" in d_line:
                     d_line = d_line.split(" sha256:")[0]
@@ -660,12 +718,12 @@ class FirmwareDiffService:
                 cleaned_lines.append(d_line)
 
             # collapse identical pairs using run-based grouping
-            
+
             # ipsw formats changed blocks as ALL - lines first, then ALL
             # + lines (not interleaved adjacent pairs), so we collect those
             # contiguous runs of -/+ then pair them by position
 
-            # when both sides have the same content after sha-stripping 
+            # when both sides have the same content after sha-stripping
             # (same section size, different hash)
             # the pair collapses to a context line (no real change)
             consolidated_lines: list[str] = []
@@ -674,11 +732,19 @@ class FirmwareDiffService:
                 c_line = cleaned_lines[ci]
                 if c_line.startswith("-") and not c_line.startswith("---"):
                     minus_run: list[str] = []
-                    while ci < len(cleaned_lines) and cleaned_lines[ci].startswith("-") and not cleaned_lines[ci].startswith("---"):
+                    while (
+                        ci < len(cleaned_lines)
+                        and cleaned_lines[ci].startswith("-")
+                        and not cleaned_lines[ci].startswith("---")
+                    ):
                         minus_run.append(cleaned_lines[ci])
                         ci += 1
                     plus_run: list[str] = []
-                    while ci < len(cleaned_lines) and cleaned_lines[ci].startswith("+") and not cleaned_lines[ci].startswith("+++"):
+                    while (
+                        ci < len(cleaned_lines)
+                        and cleaned_lines[ci].startswith("+")
+                        and not cleaned_lines[ci].startswith("+++")
+                    ):
                         plus_run.append(cleaned_lines[ci])
                         ci += 1
                     max_len = max(len(minus_run), len(plus_run))
@@ -735,11 +801,11 @@ class FirmwareDiffService:
             return out
 
         # recursively processes the raw ipsw README lines
-        
+
         # handles:
-        #  1. index links  – e.g. "- [View N files](DYLIBS/foo.md)" → recurse
-        #  2. sidecar links – e.g. "- [/path/to/bin](DYLIBS/bin.md)" → inline
-        #  3. inline entries – ipsw has already inlined the diff blocks directly
+        #  1. index links  - e.g. "- [View N files](DYLIBS/foo.md)" -> recurse
+        #  2. sidecar links - e.g. "- [/path/to/bin](DYLIBS/bin.md)" -> inline
+        #  3. inline entries - ipsw has already inlined the diff blocks directly
         #     into the README, detected by the pattern:
         #       #### BinaryName
         #       > `/full/path`
@@ -747,7 +813,9 @@ class FirmwareDiffService:
         #       …
         #       ```
 
-        def parse_lines(lines: list[str], current_prefix: str = "", in_dsc: bool = False) -> list[str]:
+        def parse_lines(
+            lines: list[str], current_prefix: str = "", in_dsc: bool = False
+        ) -> list[str]:
             out: list[str] = []
 
             # Strict filtering is applied in both MachO and DSC sections.
@@ -777,16 +845,20 @@ class FirmwareDiffService:
                         in_dsc_section = True  # strict everywhere
 
                 # skip raw HTML structural tags from ipsw output
-                if line.strip() in ("<details>", "</details>") or line.strip().startswith("<summary>"):
+                if line.strip() in ("<details>", "</details>") or line.strip().startswith(
+                    "<summary>"
+                ):
                     i += 1
                     continue
 
                 # if inside an inline diff block, collect content lines
                 if inline_in_block:
                     if line.strip().startswith("```"):
-                        # End of the diff fence → flush the accumulated entry
+                        # End of the diff fence -> flush the accumulated entry
                         inline_in_block = False
-                        result_lines = _emit_inline_entry(inline_name, inline_path, inline_inner, strict=in_dsc_section)
+                        result_lines = _emit_inline_entry(
+                            inline_name, inline_path, inline_inner, strict=in_dsc_section
+                        )
                         out.extend(result_lines)
                         # Reset state
                         inline_name = ""
@@ -817,7 +889,7 @@ class FirmwareDiffService:
                     continue
 
                 if pending_inline and line.strip() and not line.strip().startswith("```"):
-                    # buffered name/path didn't lead to a diff block — pass through
+                    # buffered name/path didn't lead to a diff block -- pass through
                     out.append(f"#### {inline_name}")
                     if inline_path:
                         out.append(f">  `{inline_path}`")
@@ -856,9 +928,9 @@ class FirmwareDiffService:
                             i += 1
                             continue
 
-                # suppress stray raw ipsw section banners 
+                # suppress stray raw ipsw section banners
                 raw_dylibs_banner = re.match(
-                    r"##\s+Dylibs\s*[—–-]\s*(Updated|Added|Removed)\s*\(\d+\)", line
+                    r"##\s+Dylibs\s*[----]\s*(Updated|Added|Removed)\s*\(\d+\)", line
                 )
                 if raw_dylibs_banner:
                     i += 1
@@ -874,7 +946,11 @@ class FirmwareDiffService:
                     if os.path.exists(index_path):
                         index_lines = read_text(index_path).splitlines()
                         new_prefix = os.path.dirname(index_rel_path)
-                        out.extend(parse_lines(index_lines, current_prefix=new_prefix, in_dsc=in_dsc_section))
+                        out.extend(
+                            parse_lines(
+                                index_lines, current_prefix=new_prefix, in_dsc=in_dsc_section
+                            )
+                        )
                     i += 1
                     continue
 
@@ -915,7 +991,9 @@ class FirmwareDiffService:
                                     continue
                                 inner.append(d_line)
 
-                        result_lines = _emit_inline_entry(bin_name, original_path, inner, strict=in_dsc_section)
+                        result_lines = _emit_inline_entry(
+                            bin_name, original_path, inner, strict=in_dsc_section
+                        )
                         out.extend(result_lines)
                     i += 1
                     continue
@@ -939,7 +1017,7 @@ class FirmwareDiffService:
             count = sum(1 for sl in s_lines if sl.startswith(">  `"))
             if count > 0:
                 # preserve the original heading level from the raw ipsw README
-                # MachO filesystem uses ### and DSC dylibs use #### 
+                # MachO filesystem uses ### and DSC dylibs use ####
                 new_header = re.sub(r"\(\d+\)", f"({count})", header)
                 final_result.append(new_header)
                 final_result.append("")
@@ -956,9 +1034,8 @@ class FirmwareDiffService:
         for line in consolidated:
             is_header = False
             if (
-                (line.startswith("## ") or line.startswith("### ") or line.startswith("#### "))
-                and "Removed" in line
-            ):
+                line.startswith("## ") or line.startswith("### ") or line.startswith("#### ")
+            ) and "Removed" in line:
                 is_header = True
             elif (
                 line.startswith("### ⬆️ Updated (")
@@ -978,7 +1055,7 @@ class FirmwareDiffService:
                     if line.startswith("- `/"):
                         continue
                     # top-level headings that appear after the section
-                    # entries (e.g. ### iBoot, ## DSC) are structural  
+                    # entries (e.g. ### iBoot, ## DSC) are structural
                     # close the current section and flow to final_result
                     if line.startswith("## ") or line.startswith("### "):
                         finalize_section(current_header, section_lines)
@@ -1000,7 +1077,7 @@ class FirmwareDiffService:
         return result
 
     def _timestamped_output_dir(self) -> str:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         return os.path.join(self.workspace_root, "artifacts", "firmware_diff", timestamp)
 
     def _determine_extraction_status(self, request: FirmwareDiffRequest) -> str:
@@ -1021,3 +1098,124 @@ class FirmwareDiffService:
         if dyld_ready or kernel_ready:
             return "partial"
         return "missing"
+
+
+# =========================================================================
+# Change classification
+#
+# Turns raw diff lines into counts and Findings. Kept here because the diff
+# service is its only caller, and the two change together whenever the ipsw
+# CLI alters its output.
+# =========================================================================
+
+
+HIGH_RISK_ENTITLEMENTS = [
+    "com.apple.private.security.no-sandbox",
+    "platform-application",
+    "com.apple.private.tcc",
+    "com.apple.private.security.container-required",
+    "com.apple.private.skip-library-validation",
+]
+
+PRIVILEGED_PATH_HINTS = [
+    "/usr/libexec",
+    "/usr/sbin",
+    "/sbin",
+    "/System/Library/LaunchDaemons",
+    "/System/Library/PrivateFrameworks",
+]
+
+# keywords that indicate an IPC/XPC surface within a sandbox policy line
+_IPC_KEYWORDS = ("mach-lookup", "xpc")
+
+
+class ChangeClassifier:
+    def __init__(self) -> None:
+        self.high_risk_entitlements = list(HIGH_RISK_ENTITLEMENTS)
+        self.privileged_path_hints = list(PRIVILEGED_PATH_HINTS)
+
+    def classify(self, diff_data: dict[str, list[str]]) -> tuple[DiffCounts, list[Finding]]:
+        counts = DiffCounts(
+            added_binaries=len(diff_data.get("added_binaries", [])),
+            modified_binaries=len(diff_data.get("modified_binaries", [])),
+            entitlement_changes=len(diff_data.get("entitlement_changes", [])),
+            sandbox_changes=len(diff_data.get("sandbox_changes", [])),
+            kext_changes=len(diff_data.get("kext_changes", [])),
+            launchd_changes=len(diff_data.get("launchd_changes", [])),
+            dyld_changes=len(diff_data.get("dyld_changes", [])),
+            kernel_changes=len(diff_data.get("kernel_changes", [])),
+            firmware_added=len(diff_data.get("firmware_added", [])),
+            firmware_modified=len(diff_data.get("firmware_modified", [])),
+            iboot_added=len(diff_data.get("iboot_added", [])),
+            iboot_modified=len(diff_data.get("iboot_modified", [])),
+        )
+
+        findings: list[Finding] = []
+        findings.extend(self._classify_entitlements(diff_data.get("entitlement_changes", [])))
+        # sandbox classifier sub-tags IPC lines instead of emitting a separate
+        # iPC finding for each, avoiding double-counting.
+        findings.extend(self._classify_sandbox(diff_data.get("sandbox_changes", [])))
+        findings.extend(self._classify_launchd(diff_data.get("launchd_changes", [])))
+
+        return counts, findings
+
+    def _classify_entitlements(self, changes: Iterable[str]) -> list[Finding]:
+        findings: list[Finding] = []
+        for line in changes:
+            for entitlement in self.high_risk_entitlements:
+                if entitlement in line:
+                    findings.append(
+                        Finding(
+                            title=f"Potential entitlement change: {entitlement}",
+                            change_type="entitlement",
+                            impact="Potential privilege boundary shift or sandbox relaxation.",
+                            mitigation="Review entitlement provenance and ensure least privilege.",
+                            confidence=0.7,
+                            evidence=[EvidenceItem(source="entitlement_diff", summary=line)],
+                        )
+                    )
+        return findings
+
+    def _classify_sandbox(self, changes: Iterable[str]) -> list[Finding]:
+        findings: list[Finding] = []
+        for line in changes:
+            lowered = line.lower()
+            is_ipc = any(kw in lowered for kw in _IPC_KEYWORDS)
+            if is_ipc:
+                findings.append(
+                    Finding(
+                        title="Potential sandbox IPC/XPC exposure change",
+                        change_type="ipc",
+                        impact="Sandbox policy may allow new IPC/XPC endpoints.",
+                        mitigation="Review mach service and XPC exposure for affected profiles.",
+                        confidence=0.65,
+                        evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        title="Potential sandbox policy change",
+                        change_type="sandbox",
+                        impact="Sandbox operations changed; may introduce new IPC or file access paths.",
+                        mitigation="Review sandbox op diff and validate protections for affected services.",
+                        confidence=0.6,
+                        evidence=[EvidenceItem(source="sandbox_diff", summary=line)],
+                    )
+                )
+        return findings
+
+    def _classify_launchd(self, changes: Iterable[str]) -> list[Finding]:
+        findings: list[Finding] = []
+        for line in changes:
+            findings.append(
+                Finding(
+                    title="Launchd/service configuration change",
+                    change_type="launchd",
+                    impact="Service changes can expose new IPC surfaces or alter privilege boundaries.",
+                    mitigation="Audit service plist changes and validate service entitlements.",
+                    confidence=0.6,
+                    evidence=[EvidenceItem(source="launchd_diff", summary=line)],
+                )
+            )
+        return findings

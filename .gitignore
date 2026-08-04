@@ -6,14 +6,17 @@ __pycache__/
 *.py[cod]
 *.so
 
-# Tooling / caches
+# Virtual environments & caches
 venv/
 .cache/
 .mlx_cache/
 .pytest_cache/
 .ruff_cache/
 
-# Editor / OS
+# Downloaded models (recreate with `python -m langgraph_orchestration.inference`)
+models/
+
+# Editor & OS
 .vscode/
 .DS_Store
 
@@ -22,15 +25,18 @@ venv/
 .langchain/
 .langsmith/
 
-# Knowledge base / RAG corpus
+# Knowledge base
 knowledge_base/
 documents/
 *.pdf
 
-# Chat transcript (default lives outside the repo; guard the in-repo case too)
+# Chat history
 chat_history.json
 
-# IPSW firmware + extraction artifacts
+# Jenkins runtime state
+.jenkins_pipeline/
+
+# Firmware downloads & extracted files
 *.ipsw
 *.dmg
 *.aea
@@ -47,7 +53,7 @@ checksums.txt.sha1
 *.nam
 *.til
 
-# Oversized regenerable firmware-diff files (>100MB, can't be pushed to GitHub)
-# artifacts/firmware_diff/*/report.json
-# artifacts/firmware_diff/*/diff/
-# artifacts/firmware_diff/*/entitlements/
+# Regenerable analysis artifacts
+artifacts/firmware_diff/*/report.json
+artifacts/firmware_diff/*/diff/
+artifacts/firmware_diff/*/entitlements/

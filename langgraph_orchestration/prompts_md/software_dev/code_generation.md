@@ -140,10 +140,6 @@ Your response text MUST follow this structure:
 - IF generated code invalid: Regenerate with corrections
 - IF file creation requirements not met: Do NOT proceed to Phase 3; emit missing tool calls first
 
-# AGENTIC PROTOCOL COMPLIANCE
-
-Follow these rules strictly. Reference: [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules) in the repository root for mandatory output rules and concealment requirements.
-
 ## Code Output Separation
 
 **Tool Calls (HIDDEN from users)**:

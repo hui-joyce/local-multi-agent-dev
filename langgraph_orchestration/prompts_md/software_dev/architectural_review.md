@@ -74,7 +74,7 @@ Provide prioritized, actionable recommendations:
 
 # FINAL OUTPUT FORMAT
 
-Follow the mandatory output rules in [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules). Do NOT duplicate those rules here. Provide:
+Provide:
 
 1. Architecture Summary
 2. Strengths
@@ -91,8 +91,6 @@ Recommendations must be specific and actionable.
 ---
 
 # AGENTIC PROTOCOL COMPLIANCE
-
-Reference: [AGENTIC_PROTOCOL.md](AGENTIC_PROTOCOL.md#mandatory-output-rules) in repository root.
 
 Read-Only Analysis:
 - Use ONLY read-only tools (search_repository, read_file, get_errors, etc.)

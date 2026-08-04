@@ -1,41 +1,32 @@
-"""
-Single entry point used by every interface (Gradio chat, FastAPI service,
-and the CLI examples) so that a prompt behaves identically regardless of how
-it is submitted. Each caller wraps the user's text in an AgentState and
-runs it through the same supervisor-routed orchestration graph.
-"""
-
 from __future__ import annotations
 
 import contextvars
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
 
-from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
-from langgraph_orchestration.core.state_utils import StateManager
+from langgraph_orchestration.agents import MLXAgentFactory
+from langgraph_orchestration.core import StateManager
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
-from langgraph_orchestration.schemas.state import AgentState
+from langgraph_orchestration.state import AgentState
 
 DEFAULT_RECURSION_LIMIT = 1000
+
 
 class OrchestrationRuntime:
     def __init__(
         self,
-        factory: Optional[MLXAgentFactory] = None,
+        factory: MLXAgentFactory | None = None,
         recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     ):
         self._factory_arg = factory
         self._recursion_limit = recursion_limit
-        self._factory: Optional[MLXAgentFactory] = None
+        self._factory: MLXAgentFactory | None = None
         self._graph = None
         self._ready = False
         self._build_lock = threading.Lock()
         # all MLX work (load + inference) runs on this single thread so that
         # model arrays and the GPU stream stay on one consistent thread
-        self._executor = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="mlx-inference"
-        )
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx-inference")
 
     @property
     def factory(self) -> MLXAgentFactory:
@@ -65,9 +56,9 @@ class OrchestrationRuntime:
     def _invoke(
         self,
         user_input: str,
-        seed_intermediate: Optional[dict[str, str]],
-        recursion_limit: Optional[int],
-        config: Optional[dict],
+        seed_intermediate: dict[str, str] | None,
+        recursion_limit: int | None,
+        config: dict | None,
     ) -> AgentState:
         state = AgentState(user_input=user_input)
         if seed_intermediate:
@@ -84,9 +75,9 @@ class OrchestrationRuntime:
         self,
         user_input: str,
         *,
-        seed_intermediate: Optional[dict[str, str]] = None,
-        recursion_limit: Optional[int] = None,
-        config: Optional[dict] = None,
+        seed_intermediate: dict[str, str] | None = None,
+        recursion_limit: int | None = None,
+        config: dict | None = None,
     ) -> AgentState:
         self.ensure_ready()
         ctx = contextvars.copy_context()
@@ -99,8 +90,10 @@ class OrchestrationRuntime:
         final_state = self.run(user_input, **kwargs)
         return StateManager.sanitize_output(final_state.final_output or "")
 
-_default_runtime: Optional[OrchestrationRuntime] = None
+
+_default_runtime: OrchestrationRuntime | None = None
 _default_lock = threading.Lock()
+
 
 def get_runtime() -> OrchestrationRuntime:
     global _default_runtime

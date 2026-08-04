@@ -1,7 +1,17 @@
+"""Reading the ``ipsw`` CLI's output, and the file helpers that go with it.
+
+The CLI prints human-readable text rather than anything machine-friendly, so
+everything below is regex work over its stdout. The file helpers at the end are
+here because they exist to write what that parsing produces.
+"""
+
 from __future__ import annotations
 
+import json
+import os
 import re
-from typing import Iterable
+from collections.abc import Iterable
+from typing import Any
 
 _ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
@@ -41,10 +51,12 @@ _ITEM_EXTENSIONS = (
 # matches a bare com.apple.* entitlement token
 _ENTITLEMENT_RE = re.compile(r"(?<![/\w])(com\.apple\.[a-z0-9.\-]+)", re.IGNORECASE)
 
+
 def strip_ansi(text: str) -> str:
     if not text:
         return ""
     return _ANSI_ESCAPE_RE.sub("", text)
+
 
 def extract_paths_by_keyword(output: str, keyword: str) -> list[str]:
     if not output:
@@ -53,6 +65,7 @@ def extract_paths_by_keyword(output: str, keyword: str) -> list[str]:
     # strictly anchor to path-safe characters to prevent capturing punctuation
     pattern = rf"(/[a-zA-Z0-9_\-\./]*{re.escape(keyword)}[a-zA-Z0-9_\-\./]*)"
     return list(dict.fromkeys(re.findall(pattern, cleaned)))
+
 
 def _heading_level(line: str) -> tuple[int, str]:
     stripped = line.lstrip()
@@ -69,9 +82,11 @@ def _heading_level(line: str) -> tuple[int, str]:
     title = stripped[count:].strip()
     return count, title
 
+
 def _title_has_keyword(title: str, keywords: Iterable[str]) -> bool:
     lowered = title.lower()
     return any(keyword in lowered for keyword in keywords)
+
 
 def _resolve_change_type(titles: list[str]) -> str | None:
     for title in reversed(titles):
@@ -79,6 +94,7 @@ def _resolve_change_type(titles: list[str]) -> str | None:
             if _title_has_keyword(title, keywords):
                 return change_type
     return None
+
 
 def _resolve_component(titles: list[str]) -> str | None:
     for title in reversed(titles):
@@ -99,6 +115,7 @@ def _resolve_component(titles: list[str]) -> str | None:
             return "kernel"
     return None
 
+
 def _looks_like_item(text: str) -> bool:
     if not text:
         return False
@@ -111,13 +128,14 @@ def _looks_like_item(text: str) -> bool:
         return True
     return any(lowered.endswith(ext) for ext in _ITEM_EXTENSIONS)
 
+
 def _extract_item_token(text: str) -> str | None:
     """Tokenizes and extracts the core path, bundle ID, or markdown link from noisy text"""
     # matches explicit markdown links e.g. [name](/path)
     link_match = re.search(r"(\[.*?\]\(.*?\))", text)
     if link_match:
         return link_match.group(1)
-    
+
     # split text to bypass surrounding conversational syntax and extract valid paths
     for word in text.split():
         clean_word = word.strip(":,()[]{}*`\"'")
@@ -125,24 +143,27 @@ def _extract_item_token(text: str) -> str | None:
             return clean_word
     return None
 
+
 def _is_group_heading(title: str) -> bool:
     lowered = title.lower().strip()
     if lowered in _GROUP_HEADINGS:
         return True
     return any(keyword in lowered for keyword in ("view ", "updated", "removed", "new", "added"))
 
+
 def _add_unique(items: list[str], item: str, seen: set[str]) -> None:
     if item and item not in seen:
         seen.add(item)
         items.append(item)
+
 
 def parse_diff_markdown(text: str) -> dict[str, list[str]]:
     headings: list[str | None] = [None] * 6
 
     added_binaries: list[str] = []
     modified_binaries: list[str] = []
-    macho_binaries: list[str] = []   # filesystem Mach-O origin (## MachO section)
-    dsc_dylibs: list[str] = []       # dyld_shared_cache origin (## DSC section)
+    macho_binaries: list[str] = []  # filesystem Mach-O origin (## MachO section)
+    dsc_dylibs: list[str] = []  # dyld_shared_cache origin (## DSC section)
     entitlements: list[str] = []
     sandbox: list[str] = []
     kexts: list[str] = []
@@ -169,8 +190,8 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
 
     component_hint: str | None = None
     active_change_type: str | None = None
-    active_section: str | None = None  # "macho" | "dsc" | None — set by ## headings
-    in_diff_block: bool = False         # True while inside a ```diff...``` fence
+    active_section: str | None = None  # "macho" | "dsc" | None -- set by ## headings
+    in_diff_block: bool = False  # True while inside a ```diff...``` fence
 
     for raw in text.splitlines():
         line = strip_ansi(raw).rstrip()
@@ -210,15 +231,27 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
                 change_type = _resolve_change_type(titles) or active_change_type
                 if change_type:
                     _apply_item(
-                        item, titles, change_type, component_hint, active_section,
-                        added_binaries, modified_binaries, macho_binaries, dsc_dylibs,
-                        kexts, launchd, firmware_added, firmware_modified,
-                        iboot_added, iboot_modified, seen,
+                        item,
+                        titles,
+                        change_type,
+                        component_hint,
+                        active_section,
+                        added_binaries,
+                        modified_binaries,
+                        macho_binaries,
+                        dsc_dylibs,
+                        kexts,
+                        launchd,
+                        firmware_added,
+                        firmware_modified,
+                        iboot_added,
+                        iboot_modified,
+                        seen,
                     )
             continue
 
         stripped = line.strip()
-        # Track diff fences — items inside a ```diff block are diff content, not binary paths.
+        # Track diff fences -- items inside a ```diff block are diff content, not binary paths.
         if stripped.startswith("```"):
             in_diff_block = stripped.startswith("```diff")
             continue
@@ -236,10 +269,22 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             if not change_type:
                 continue
             _apply_item(
-                item, titles, change_type, component_hint, active_section,
-                added_binaries, modified_binaries, macho_binaries, dsc_dylibs,
-                kexts, launchd, firmware_added, firmware_modified,
-                iboot_added, iboot_modified, seen,
+                item,
+                titles,
+                change_type,
+                component_hint,
+                active_section,
+                added_binaries,
+                modified_binaries,
+                macho_binaries,
+                dsc_dylibs,
+                kexts,
+                launchd,
+                firmware_added,
+                firmware_modified,
+                iboot_added,
+                iboot_modified,
+                seen,
             )
             continue
 
@@ -253,10 +298,22 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             if not change_type:
                 continue
             _apply_item(
-                item, titles, change_type, component_hint, active_section,
-                added_binaries, modified_binaries, macho_binaries, dsc_dylibs,
-                kexts, launchd, firmware_added, firmware_modified,
-                iboot_added, iboot_modified, seen,
+                item,
+                titles,
+                change_type,
+                component_hint,
+                active_section,
+                added_binaries,
+                modified_binaries,
+                macho_binaries,
+                dsc_dylibs,
+                kexts,
+                launchd,
+                firmware_added,
+                firmware_modified,
+                iboot_added,
+                iboot_modified,
+                seen,
             )
             continue
 
@@ -270,7 +327,10 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
 
         if "sandbox" in stripped.lower() and not stripped.startswith(("+", "-", "#")):
             cleaned = stripped.strip()
-            if any(kw in cleaned.lower() for kw in ("allow", "deny", "filter", "operation", "profile", "policy")):
+            if any(
+                kw in cleaned.lower()
+                for kw in ("allow", "deny", "filter", "operation", "profile", "policy")
+            ):
                 if cleaned and cleaned not in seen["sandbox"]:
                     seen["sandbox"].add(cleaned)
                     sandbox.append(cleaned)
@@ -289,6 +349,7 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
         "iboot_added": iboot_added,
         "iboot_modified": iboot_modified,
     }
+
 
 def _apply_item(
     item: str,
@@ -327,11 +388,19 @@ def _apply_item(
         _add_unique(launchd, item, seen["launchd"])
 
     if component == "firmware":
-        target, key = (firmware_added, "firmware_added") if change_type == "added" else (firmware_modified, "firmware_modified")
+        target, key = (
+            (firmware_added, "firmware_added")
+            if change_type == "added"
+            else (firmware_modified, "firmware_modified")
+        )
         _add_unique(target, item, seen[key])
 
     if component == "iboot":
-        target, key = (iboot_added, "iboot_added") if change_type == "added" else (iboot_modified, "iboot_modified")
+        target, key = (
+            (iboot_added, "iboot_added")
+            if change_type == "added"
+            else (iboot_modified, "iboot_modified")
+        )
         _add_unique(target, item, seen[key])
 
     if active_section == "macho":
@@ -339,10 +408,12 @@ def _apply_item(
     elif active_section == "dsc":
         _add_unique(dsc_dylibs, item, seen["dsc_dylibs"])
 
+
 def parse_simple_list_output(text: str) -> list[str]:
     cleaned = strip_ansi(text)
     lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
     return list(dict.fromkeys(lines))
+
 
 def parse_dyld_diff_output(text: str) -> list[str]:
     cleaned = strip_ansi(text)
@@ -365,6 +436,7 @@ def parse_dyld_diff_output(text: str) -> list[str]:
             seen.add(path)
             items.append(path)
     return items
+
 
 def extract_cstring_diffs(text: str) -> list[str]:
     headings: list[str | None] = [None] * 6
@@ -425,6 +497,7 @@ def extract_cstring_diffs(text: str) -> list[str]:
 
     return results
 
+
 def extract_symbol_diffs(text: str) -> list[str]:
     headings: list[str | None] = [None] * 6
     results: list[str] = []
@@ -482,3 +555,40 @@ def extract_symbol_diffs(text: str) -> list[str]:
             results.append(entry)
 
     return results
+
+
+# =========================================================================
+# File helpers
+#
+# Used by the diff service and the RE graph to lay out run artifacts.
+# =========================================================================
+
+
+def ensure_dir(path: str) -> str:
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def write_text(path: str, content: str) -> None:
+    ensure_dir(os.path.dirname(path) or ".")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(content)
+
+
+def write_json(path: str, payload: Any) -> None:
+    ensure_dir(os.path.dirname(path) or ".")
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=True)
+
+
+def read_text(path: str) -> str:
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
+def list_files(root: str) -> list[str]:
+    files: list[str] = []
+    for dirpath, _, filenames in os.walk(root):
+        for name in filenames:
+            files.append(os.path.join(dirpath, name))
+    return files

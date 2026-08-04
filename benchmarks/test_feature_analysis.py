@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import sys
 import time
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 project_root = Path(__file__).parent.parent
@@ -12,22 +12,30 @@ sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
 
-from langgraph_orchestration.agents.gemini_factory import GeminiAgentFactory
+from langgraph_orchestration.agents import MLXAgentFactory
+
+# Optional cloud baseline; see the note in test_ipsw_diff.py.
+# from langgraph_orchestration.gemini import GeminiAgentFactory
 from langgraph_orchestration.graphs.reverse_engineering import (
-    build_reverse_engineering_graph,
     FEATURE_ANALYSIS_RECURSION_LIMIT,
+    build_reverse_engineering_graph,
 )
-from langgraph_orchestration.schemas.state import AgentState
+from langgraph_orchestration.state import AgentState
 
 # REPORT_PATH = Path("artifacts/firmware_diff/20260617-065805/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
 REPORT_PATH = Path("artifacts/firmware_diff/20260712-141626/report.json")
-MD_REPORT_PATH = Path("artifacts/firmware_diff/20260712-141626/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md")
+MD_REPORT_PATH = Path(
+    "artifacts/firmware_diff/20260712-141626/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md"
+)
+
+
 @dataclass
 class FeatureAnalysisCase:
     case_id: str
     description: str
     report_path: Path
     user_input: str
+
 
 @dataclass
 class FeatureAnalysisResult:
@@ -39,27 +47,28 @@ class FeatureAnalysisResult:
     report_count: int
     report_paths: dict[str, str]
 
-def build_feature_case() -> FeatureAnalysisCase:    
+
+def build_feature_case() -> FeatureAnalysisCase:
     return FeatureAnalysisCase(
         case_id="RE-FEATURE-ANALYSIS-17-0-3",
         description="Feature analysis on 17.0.3 vs 17.1 diff report.",
         report_path=REPORT_PATH,
-        user_input=(
-            "Run feature analysis on diff report: "
-            "17.0.3 (21A360) vs 17.1 (21B80)."
-        ),
+        user_input=("Run feature analysis on diff report: 17.0.3 (21A360) vs 17.1 (21B80)."),
     )
+
 
 def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
     report_text = case.report_path.read_text(encoding="utf-8")
-    
+
     state = AgentState(user_input=case.user_input)
     state.intermediate_outputs["firmware_diff_report_path"] = str(MD_REPORT_PATH)
     state.intermediate_outputs["firmware_diff_report"] = report_text
 
     start = time.perf_counter()
     raw_result = None
-    for chunk in graph.stream(state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT}):
+    for chunk in graph.stream(
+        state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT}
+    ):
         print("\n--- GRAPH CHUNK ---")
         for node_name, node_state in chunk.items():
             print(f"Node: {node_name}")
@@ -81,15 +90,16 @@ def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
         report_paths=reports,
     )
 
+
 def write_result(result: FeatureAnalysisResult, output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     json_path = output_dir / f"test_feature_analysis-{timestamp}.json"
     md_path = output_dir / f"test_feature_analysis-{timestamp}.md"
 
     payload = {
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_at_utc": datetime.now(UTC).isoformat(),
         "result": asdict(result),
     }
 
@@ -126,7 +136,8 @@ def main() -> None:
     if not case.report_path.exists():
         raise FileNotFoundError(f"Missing diff report: {case.report_path}")
 
-    factory = GeminiAgentFactory(model_name="gemini-3.1-pro-preview")
+    factory = MLXAgentFactory()
+    # factory = GeminiAgentFactory(model_name="gemini-3.1-pro-preview")
     factory.ensure_loaded()
     graph = build_reverse_engineering_graph(factory=factory)
     result = run_case(graph, case)
@@ -139,6 +150,7 @@ def main() -> None:
     print(f"Reports: {result.report_count}")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
+
 
 if __name__ == "__main__":
     main()
