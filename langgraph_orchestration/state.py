@@ -1,17 +1,16 @@
-"""Shared state schema for LangGraph orchestration.
+from typing import Any, Literal
 
-Defines the data structure that flows through the agent graph,
-incl. user input, retrieved context, outputs from agents, and
-tool-call history for local agentic workflows.
-"""
-from pydantic import BaseModel, Field
-from typing import Optional, Literal, Any
+from pydantic import BaseModel, ConfigDict, Field
+
 from langgraph_orchestration.tooling.tool import ToolPolicy, ToolRequest, ToolResult
 
+
 class AgentState(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     user_input: str = Field(description="The original user request/query")
 
-    selected_domain: Optional[Literal["software_dev", "reverse_engineering"]] = Field(
+    selected_domain: Literal["software_dev", "reverse_engineering"] | None = Field(
         default=None,
         description="Primary domain selected by supervisor routing",
     )
@@ -51,12 +50,7 @@ class AgentState(BaseModel):
         description="Maximum tool loop iterations before forcing synthesis",
     )
 
-    requires_tool_confirmation: bool = Field(
-        default=True,
-        description="Whether write/edit actions must be confirmed before execution",
-    )
-
-    workspace_root: Optional[str] = Field(
+    workspace_root: str | None = Field(
         default=None,
         description="Optional repository or IDA workspace root for host-side execution",
     )
@@ -101,7 +95,7 @@ class AgentState(BaseModel):
         description="Pending feature analysis targets",
     )
 
-    feature_analysis_current: Optional[dict[str, Any]] = Field(
+    feature_analysis_current: dict[str, Any] | None = Field(
         default=None,
         description="Active feature analysis target",
     )
@@ -145,7 +139,7 @@ class AgentState(BaseModel):
         description="Maximum code generation retry attempts when tests fail",
     )
 
-    final_output: Optional[str] = Field(
+    final_output: str | None = Field(
         default=None,
         description="Final synthesized output for the user",
     )
@@ -167,6 +161,3 @@ class AgentState(BaseModel):
         cleaned = note.strip()
         if cleaned:
             self.analysis_notes.append(cleaned)
-
-    class Config:
-        arbitrary_types_allowed = True

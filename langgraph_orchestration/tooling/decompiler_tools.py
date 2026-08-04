@@ -1,27 +1,16 @@
-"""Agent-facing tools for a remote IDA Pro instance via rpyc.
-
-Groups: lookup (find_address, get_xrefs_to), decompilation (decompile_function,
-get_local_variables), annotation (rename_local_variable, set_comment,
-save_ida_database), ObjC/data-flow (resolve_objc_dispatch, trace_variable_source),
-server lifecycle (start/stop_ida_server), and metadata (get_entitlements).
-
-Non-@tool helpers (auto_annotate_function, count_user_annotations) are called
-deterministically by the RE graph, not exposed to the model.
-
-Client half of the injection pipeline: the RE graph pastes decompile_function's
-output verbatim into reports, so it filters degenerate Hex-Rays thunks
-(_is_degenerate_decompilation) here."""
+"""Agent-facing tools for interacting with a remote IDA Pro instance via RPyC"""
 
 from __future__ import annotations
+
 import os
 import re
 import subprocess
 import time
-import rpyc
-from typing import Union
-from dotenv import load_dotenv
 
+import rpyc
+from dotenv import load_dotenv
 from langchain_core.tools import tool
+
 load_dotenv()
 
 DECOMPILER_HOST = "localhost"
@@ -33,12 +22,17 @@ RPC_TIMEOUT = 360
 IDA_EXECUTABLE_PATH = os.getenv("IDA_PATH")
 IDA_RPC_SERVER_SCRIPT = os.getenv("IDA_RPC_SCRIPT_PATH")
 
+
 def _connect() -> rpyc.Connection:
     """Open a fresh rpyc connection with a consistent timeout"""
-    return rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": RPC_TIMEOUT})
+    return rpyc.connect(
+        DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": RPC_TIMEOUT}
+    )
+
 
 def _get_connection_error_msg() -> str:
     import subprocess
+
     try:
         result = subprocess.run(["pgrep", "-f", "ida64|idat"], capture_output=True, text=True)
         if result.stdout.strip():
@@ -59,8 +53,9 @@ def _is_degenerate_decompilation(pseudocode: str) -> bool:
     head = pseudocode[:4000]
     return head.count("void *") >= 24 or bool(_DEGENERATE_THUNK_RE.search(head))
 
+
 @tool
-def decompile_function(address: Union[int, str]) -> str:
+def decompile_function(address: int | str) -> str:
     """Decompiles the function at the given address"""
     if isinstance(address, str):
         address = int(address, 16) if address.startswith("0x") else int(address)
@@ -75,7 +70,7 @@ def decompile_function(address: Union[int, str]) -> str:
                     f"# ERROR: Decompiler could not recover a usable prototype for "
                     f"0x{address:x} (it produced a degenerate void*-parameter thunk, "
                     f"typically a Swift dispatch stub). This address is not meaningfully "
-                    f"decompilable — do NOT paste this output. Use get_xrefs_to on the "
+                    f"decompilable -- do NOT paste this output. Use get_xrefs_to on the "
                     f"address to find real callers instead."
                 )
             return result
@@ -86,7 +81,9 @@ def decompile_function(address: Union[int, str]) -> str:
         except EOFError as e:
             last_error = e
             wait = 2 * (attempt + 1)
-            print(f"[decompile_function] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(
+                f"[decompile_function] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}"
+            )
             time.sleep(wait)
         except Exception as e:
             return f"# ERROR: {e}"
@@ -100,7 +97,7 @@ def decompile_function(address: Union[int, str]) -> str:
 
 
 @tool
-def get_xrefs_to(address: Union[int, str]) -> list[dict]:
+def get_xrefs_to(address: int | str) -> list[dict]:
     """Finds code cross-references to a given address"""
     if isinstance(address, str):
         address = int(address, 16) if address.startswith("0x") else int(address)
@@ -112,7 +109,10 @@ def get_xrefs_to(address: Union[int, str]) -> list[dict]:
             xrefs = conn.root.exposed_get_xrefs_to(address)
             if xrefs:
                 # convert the RPyC netrefs to local python dicts
-                return [{str(k): (int(v) if isinstance(v, int) else str(v)) for k, v in dict(x).items()} for x in xrefs]
+                return [
+                    {str(k): (int(v) if isinstance(v, int) else str(v)) for k, v in dict(x).items()}
+                    for x in xrefs
+                ]
             return []
         except ConnectionRefusedError:
             return [{"error": _get_connection_error_msg()}]
@@ -121,7 +121,7 @@ def get_xrefs_to(address: Union[int, str]) -> list[dict]:
         except EOFError as e:
             last_error = e
             wait = 2 * (attempt + 1)
-            print(f"[get_xrefs_to] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(f"[get_xrefs_to] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}")
             time.sleep(wait)
         except Exception as e:
             return [{"error": f"Unexpected error: {e}"}]
@@ -135,10 +135,7 @@ def get_xrefs_to(address: Union[int, str]) -> list[dict]:
 
 
 def _resolve_func_and_segment(conn, addr: int) -> tuple[bool, int, str]:
-    """Classify an address: return (is_func, func_start, seg_name).
-
-    func_start falls back to addr when function boundaries are unavailable and
-    seg_name is "" if it can't be read; both server calls are best-effort."""
+    """Classify an address and return `(is_func, func_start, seg_name)`"""
     is_func = False
     func_start = addr
     try:
@@ -157,17 +154,12 @@ def _resolve_func_and_segment(conn, addr: int) -> tuple[bool, int, str]:
 
 
 def _resolve_objc_method_impl(conn, selector: str, original_query: str):
-    """Find the address of the real method that implements an ObjC selector.
-
-    Turns a bare selector (e.g. "scene:willConnectToSession:options:") into the
-    function IDA labels "-[Class scene:willConnectToSession:options:]", skipping
-    objc_msgSend call thunks. Returns a find_address-style symbol dict, or None
-    if no implementation is found"""
+    """Find the implementation address for an ObjC selector"""
     try:
         results = conn.root.exposed_find_objc_method_impl(selector)
     except Exception:
-        # RPC call failed as older IDA server doesn't expose exposed_find_objc_method_impl
-        # return None so find_address falls back to normal symbol and string lookups 
+        # Older IDA servers don't support this RPC; return None so find_address falls
+        # back to its standard symbol and string lookup
         return None
     for r in results or []:
         addr = r.get("address")
@@ -188,33 +180,33 @@ def _resolve_objc_method_impl(conn, selector: str, original_query: str):
 
 
 @tool
-def find_address(query: str) -> Union[dict, str]:
+def find_address(query: str) -> dict | str:
     """Finds an address in the binary by symbol name, C-string, or ObjC selector.
     Accepts diff-report kebab-case names, raw symbol names, ObjC method syntax, and plain strings."""
     original_query = query
-    query = re.sub(r'^[-+]\s+', '', query).strip()  # strip diff markers (+/-)
-    query = re.sub(r'^"|"$', '', query)              # strip surrounding quotes
+    query = re.sub(r"^[-+]\s+", "", query).strip()  # strip diff markers (+/-)
+    query = re.sub(r'^"|"$', "", query)  # strip surrounding quotes
 
-    # reject ObjC type encodings (method signature)     
-    # eg metadata like B36@0:8@16B24@28, which is not searchable names              
-    if re.match(r'^[a-zA-Z@\*\^v]{1,3}\d+[@:^]', query):
+    # reject ObjC type encodings (method signature)
+    # eg metadata like B36@0:8@16B24@28, which is not searchable names
+    if re.match(r"^[a-zA-Z@\*\^v]{1,3}\d+[@:^]", query):
         return (
             f"error: '{original_query}' is an ObjC type encoding (method signature), "
             f"not a searchable symbol or string. Skip this query."
         )
 
-    # classify query format and extract canonical token            
+    # classify query format and extract canonical token
     is_objc_selector = False
     canonical = query
 
     if query.startswith("-[") or query.startswith("+["):
-        m = re.search(r'\[.*? ([^\]]+)\]', query)
+        m = re.search(r"\[.*? ([^\]]+)\]", query)
         if m:
             canonical = m.group(1)
             is_objc_selector = True
 
     elif "_block_invoke" in query and "-[" in query:
-        m = re.search(r'\[.*? ([^\]]+)\]', query)
+        m = re.search(r"\[.*? ([^\]]+)\]", query)
         if m:
             canonical = m.group(1)
             is_objc_selector = True
@@ -237,30 +229,45 @@ def find_address(query: str) -> Union[dict, str]:
     string_variants: list[str] = []
 
     if is_objc_selector:
-        # try with and without leading _ 
+        # try with and without leading _
         base = canonical.lstrip("_")
-        string_variants = list(dict.fromkeys([
-            base,
-            canonical,
-            _kebab_to_camel(base),          
-        ]))
-        symbol_variants = list(dict.fromkeys([
-            query,                          # e.g., _objc_msgSend$isFinished
-            canonical,                      # e.g., isFinished
-            "_objc_msgSend$" + base,
-        ]))
+        string_variants = list(
+            dict.fromkeys(
+                [
+                    base,
+                    canonical,
+                    _kebab_to_camel(base),
+                ]
+            )
+        )
+        symbol_variants = list(
+            dict.fromkeys(
+                [
+                    query,  # e.g., _objc_msgSend$isFinished
+                    canonical,  # e.g., isFinished
+                    "_objc_msgSend$" + base,
+                ]
+            )
+        )
     else:
         base = canonical
         snake = _kebab_to_snake(base)
         camel = _kebab_to_camel(base)
 
-        symbol_variants = list(dict.fromkeys([
-            base, "_" + base,
-            snake, "_" + snake,
-            camel, "_" + camel,
-            "_OBJC_CLASS_$_" + base,
-            "_OBJC_METACLASS_$_" + base,
-        ]))
+        symbol_variants = list(
+            dict.fromkeys(
+                [
+                    base,
+                    "_" + base,
+                    snake,
+                    "_" + snake,
+                    camel,
+                    "_" + camel,
+                    "_OBJC_CLASS_$_" + base,
+                    "_OBJC_METACLASS_$_" + base,
+                ]
+            )
+        )
         string_variants = list(dict.fromkeys([base, snake, camel]))
 
         # handles diff-report slugs that never exist as a combined symbol
@@ -270,12 +277,17 @@ def find_address(query: str) -> Union[dict, str]:
             method_kebab = parts[1] if len(parts) > 1 else ""
             method_camel = _kebab_to_camel(method_kebab)
             method_snake = _kebab_to_snake(method_kebab)
-            for extra in [class_part, method_camel, "_" + method_camel,
-                          method_snake, "_" + method_snake]:
+            for extra in [
+                class_part,
+                method_camel,
+                "_" + method_camel,
+                method_snake,
+                "_" + method_snake,
+            ]:
                 if extra and extra not in symbol_variants:
                     symbol_variants.append(extra)
 
-    # try every variant against both lookups, with retry on EOF   
+    # try every variant against both lookups, with retry on EOF
 
     # for ObjC selectors, use the text before the first ':' as the IDA
     # selector stem, e.g. sel_shouldAcceptGroupMessagePayloadWithExistingChat
@@ -341,7 +353,7 @@ def find_address(query: str) -> Union[dict, str]:
                 is_func, func_start, seg_name = _resolve_func_and_segment(conn, best_addr)
 
                 _fuzzy_warning = (
-                    f"FUZZY MATCH — no exact symbol or string matched '{original_query}'. "
+                    f"FUZZY MATCH -- no exact symbol or string matched '{original_query}'. "
                     f"This is a best-guess by name similarity and may be a DIFFERENT function. "
                     f"Before decompiling or labelling it as '{original_query}', confirm the "
                     f"resolved name '{best['name']}' actually corresponds to your target."
@@ -373,13 +385,10 @@ def find_address(query: str) -> Union[dict, str]:
                         ],
                     }
 
-
-
             return (
                 f"error: Could not find '{canonical}' (from '{original_query}') "
                 f"as symbol, string, or fuzzy name match."
             )
-
 
         except ConnectionRefusedError:
             return _get_connection_error_msg()
@@ -388,7 +397,7 @@ def find_address(query: str) -> Union[dict, str]:
         except EOFError as e:
             last_error = e
             wait = 3 * (attempt + 1)
-            print(f"[find_address] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(f"[find_address] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}")
             time.sleep(wait)
         except Exception as e:
             return f"error: {e}"
@@ -400,7 +409,6 @@ def find_address(query: str) -> Union[dict, str]:
                     pass
 
     return f"error: Decompiler connection closed after 3 attempts: {last_error}"
-
 
 
 @tool
@@ -416,7 +424,9 @@ def rename_local_variable(func_address: int, old_name: str, new_name: str) -> bo
             return False
         except EOFError as e:
             wait = 2 * (attempt + 1)
-            print(f"[rename_local_variable] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(
+                f"[rename_local_variable] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}"
+            )
             time.sleep(wait)
         except Exception:
             return False
@@ -427,6 +437,7 @@ def rename_local_variable(func_address: int, old_name: str, new_name: str) -> bo
                 except Exception:
                     pass
     return False
+
 
 @tool
 def get_local_variables(func_address: int) -> str:
@@ -445,7 +456,9 @@ def get_local_variables(func_address: int) -> str:
         except EOFError as e:
             last_error = e
             wait = 2 * (attempt + 1)
-            print(f"[get_local_variables] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(
+                f"[get_local_variables] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}"
+            )
             time.sleep(wait)
         except Exception as e:
             return f"error: {e}"
@@ -470,13 +483,13 @@ def start_ida_server_for_binary(binary_path: str) -> str:
 
     stop_ida_server.invoke({})
 
-    import subprocess
     import socket
+    import subprocess
 
     # force kill any lingering ida64/idat processes just in case
     subprocess.run(["pkill", "-9", "-f", "idat"], capture_output=True)
     subprocess.run(["pkill", "-9", "-f", "ida64"], capture_output=True)
-    
+
     # clean up only the unpacked working files (.id0/.id1/.id2/.nam/.til) left
     # by a previous aborted run
     # preserve any existing .i64 so annotations are
@@ -491,11 +504,11 @@ def start_ida_server_for_binary(binary_path: str) -> str:
             pass
 
     # wait for the port to be fully released
-    for _ in range(60):  
+    for _ in range(60):
         try:
             with socket.create_connection((DECOMPILER_HOST, DECOMPILER_PORT), timeout=1):
                 time.sleep(1)
-        except (ConnectionRefusedError, socket.timeout, OSError):
+        except (TimeoutError, ConnectionRefusedError, OSError):
             break
     else:
         return "# ERROR: Port 18861 is still in use after attempting to kill old IDA instances."
@@ -514,14 +527,22 @@ def start_ida_server_for_binary(binary_path: str) -> str:
         command.insert(2, "-c")  # fresh DB only when no saved .i64 exists
     try:
         log_file = open("/tmp/ida_rpc_server.log", "w")
-        subprocess.Popen(command, stdout=log_file, stderr=log_file, stdin=subprocess.DEVNULL, env=os.environ.copy())
+        subprocess.Popen(
+            command,
+            stdout=log_file,
+            stderr=log_file,
+            stdin=subprocess.DEVNULL,
+            env=os.environ.copy(),
+        )
     except Exception as e:
         return f"# ERROR: Failed to start IDA Pro: {e}"
 
     for _ in range(300):  # wait up to 10 minutes
         try:
             with rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 2}):
-                return f"Successfully started IDA Pro RPC server for: {os.path.basename(binary_path)}."
+                return (
+                    f"Successfully started IDA Pro RPC server for: {os.path.basename(binary_path)}."
+                )
         except (ConnectionRefusedError, TimeoutError, OSError):
             time.sleep(2)
 
@@ -533,16 +554,19 @@ def stop_ida_server() -> str:
     """Connects to the running IDA Pro RPC server and requests a shutdown"""
     import socket
     import subprocess
+
     msg = "Shutdown signal sent."
     try:
         with socket.create_connection((DECOMPILER_HOST, DECOMPILER_PORT), timeout=2):
             pass
-        with rpyc.connect(DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 5}) as conn:
+        with rpyc.connect(
+            DECOMPILER_HOST, DECOMPILER_PORT, config={"sync_request_timeout": 5}
+        ) as conn:
             conn.root.exposed_shutdown()
     except Exception as e:
         msg = f"Shutdown failed or connection terminated: {e}"
-        
-    # kill lingering idat processes 
+
+    # kill lingering idat processes
     try:
         subprocess.run(["pkill", "-9", "-f", "idat"], capture_output=True)
     except Exception:
@@ -564,7 +588,7 @@ def set_comment(address: int, comment: str) -> bool:
             return False
         except EOFError as e:
             wait = 2 * (attempt + 1)
-            print(f"[set_comment] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(f"[set_comment] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}")
             time.sleep(wait)
         except Exception:
             return False
@@ -594,7 +618,9 @@ def save_ida_database() -> str:
         except EOFError as e:
             last_error = e
             wait = 2 * (attempt + 1)
-            print(f"[save_ida_database] EOFError on attempt {attempt+1}, retrying in {wait}s: {e}")
+            print(
+                f"[save_ida_database] EOFError on attempt {attempt + 1}, retrying in {wait}s: {e}"
+            )
             time.sleep(wait)
         except Exception as e:
             return f"Error saving database: {e}"
@@ -634,11 +660,16 @@ def auto_annotate_function(func_address: int, header_comment: str = "") -> dict:
                     conn.close()
                 except Exception:
                     pass
-    return {"ok": False, "renamed": 0, "commented": 0, "error": f"stream closed after 3 attempts: {last_error}"}
+    return {
+        "ok": False,
+        "renamed": 0,
+        "commented": 0,
+        "error": f"stream closed after 3 attempts: {last_error}",
+    }
 
 
 def count_user_annotations(func_addresses: list[int]) -> dict:
-    """Count persisted user annotations across the given functions 
+    """Count persisted user annotations across the given functions
     Returns {'named_lvars', 'comments', 'functions'} as ints"""
     conn = None
     try:
@@ -664,7 +695,9 @@ def count_user_annotations(func_addresses: list[int]) -> dict:
 def get_entitlements(binary_path: str) -> str:
     """Extracts entitlements from a Mach-O binary using ipsw"""
     try:
-        result = subprocess.run(["ipsw", "ent", binary_path], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["ipsw", "ent", binary_path], capture_output=True, text=True, check=True
+        )
         return result.stdout or result.stderr
     except subprocess.CalledProcessError as e:
         return f"Failed to get entitlements: {e.stderr}"

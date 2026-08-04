@@ -16,14 +16,14 @@ LOW_SIGNAL = "LOW_SIGNAL"
 # Build metadata that carries no behavioral meaning. Anchored at the +/- marker.
 _METADATA_RE = re.compile(
     r"^[+\-]\s*("
-    r"UUID:\s*[0-9A-Fa-f\-]+"             # UUID drift
+    r"UUID:\s*[0-9A-Fa-f\-]+"  # UUID drift
     r'|"?\d+(?:\.\d+)+[A-Za-z0-9\-_]*"?'  # version string e.g. 1450.500.221.2.9
-    r"|__TEXT\.__"                        # section sizes
+    r"|__TEXT\.__"  # section sizes
     r"|__LINKEDIT"
-    r"|__DATA\.__"                        # data section sizes (metadata churn)
+    r"|__DATA\.__"  # data section sizes (metadata churn)
     r"|__const"
     r"|__got"
-    r"|/usr/lib/"                         # dylib deps
+    r"|/usr/lib/"  # dylib deps
     r"|/System/Library/"
     r"|/usr/local/lib/"
     r")"
@@ -35,6 +35,7 @@ _TIMESTAMP_RE = re.compile(
     re.IGNORECASE,
 )
 
+
 @dataclass(frozen=True)
 class TriageResult:
     signal: str
@@ -45,8 +46,10 @@ class TriageResult:
     def is_high_signal(self) -> bool:
         return self.signal == HIGH_SIGNAL
 
+
 def _is_noise(stripped_line: str) -> bool:
     return bool(_METADATA_RE.match(stripped_line) or _TIMESTAMP_RE.match(stripped_line))
+
 
 def triage_evidence_explained(evidence: str) -> TriageResult:
     """Classify diff evidence and return the deciding line for auditability"""
@@ -66,6 +69,3 @@ def triage_evidence_explained(evidence: str) -> TriageResult:
         )
 
     return TriageResult(LOW_SIGNAL, "only metadata/timestamp churn detected")
-
-def triage_evidence(evidence: str) -> str:
-    return triage_evidence_explained(evidence).signal

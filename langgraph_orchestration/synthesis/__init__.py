@@ -1,1 +1,0 @@
-# synthesis layer for multi-domain orchestration

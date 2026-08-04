@@ -1,14 +1,228 @@
-"""Prompt builders for the reverse-engineering graph.
-
-build_unified_feature_analysis_prompt embeds a read-only "ground truth"
-decompilation block (_format_ground_truth_decompilation): the model describes that
-code in prose, while the graph pastes real code into the report."""
-
 from __future__ import annotations
 
-from langgraph_orchestration.prompts import render_prompt
-from langgraph_orchestration.prompts.shared import build_tooling_block
-from langgraph_orchestration.prompts.utils import _truncate
+import re
+from collections.abc import Iterable
+from functools import lru_cache
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from langgraph_orchestration.inference import MLXInferenceEngine
+
+# Section: loading
+
+_PROMPT_ROOT = Path(__file__).resolve().parent / "prompts_md"
+
+_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+@lru_cache(maxsize=128)
+def load_prompt_file(relative_path: str) -> tuple[dict[str, str], str]:
+    prompt_path = _PROMPT_ROOT / relative_path
+    try:
+        content = prompt_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"Prompt template not found: {prompt_path}. "
+            "Prompt files live under langgraph_orchestration/prompts_md/."
+        ) from exc
+
+    if not content.startswith("---"):
+        return {}, content
+
+    end_index = content.find("\n---", 3)
+    if end_index == -1:
+        return {}, content
+
+    frontmatter: dict[str, str] = {}
+    for line in content[3:end_index].strip("\n").splitlines():
+        if not line.strip():
+            continue
+        key, _, value = line.partition(":")
+        if key:
+            frontmatter[key.strip()] = value.strip()
+
+    return frontmatter, content[end_index + 4 :].lstrip("\n")
+
+
+def render_prompt(relative_path: str, **kwargs: Any) -> tuple[str, str]:
+    """Return ``(system_prompt, body)`` with ``{placeholders}`` filled in"""
+    frontmatter, body = load_prompt_file(relative_path)
+
+    def replace(match: re.Match[str]) -> str:
+        key = match.group(1)
+        return str(kwargs[key]) if key in kwargs else match.group(0)
+
+    return frontmatter.get("system_prompt", ""), _PLACEHOLDER_RE.sub(replace, body)
+
+
+_SOFTWARE_DEV_ALLOWED_TOOLS = [
+    "read_file",
+    "read_many_files",
+    "search_repository",
+    "get_errors",
+    "create_file",
+    "edit_file",
+]
+
+# IDA/decompiler tools available to the per-component feature-analysis agent
+RE_IDA_ANALYSIS_TOOLS = [
+    "find_address",
+    "decompile_function",
+    "get_xrefs_to",
+    "rename_local_variable",
+    "set_comment",
+    "get_entitlements",
+    "resolve_objc_dispatch",
+    "trace_variable_source",
+    "save_ida_database",
+]
+
+_REVERSE_ENGINEERING_ALLOWED_TOOLS = [
+    "read_file",
+    "read_many_files",
+    "ipsw_cli",
+    "ipsw_download",
+    "ipsw_extract",
+    "ipsw_diff",
+    *RE_IDA_ANALYSIS_TOOLS,
+]
+
+
+def get_allowed_tools(domain: str) -> list[str]:
+    if domain == "reverse_engineering":
+        return list(_REVERSE_ENGINEERING_ALLOWED_TOOLS)
+    return list(_SOFTWARE_DEV_ALLOWED_TOOLS)
+
+
+def _format_tools(tool_names: Iterable[str]) -> str:
+    return "\n".join(f"- {tool}" for tool in tool_names)
+
+
+def build_tooling_block(domain: str, user_input: str, task_focus: str) -> str:
+    if domain == "reverse_engineering":
+        allowed_tools = _format_tools(_REVERSE_ENGINEERING_ALLOWED_TOOLS)
+    else:
+        allowed_tools = _format_tools(_SOFTWARE_DEV_ALLOWED_TOOLS)
+
+    _, body = render_prompt(
+        "shared/tooling.md",
+        domain=domain,
+        allowed_tools=allowed_tools,
+        task_focus=task_focus,
+        user_input=user_input,
+    )
+    return body
+
+
+# Serction: label routing and task splitting
+
+
+def build_label_routing_prompt(inference_engine: MLXInferenceEngine, user_input: str) -> str:
+    """
+    Build a prompt for label-based routing classification.
+    Returns one of: SOFTWARE_DEV, REVERSE_ENGINEERING, or BOTH
+    """
+    system_prompt, user_message = render_prompt(
+        "supervisor/label_routing.md",
+        user_input=user_input,
+    )
+
+    return inference_engine.build_prompt(
+        user_input=user_message,
+        context=None,
+        system_prompt=system_prompt,
+        enable_thinking=False,
+    )
+
+
+def build_split_tasks_prompt(inference_engine: MLXInferenceEngine, user_input: str) -> str:
+    """Build a prompt to extract domain-specific subtasks from a multi-domain request"""
+
+    system_prompt, user_message = render_prompt(
+        "supervisor/split_tasks.md",
+        user_input=user_input,
+    )
+
+    return inference_engine.build_prompt(
+        user_input=user_message,
+        context=None,
+        system_prompt=system_prompt,
+        enable_thinking=False,
+    )
+
+
+# Section: software dev
+
+SOFTWARE_DEV_TASKS = ["code_generation", "unit_testing", "architectural_review"]
+ROUTER_SYSTEM_PROMPT, _ROUTER_BODY = render_prompt(
+    "software_dev/task_router.md",
+    user_input="",
+)
+
+
+def build_dev_task_router_prompt(user_input: str) -> str:
+    """Build routing prompt for selecting the software development plan"""
+    _, body = render_prompt(
+        "software_dev/task_router.md",
+        user_input=user_input,
+    )
+    return body
+
+
+def _prepend_tooling_block(user_input: str, task_focus: str, body: str) -> str:
+    tooling_block = build_tooling_block(
+        domain="software_dev",
+        user_input=user_input,
+        task_focus=task_focus,
+    )
+    return f"{tooling_block}\n\n{body}"
+
+
+def build_code_generation_prompt(user_input: str, attempt: int) -> str:
+    _, body = render_prompt(
+        "software_dev/code_generation.md",
+        user_input=user_input,
+        attempt=attempt,
+    )
+    return _prepend_tooling_block(
+        user_input=user_input,
+        task_focus="Plan the change, gather surrounding context, and request file or repository tools before editing.",
+        body=body,
+    )
+
+
+def build_unit_testing_prompt(code_target: str) -> str:
+    _, body = render_prompt(
+        "software_dev/unit_testing.md",
+        code_target=code_target,
+    )
+    return _prepend_tooling_block(
+        user_input=code_target,
+        task_focus="Inspect the implementation and request any missing files or related tests before proposing coverage.",
+        body=body,
+    )
+
+
+def build_architectural_review_prompt(user_request: str, combined_outputs: str) -> str:
+    _, body = render_prompt(
+        "software_dev/architectural_review.md",
+        user_request=user_request,
+        combined_outputs=combined_outputs,
+    )
+    return _prepend_tooling_block(
+        user_input=user_request,
+        task_focus="Inspect surrounding architecture and repository context before issuing recommendations.",
+        body=body,
+    )
+
+
+# Section: reverse engineering
+
+
+def _truncate(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit].rstrip() + "\n\n[TRUNCATED]"
+
 
 def _prepend_tooling_block(user_input: str, task_focus: str, body: str) -> str:
     tooling_block = build_tooling_block(
@@ -18,6 +232,7 @@ def _prepend_tooling_block(user_input: str, task_focus: str, body: str) -> str:
     )
     return f"{tooling_block}\n\n{body}"
 
+
 def build_planning_prompt(user_input: str) -> str:
     _, body = render_prompt(
         "reverse_engineering/planning.md",
@@ -25,7 +240,10 @@ def build_planning_prompt(user_input: str) -> str:
     )
     return body
 
-def build_code_analysis_prompt(user_input: str, planning_output: str = "", generated_code: str = "") -> str:
+
+def build_code_analysis_prompt(
+    user_input: str, planning_output: str = "", generated_code: str = ""
+) -> str:
     if generated_code and planning_output:
         intro = (
             "Analyze this GENERATED code using the structured plan below.\n"
@@ -61,6 +279,7 @@ def build_code_analysis_prompt(user_input: str, planning_output: str = "", gener
     )
     return body
 
+
 def build_vulnerability_detection_prompt(user_input: str, analysis_output: str = "") -> str:
     if analysis_output:
         intro = (
@@ -83,6 +302,7 @@ def build_vulnerability_detection_prompt(user_input: str, analysis_output: str =
     )
     return body
 
+
 def _format_ground_truth_decompilation(
     decompilations: list[dict] | None, per_cap: int = 3000
 ) -> str:
@@ -100,10 +320,10 @@ def _format_ground_truth_decompilation(
     if not blocks:
         return ""
     return (
-        "\n### Verified Decompilation (ground truth — real IDA output)\n"
+        "\n### Verified Decompilation (ground truth -- real IDA output)\n"
         "This is the ACTUAL decompiled code for this component's most security-relevant "
         "functions. Base `## How is it implemented` and `## Vulnerability Assessment` on THIS "
-        "code — its control flow, calls, and data handling — not on guesses from symbol names. "
+        "code -- its control flow, calls, and data handling -- not on guesses from symbol names. "
         "Do NOT paste it into the report (the system re-inserts the full output for you) and do "
         "NOT state anything that contradicts it.\n"
         "```c\n" + "\n\n".join(blocks) + "\n```\n"
@@ -153,9 +373,9 @@ def build_unified_feature_analysis_prompt(
     - Max 20 string lookups
     *Selection Priority:* 1. Added symbols, 2. Removed symbols, 3. Added strings, 4. Security/privacy/IPC strings.
 
-    **TOOL SELECTION GUIDE — READ CAREFULLY:**
+    **TOOL SELECTION GUIDE -- READ CAREFULLY:**
     *   **`find_address`**: Use this to find the memory address of ANY entry listed under **`Symbols:`** or **`CStrings:`** in the diff. Pass the raw string from the diff as the `query`.
-        *CRITICAL*: If a symbol/string is marked with `-` (minus sign) in the diff, it means it was REMOVED in the new version. The `find_address` tool runs against the NEW binary, so it WILL NOT find removed items. If a feature was entirely removed, document its removal thoroughly in the final report — do NOT skip the component.
+        *CRITICAL*: If a symbol/string is marked with `-` (minus sign) in the diff, it means it was REMOVED in the new version. The `find_address` tool runs against the NEW binary, so it WILL NOT find removed items. If a feature was entirely removed, document its removal thoroughly in the final report -- do NOT skip the component.
     *   **`get_xrefs_to`**: Finds code that references a specific DATA address. Use this on addresses returned by `find_address` when the result type is `string_data`. (Args: `address`)
     *   **`decompile_function`**: Decompile a CODE address to get C-like pseudo-code. Use this on addresses returned by `find_address` when the result type is `symbol`, or on xref addresses. (Args: `address`)
     *   **`resolve_objc_dispatch`**: When you see `objc_msgSend(v4, "doSomething")` and need to resolve `v4`'s class. (Args: `func_ea`, `call_ea`)
@@ -172,14 +392,14 @@ def build_unified_feature_analysis_prompt(
     *Database Annotation (MANDATORY):* For each binary opened, you MUST utilize the `set_comment` tool to document data flow, call traces, and important entry points. Rename variables with `rename_local_variable` when you decipher them, and call `save_ida_database` to persist annotations.
 
     **STAGE 3: REPORTING & CORRELATION**
-    If a `### Verified Decompilation (ground truth)` block is provided above, it is the AUTHORITATIVE source for this component's implementation — ground your `How is it implemented` and `Vulnerability Assessment` claims in that real code and never contradict it.
+    If a `### Verified Decompilation (ground truth)` block is provided above, it is the AUTHORITATIVE source for this component's implementation -- ground your `How is it implemented` and `Vulnerability Assessment` claims in that real code and never contradict it.
     Synthesize findings into these sections:
     *   `## What this feature does`: High-level summary based on evidence.
-    *   `## How is it implemented`: Explain the implementation logic in PROSE. CRITICAL: do NOT write, paste, paraphrase, or invent any `c`/pseudocode code block here — the system automatically inserts the real `decompile_function` output into this section for you, so hand-written code is never needed and will be discarded. Your job is: (1) during Stage 2, actually call `decompile_function` on the key addresses; (2) here, describe in words what that decompiled code does (control flow, key calls, data handling). If you did NOT call `decompile_function`, say so plainly and describe the implementation from binary-level diff evidence (section size changes, removed dylib dependencies, symbol/function count changes) and string evidence. NEVER fabricate a function body or a decompilation.
+    *   `## How is it implemented`: Explain the implementation logic in PROSE. CRITICAL: do NOT write, paste, paraphrase, or invent any `c`/pseudocode code block here -- the system automatically inserts the real `decompile_function` output into this section for you, so hand-written code is never needed and will be discarded. Your job is: (1) during Stage 2, actually call `decompile_function` on the key addresses; (2) here, describe in words what that decompiled code does (control flow, key calls, data handling). If you did NOT call `decompile_function`, say so plainly and describe the implementation from binary-level diff evidence (section size changes, removed dylib dependencies, symbol/function count changes) and string evidence. NEVER fabricate a function body or a decompilation.
     *   `## How to trigger this feature`: Infer trigger conditions.
     *   `## Vulnerability Assessment`: Analyze structural changes (new bounds checks, locking mechanisms, changed parameter types, memory management) to determine if this is a security patch. If it is a potential vulnerability fix, identify the likely vulnerability class (e.g., Use-After-Free, Out-of-Bounds, Privilege Escalation, Race Condition), how the old code was exploitable, how the new code mitigates it, and the potential impact if left unpatched. Be highly accurate and base this strictly on the evidence.
     *   `## Evidence`: Critical evidence (strings, symbols, addresses, entitlements, binary diff).
-    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, and `reason`. Use this rubric to assign `tier` — the value MUST be exactly one of these three strings, no substitutions:
+    *   `---AI_PRIORITISATION_SCORE---`: Provide the JSON object with `method`, `category`, `tier`, and `reason`. Use this rubric to assign `tier` -- the value MUST be exactly one of these three strings, no substitutions:
         - `TIER_1`: Critical/high interest. Security boundaries, privilege changes, crypto/auth logic, IPC protocol updates, entitlement changes, privacy-sensitive framework changes, or any memory-safety fix (UAF, OOB, race).
         - `TIER_2`: Medium interest. Core business-logic updates, data-sync or serialisation changes, new internal subsystem logging, daemon lifecycle changes (e.g. observer registration/removal), or refactors with clear functional impact.
         - `TIER_3`: Low interest/noise. Pure UI text, version bumps, asset-table expansions with no code logic change, or telemetry jitter with no privacy implication.
@@ -187,24 +407,24 @@ def build_unified_feature_analysis_prompt(
     If the evidence contains multiple related binaries (e.g. sharing a subsystem or version bump), synthesize them as a single cohesive feature change.
     """
     # Four cases based on tool state and IDA availability:
-    # 1. No tools used yet + IDA available      → Stage 1: must call find_address first
-    # 2. No tools used yet + IDA unavailable    → Stage 3: write report from evidence only
-    # 3. Has tool results  + budget exhausted   → Stage 3: final report now
-    # 4. Has tool results  + budget remaining   → Stage 2: continue decompilation
+    # 1. No tools used yet + IDA available      -> Stage 1: must call find_address first
+    # 2. No tools used yet + IDA unavailable    -> Stage 3: write report from evidence only
+    # 3. Has tool results  + budget exhausted   -> Stage 3: final report now
+    # 4. Has tool results  + budget remaining   -> Stage 2: continue decompilation
     if not has_tool_results and at_limit:
-        # IDA unavailable — write the report from binary diff + string/symbol evidence
+        # IDA unavailable -- write the report from binary diff + string/symbol evidence
         output_format_instructions = """
-        **CURRENT STATE: FINAL REPORT FROM EVIDENCE (STAGE 3 — IDA UNAVAILABLE)**
+        **CURRENT STATE: FINAL REPORT FROM EVIDENCE (STAGE 3 -- IDA UNAVAILABLE)**
         The decompiler could not be started for this component. You MUST still write a thorough report using the binary-level diff evidence provided above (section size changes, removed/added dylib dependencies, function count changes, symbol/string changes).
 
         Your response MUST be a single markdown document starting EXACTLY with `## What this feature does`.
         DO NOT include any `<tool_call>` tags.
         End with `---AI_PRIORITISATION_SCORE---` and the JSON score.
-        In `## How is it implemented`, describe what the binary diff reveals about the change — removed classes, dropped dependencies, text section shrinkage, etc.
+        In `## How is it implemented`, describe what the binary diff reveals about the change -- removed classes, dropped dependencies, text section shrinkage, etc.
         No conversational filler. No skipping sections.
         """
     elif not has_tool_results:
-        # IDA available and no tools used yet — must call tools before writing the report
+        # IDA available and no tools used yet -- must call tools before writing the report
         output_format_instructions = """
         **CURRENT STATE: CANDIDATE SELECTION (STAGE 1)**
         You have not used any tools yet. You MUST call tools to gather evidence before writing the final report.
@@ -216,7 +436,7 @@ def build_unified_feature_analysis_prompt(
         - For items listed under `Symbols:` or `CStrings:`, call `find_address` (max 20 calls total).
         - Pass the exact text from the diff as the `query` parameter.
         - Prioritize added symbols, security/privacy strings, and IPC/authentication identifiers.
-        - Issue all applicable `find_address` calls in this single round — do not stop after one.
+        - Issue all applicable `find_address` calls in this single round -- do not stop after one.
         """
     elif at_limit:
         output_format_instructions = """
@@ -225,7 +445,7 @@ def build_unified_feature_analysis_prompt(
 
         Your response MUST be a single markdown document. You MUST start your response EXACTLY with `## What this feature does`. DO NOT include any `<tool_call>` tags. End your report with `---AI_PRIORITISATION_SCORE---` and the JSON score. No conversational filler.
 
-        **PSEUDOCODE RULE**: Do NOT paste, paraphrase, or invent any code block in `## How is it implemented` — the system inserts the real `decompile_function` output there for you, and any code you write will be discarded. Write only a prose explanation of what the decompiled code does. Never fabricate a function body.
+        **PSEUDOCODE RULE**: Do NOT paste, paraphrase, or invent any code block in `## How is it implemented` -- the system inserts the real `decompile_function` output there for you, and any code you write will be discarded. Write only a prose explanation of what the decompiled code does. Never fabricate a function body.
         """
     else:
         output_format_instructions = """
@@ -249,7 +469,7 @@ def build_unified_feature_analysis_prompt(
 
         If you have gathered enough evidence, or if you have hit your tool budget limits, transition to STAGE 3. Output the final report starting EXACTLY with `## What this feature does` and concluding with the `---AI_PRIORITISATION_SCORE---` JSON object.
 
-        **PSEUDOCODE RULE**: In `## How is it implemented`, write only a prose explanation — do NOT paste or invent any code block. The system automatically inserts the real `decompile_function` output for you. Never fabricate a function body.
+        **PSEUDOCODE RULE**: In `## How is it implemented`, write only a prose explanation -- do NOT paste or invent any code block. The system automatically inserts the real `decompile_function` output for you. Never fabricate a function body.
         """
     if security_notes_match:
         workflow += (

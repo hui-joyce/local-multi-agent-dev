@@ -5,9 +5,9 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 _HDIUTIL_PERM_RE = re.compile(r"hdiutil:\s+attach\s+failed.*permission\s+denied", re.IGNORECASE)
+
 
 @dataclass
 class CommandResult:
@@ -19,12 +19,13 @@ class CommandResult:
     duration_seconds: float
     success: bool
 
+
 class IpswCliRunner:
-    def __init__(self, executable: str = "ipsw", cwd: Optional[str] = None):
+    def __init__(self, executable: str = "ipsw", cwd: str | None = None):
         self.executable = executable
         self.cwd = cwd
 
-    def run(self, args: list[str], timeout: int = 600, cwd: Optional[str] = None) -> CommandResult:
+    def run(self, args: list[str], timeout: int = 600, cwd: str | None = None) -> CommandResult:
         cmd = [self.executable, *args]
         started = time.perf_counter()
         try:
@@ -79,13 +80,13 @@ class IpswCliRunner:
         self,
         args: list[str],
         timeout: int = 600,
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
     ) -> CommandResult:
         """Run the command; if hdiutil permission denied is detected, retry with sudo.
 
         Sudo credential resolution order:
-          1. ``IPSW_SUDO_PASSWORD`` environment variable — piped to ``sudo -S``.
-          2. Passwordless sudo (``sudo -n``) — works if the user has a
+          1. ``IPSW_SUDO_PASSWORD`` environment variable -- piped to ``sudo -S``.
+          2. Passwordless sudo (``sudo -n``) -- works if the user has a
              NOPASSWD entry for ``ipsw`` in sudoers
           3. Falls back to returning the original (non-sudo) result
         """
@@ -93,7 +94,7 @@ class IpswCliRunner:
         if not self._needs_sudo_retry(result):
             return result
 
-        # Attempt 1: passwordless sudo (-n flag — no password prompt)
+        # Attempt 1: passwordless sudo (-n flag -- no password prompt)
         sudo_password = os.environ.get("IPSW_SUDO_PASSWORD", "")
         cmd_base = [self.executable, *args]
 
@@ -114,7 +115,6 @@ class IpswCliRunner:
                 # If passwordless sudo also hit permission denied, fall through
                 combined = stdout + stderr
                 if proc.returncode == 0 or not _HDIUTIL_PERM_RE.search(combined):
-
                     return CommandResult(
                         args=sudo_cmd,
                         command=" ".join(sudo_cmd),
@@ -132,8 +132,7 @@ class IpswCliRunner:
                 command=result.command,
                 stdout=result.stdout,
                 stderr=(
-                    result.stderr
-                    + "\n[sudo-retry] SystemOS volume requires sudo. "
+                    result.stderr + "\n[sudo-retry] SystemOS volume requires sudo. "
                     "Set IPSW_SUDO_PASSWORD env var or grant NOPASSWD sudo for ipsw."
                 ),
                 exit_code=result.exit_code,
@@ -183,7 +182,7 @@ class IpswCliRunner:
         # return original
         return result
 
-    def run_shell(self, command: str, timeout: int = 600, cwd: Optional[str] = None) -> CommandResult:
+    def run_shell(self, command: str, timeout: int = 600, cwd: str | None = None) -> CommandResult:
         """Run a shell command string (supports pipes) and return a CommandResult"""
         started = time.perf_counter()
         try:
@@ -230,11 +229,12 @@ class IpswCliRunner:
                 success=False,
             )
 
+
 def build_download_args(
     device: str,
-    version: Optional[str] = None,
-    build: Optional[str] = None,
-    output_dir: Optional[str] = None,
+    version: str | None = None,
+    build: str | None = None,
+    output_dir: str | None = None,
     resume_all: bool = True,
     latest: bool = False,
     include_kernel: bool = False,
@@ -266,11 +266,11 @@ def build_download_args(
 
 def build_extract_args(
     ipsw_path: str,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     dyld: bool = False,
     kernel: bool = False,
     dyld_arch: str = "arm64e",
-    extra_args: Optional[list[str]] = None,
+    extra_args: list[str] | None = None,
 ) -> list[str]:
     args = ["extract"]
     if dyld:
@@ -288,7 +288,7 @@ def build_extract_args(
 def build_diff_args(
     old_ipsw: str,
     new_ipsw: str,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     markdown: bool = True,
     include_fw: bool = True,
     include_launchd: bool = True,

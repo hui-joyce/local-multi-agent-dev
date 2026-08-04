@@ -4,8 +4,8 @@ import json
 import os
 import sys
 import time
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -14,20 +14,27 @@ sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
 
-from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
-from langgraph_orchestration.core.state_utils import StateManager
+from langgraph_orchestration.agents import MLXAgentFactory
+
+# Optional cloud baseline. Local MLX is the engine under test; uncomment this
+# and the swap in main() only to compare against a hosted model, and be aware
+# that doing so sends diff evidence and decompiled code off this machine.
+# from langgraph_orchestration.gemini import GeminiAgentFactory
+from langgraph_orchestration.core import StateManager
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
 from langgraph_orchestration.graphs.reverse_engineering import (
-    build_reverse_engineering_graph,
     FEATURE_ANALYSIS_RECURSION_LIMIT,
+    build_reverse_engineering_graph,
 )
-from langgraph_orchestration.schemas.state import AgentState
+from langgraph_orchestration.state import AgentState
+
 
 @dataclass
 class IpswDiffCase:
     case_id: str
     description: str
     user_input: str
+
 
 @dataclass
 class IpswDiffResult:
@@ -39,6 +46,7 @@ class IpswDiffResult:
     latency_seconds: float
     output_chars: int
     output_text: str
+
 
 def build_ipsw_diff_case() -> IpswDiffCase:
     return IpswDiffCase(
@@ -54,44 +62,48 @@ def build_ipsw_diff_case() -> IpswDiffCase:
         ),
     )
 
+
 def run_ipsw_diff_case(graph: Any, case: IpswDiffCase) -> tuple[IpswDiffResult, AgentState]:
     state = AgentState(user_input=case.user_input)
 
     start = time.perf_counter()
-    raw_result = graph.invoke(state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT})
+    raw_result = graph.invoke(
+        state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT}
+    )
     elapsed = time.perf_counter() - start
 
     final_state = AgentState(**raw_result)
     final_output = StateManager.sanitize_output(final_state.final_output or "")
 
     return IpswDiffResult(
-            case_id=case.case_id,
-            description=case.description,
-            selected_domain=final_state.selected_domain,
-            execution_domains=final_state.execution_domains,
-            agent_chain=final_state.agent_chain,
-            latency_seconds=round(elapsed, 3),
-            output_chars=len(final_output),
-            output_text=final_output,
+        case_id=case.case_id,
+        description=case.description,
+        selected_domain=final_state.selected_domain,
+        execution_domains=final_state.execution_domains,
+        agent_chain=final_state.agent_chain,
+        latency_seconds=round(elapsed, 3),
+        output_chars=len(final_output),
+        output_text=final_output,
     ), final_state
+
 
 def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     json_path = output_dir / f"test_ipsw_diff-{timestamp}.json"
     md_path = output_dir / f"test_ipsw_diff-{timestamp}.md"
 
     payload = {
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_at_utc": datetime.now(UTC).isoformat(),
         "result": asdict(result),
     }
 
     with json_path.open("w", encoding="utf-8") as file_handle:
         json.dump(payload, file_handle, indent=2)
 
-    execution_domains = ', '.join(result.execution_domains) if result.execution_domains else 'n/a'
-    agent_chain = ', '.join(result.agent_chain) if result.agent_chain else 'n/a'
+    execution_domains = ", ".join(result.execution_domains) if result.execution_domains else "n/a"
+    agent_chain = ", ".join(result.agent_chain) if result.agent_chain else "n/a"
 
     markdown = (
         "# IPSW Diff Test\n\n"
@@ -111,6 +123,7 @@ def write_result(result: IpswDiffResult, output_dir: Path) -> tuple[Path, Path]:
         file_handle.write(markdown)
 
     return json_path, md_path
+
 
 def resolve_artifact_output_dir(final_state: AgentState, base_dir: Path) -> Path:
     """Nest results under the firmware_diff artifact id, mirroring artifacts/firmware_diff/<id>/.
@@ -132,7 +145,8 @@ def resolve_artifact_output_dir(final_state: AgentState, base_dir: Path) -> Path
                 return base_dir / parts[idx + 1]
     return base_dir
 
-def trigger_feature_analysis(diff_report_path: str | Path, factory: GeminiAgentFactory) -> dict[str, str]:
+
+def trigger_feature_analysis(diff_report_path: str | Path, factory) -> dict[str, str]:
     diff_report_path = Path(diff_report_path)
 
     report_json_path: Path | None = None
@@ -158,7 +172,9 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: GeminiAgentF
     start = time.perf_counter()
 
     re_graph = build_reverse_engineering_graph(factory=factory)
-    raw_result = re_graph.invoke(state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT})
+    raw_result = re_graph.invoke(
+        state.model_dump(), config={"recursion_limit": FEATURE_ANALYSIS_RECURSION_LIMIT}
+    )
 
     elapsed = time.perf_counter() - start
     final_state = AgentState(**raw_result)
@@ -175,7 +191,8 @@ def trigger_feature_analysis(diff_report_path: str | Path, factory: GeminiAgentF
 def main() -> None:
     load_dotenv()
 
-    factory = GeminiAgentFactory() 
+    factory = MLXAgentFactory()
+    # factory = GeminiAgentFactory()  # cloud baseline; see the import note above
     graph = build_orchestration_graph(factory=factory)
 
     case = build_ipsw_diff_case()
@@ -197,7 +214,9 @@ def main() -> None:
                 break
 
     if not diff_report_path:
-        diff_report_path = final_state_from_run.intermediate_outputs.get("firmware_diff_report_path")
+        diff_report_path = final_state_from_run.intermediate_outputs.get(
+            "firmware_diff_report_path"
+        )
 
     idiff_path = None
     if raw_diff_dir and Path(raw_diff_dir).exists():
@@ -210,13 +229,16 @@ def main() -> None:
                         break
                 if idiff_path:
                     break
-                
+
     if idiff_path:
         from ipsw_service.models import IDiffReport
+
         print(f"\nLoading idiff payload from: {idiff_path}")
         try:
             idiff_report = IDiffReport.from_file(str(idiff_path))
-            print(f"Successfully loaded idiff report '{idiff_report.title}' with {len(idiff_report.machos)} binaries/dylibs tracked.")
+            print(
+                f"Successfully loaded idiff report '{idiff_report.title}' with {len(idiff_report.machos)} binaries/dylibs tracked."
+            )
         except Exception as e:
             print(f"Failed to load idiff report: {e}")
 
@@ -224,6 +246,7 @@ def main() -> None:
         feature_reports = trigger_feature_analysis(diff_report_path, factory)
         if feature_reports:
             print(f"Feature analysis: {len(feature_reports)} reports")
+
 
 if __name__ == "__main__":
     main()

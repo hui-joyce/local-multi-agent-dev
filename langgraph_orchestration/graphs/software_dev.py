@@ -7,25 +7,25 @@ within the software development domain.
 import json
 import re
 
-from langgraph.graph import StateGraph, END
-from langgraph_orchestration.schemas.state import AgentState
-from langgraph_orchestration.agents.mlx_factory import MLXAgentFactory
-from langgraph_orchestration.inference.inference_engine import GenerationConfig
-from langgraph_orchestration.retrievers.config import RAGConfigManager
-# from langgraph_orchestration.retrievers import QdrantRetriever
-from langgraph_orchestration.core.state_utils import StateManager
-from langgraph_orchestration.prompts.shared import get_allowed_tools
+from langgraph.graph import END, StateGraph
+
+from langgraph_orchestration.agents import MLXAgentFactory
+from langgraph_orchestration.core import StateManager
+from langgraph_orchestration.inference import GenerationConfig
+from langgraph_orchestration.prompts import (
+    ROUTER_SYSTEM_PROMPT,
+    SOFTWARE_DEV_TASKS,
+    build_architectural_review_prompt,
+    build_code_generation_prompt,
+    build_dev_task_router_prompt,
+    build_unit_testing_prompt,
+    get_allowed_tools,
+)
+from langgraph_orchestration.retrievers import retrieve_context
+from langgraph_orchestration.state import AgentState
 from langgraph_orchestration.tooling.executor import (
     should_continue_tool_loop,
     tool_executor_node,
-)
-from langgraph_orchestration.prompts.software_dev import (
-    SOFTWARE_DEV_TASKS,
-    ROUTER_SYSTEM_PROMPT,
-    build_dev_task_router_prompt,
-    build_code_generation_prompt,
-    build_unit_testing_prompt,
-    build_architectural_review_prompt,
 )
 
 
@@ -36,14 +36,12 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     """
     if factory is None or isinstance(factory, dict):
         factory = MLXAgentFactory()
-    
-    code_gen_agent = factory.create_code_generation_agent()
-    test_agent = factory.create_unit_testing_agent()
-    arch_agent = factory.create_architectural_review_agent()
-    inference_engine = factory.inference_engine
-    # disable for no rag test
-    # retriever = QdrantRetriever()
-    
+
+    code_gen_agent = factory.create_agent("code_generation")
+    test_agent = factory.create_agent("unit_testing")
+    arch_agent = factory.create_agent("architectural_review")
+    inference_engine = factory.ensure_loaded()
+
     graph = StateGraph(AgentState)
 
     def _extract_json_block(raw_output: str) -> str:
@@ -90,13 +88,8 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         return plan[idx + 1]
 
     def retrieve_dev_context_node(state: AgentState) -> AgentState:
-        RAGConfigManager.initialize()
-        rag_manager = RAGConfigManager.get_rag_manager()
-        config = RAGConfigManager.get_config()
-        context = rag_manager.retrieve_software_dev_context(
-            query=state.user_input,
-            top_k=config.default_top_k,
-        )
+        # Retrieval is optional. Missing Qdrant or embedding models return []
+        context = retrieve_context(state.user_input, domain="software_dev")
         state.dev_context = context
         state.dev_task_plan = _select_dev_task_plan(state.user_input)
         state.tool_policy.allowed_tools = get_allowed_tools("software_dev")
@@ -114,7 +107,9 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
                 lines.append(f"- {result.tool_name}: {excerpt}")
             else:
                 lines.append(f"- {result.tool_name} failed: {result.error}")
-        lines.append("Use this evidence directly. Do not re-request the same tool unless data is missing.")
+        lines.append(
+            "Use this evidence directly. Do not re-request the same tool unless data is missing."
+        )
         return "\n".join(lines)
 
     def _augment_prompt_with_tools(prompt: str, state: AgentState) -> str:
@@ -122,7 +117,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         if not observation:
             return prompt
         return f"{prompt}\n\n{observation}"
-    
+
     def _files_written(state: AgentState) -> list[str]:
         """Paths successfully written this run (proof codegen produced files, not prose)"""
         return [
@@ -165,7 +160,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         if has_pass and not has_fail:
             return True
         return not has_fail
-    
+
     def unit_testing_node(state: AgentState) -> AgentState:
         code_target = state.intermediate_outputs.get("code_generation") or state.user_input
         prompt = build_unit_testing_prompt(code_target)
@@ -179,7 +174,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
             agent_name="unit_testing",
             output=output,
         )
-    
+
     def architectural_review_node(state: AgentState) -> AgentState:
         prompt = build_architectural_review_prompt(
             user_request=state.user_input,
@@ -230,7 +225,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         if should_continue_tool_loop(state):
             return "architectural_review"
         return "synthesize"
-    
+
     def synthesize_output(state: AgentState) -> AgentState:
         files = sorted(set(_files_written(state)))
         if "code_generation" not in state.dev_task_plan:
@@ -250,7 +245,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         state.branch_outputs["software_dev"] = StateManager.sanitize_output(final)
         state.agent_chain.append("software_dev_synthesize")
         return state
-    
+
     graph.add_node("retrieve_dev_context", retrieve_dev_context_node)
     graph.add_node("code_generation", code_generation_node)
     graph.add_node("code_generation_tools", tool_executor_node)
@@ -259,7 +254,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     graph.add_node("architectural_review", architectural_review_node)
     graph.add_node("architectural_review_tools", tool_executor_node)
     graph.add_node("synthesize", synthesize_output)
-    
+
     graph.add_conditional_edges(
         "retrieve_dev_context",
         route_after_retrieve,
@@ -302,9 +297,9 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
         },
     )
     graph.add_edge("synthesize", END)
-    
+
     graph.set_entry_point("retrieve_dev_context")
-    
+
     compiled = graph.compile()
     compiled.name = "Software Development"
     compiled.description = "Code generation, testing, and architectural review workflow"
