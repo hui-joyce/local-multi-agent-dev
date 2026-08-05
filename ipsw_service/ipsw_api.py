@@ -18,14 +18,6 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-# ===========================================================================
-# The raw client
-#
-# Four endpoints, no retries, no caching. If api.ipsw.me is unreachable the
-# caller gets an exception and decides what that means -- for the nightly
-# pipeline it means "try again tomorrow".
-# ===========================================================================
-
 
 @dataclass
 class ApiResponse:
@@ -62,17 +54,29 @@ class IpswDownloadsClient:
         return self._get_json(f"/ipsw/{version}")
 
 
-# =========================================================================
-# Catalog lookups
-#
-# The semantic layer: which device is newest, which build precedes this one,
-# which identifier does 'iPhone 18 Pro' mean. All of it derived from the four
-# endpoints above.
-# =========================================================================
+# Section: catalog lookups
 
 
 def _version_tuple(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in str(version).split(".") if part.isdigit())
+
+
+_BUILD_ID_RE = re.compile(r"^(\d+)([A-Z]+)(\d+)([a-z]*)$")
+
+
+def build_key(build: str) -> tuple[int, str, int, str]:
+    """Sortable key for an Apple build ID"""
+    match = _BUILD_ID_RE.match(str(build).strip())
+    if not match:
+        return (0, "", 0, "")
+    return (int(match.group(1)), match.group(2), int(match.group(3)), match.group(4))
+
+
+def release_key(version: str, build: str) -> tuple[tuple[int, ...], tuple[int, str, int, str]]:
+    """Orders releases by version, then build.
+    Build numbers distinguish re-releases with the same version.
+    """
+    return (_version_tuple(version), build_key(build))
 
 
 # iPhone18,1 -> family "iPhone", generation 18, model 1
@@ -86,10 +90,8 @@ class FirmwareCatalogService:
         self.client = client or IpswDownloadsClient()
 
     def list_ipsw_firmwares(self, identifier: str) -> list[dict]:
-        """Every IPSW release for *identifier*, newest version first, [] on failure.
-
-        Ordered by version, then release date so same-version rebuilds are
-        deterministic.
+        """Returns all IPSW releases for *identifier*, newest first.
+        Ordered by version, build, then release date.
         """
         try:
             response = self.client.get_device_firmwares(identifier, firmware_type="ipsw")
@@ -107,7 +109,7 @@ class FirmwareCatalogService:
         return sorted(
             (item for item in firmwares if isinstance(item, dict)),
             key=lambda item: (
-                _version_tuple(item.get("version", "")),
+                release_key(item.get("version", ""), item.get("buildid", "")),
                 str(item.get("releasedate") or ""),
             ),
             reverse=True,
@@ -129,13 +131,7 @@ class FirmwareCatalogService:
         return self._as_target(identifier, firmwares[0]) if firmwares else None
 
     def list_devices(self, family_prefix: str = "iPhone") -> list[str]:
-        """Device identifiers in *family_prefix*, newest hardware first, [] on failure.
-
-        Ordered by generation descending then model ascending: within a
-        generation Apple assigns ``,1`` to the flagship that launches with it,
-        and higher model numbers to the later, lower-tier variants (iPhone18,1
-        is the 17 Pro; iPhone18,5 is the 17e).
-        """
+        """Device identifiers in *family_prefix*, newest hardware first, [] on failure"""
         try:
             response = self.client.get_devices()
         except Exception:
@@ -152,12 +148,7 @@ class FirmwareCatalogService:
         return [identifier for _, _, identifier in sorted(ranked)]
 
     def resolve_newest_device(self, family_prefix: str = "iPhone") -> str | None:
-        """Newest device in *family_prefix* that has at least two releases to diff.
-
-        Hardware released within the current OS cycle only has its launch
-        build, so skipping to the next candidate keeps a diff pair available
-        instead of stalling for a release cycle.
-        """
+        """Newest device in *family_prefix* that has at least two releases to diff"""
         for identifier in self.list_devices(family_prefix):
             versions = {
                 str(firmware.get("version", ""))
@@ -167,17 +158,14 @@ class FirmwareCatalogService:
                 return identifier
         return None
 
-    def resolve_previous_ipsw(self, identifier: str, version: str) -> dict | None:
-        """Newest release for *identifier* older than *version*, or None.
-
-        Compared by version rather than list position so it still resolves when
-        *version* itself is absent from the catalog.
-        """
-        current = _version_tuple(version)
-        if not current:
+    def resolve_previous_ipsw(self, identifier: str, version: str, build: str = "") -> dict | None:
+        """Newest release for *identifier* older than *version*/*build*, or None"""
+        current = release_key(version, build)
+        if not current[0]:
             return None
         for firmware in self.list_ipsw_firmwares(identifier):
-            if _version_tuple(firmware.get("version", "")) < current:
+            candidate = release_key(firmware.get("version", ""), firmware.get("buildid", ""))
+            if candidate < current:
                 return self._as_target(identifier, firmware)
         return None
 
@@ -191,7 +179,7 @@ class FirmwareCatalogService:
 
     @staticmethod
     def family_prefix_for(user_input: str) -> str:
-        """Device-identifier prefix implied by the OS/device family named in the request."""
+        """Device-identifier prefix implied by the OS/device family named in the request"""
         lowered = user_input.lower()
         if "ipad" in lowered:
             return "iPad"

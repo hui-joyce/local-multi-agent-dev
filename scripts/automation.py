@@ -22,7 +22,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 # Section: shared config
 
 from ipsw_service.cli import IpswCliRunner, build_download_args
-from ipsw_service.ipsw_api import FirmwareCatalogService
+from ipsw_service.ipsw_api import FirmwareCatalogService, release_key
 from ipsw_service.security_notes_service import cache_path
 from langgraph_orchestration.graphs.reverse_engineering import (
     FEATURE_ANALYSIS_RECURSION_LIMIT,
@@ -86,10 +86,6 @@ def keep_per_device() -> int:
         return 1
 
 
-def version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in str(version).split(".") if part.isdigit())
-
-
 def ipsw_filename(device: str, version: str, build: str) -> str:
     return f"{device}_{version}_{build}_Restore.ipsw"
 
@@ -107,7 +103,7 @@ def local_ipsws(device: str | None = None) -> list[dict]:
         parsed = parse_ipsw_name(path.name)
         if parsed and path.is_file() and (device is None or parsed["device"] == device):
             found.append({**parsed, "path": path})
-    found.sort(key=lambda entry: (version_key(entry["version"]), entry["build"]), reverse=True)
+    found.sort(key=lambda entry: release_key(entry["version"], entry["build"]), reverse=True)
     return found
 
 
@@ -224,11 +220,11 @@ def _download(runner: IpswCliRunner, device: str, version: str, build: str) -> P
     return None
 
 
-def _local_baseline(device: str, version: str) -> dict | None:
-    """Newest already-downloaded IPSW for *device* older than *version*"""
-    current = version_key(version)
+def _local_baseline(device: str, version: str, build: str = "") -> dict | None:
+    """Newest already-downloaded IPSW for *device* older than *version*/*build*"""
+    current = release_key(version, build)
     for entry in local_ipsws(device):
-        if version_key(entry["version"]) < current:
+        if release_key(entry["version"], entry["build"]) < current:
             return entry
     return None
 
@@ -281,12 +277,12 @@ def stage_download() -> int:
             continue
         print(f"    OK: {new_ipsw.name} ({gigabytes(new_ipsw.stat().st_size)})")
 
-        baseline = _local_baseline(device, version)
+        baseline = _local_baseline(device, version, build)
         gap = ""
         if baseline:
             print(f"    Baseline already on disk: {baseline['path'].name}")
         else:
-            previous = catalog.resolve_previous_ipsw(device, version)
+            previous = catalog.resolve_previous_ipsw(device, version, build)
             if previous is None:
                 if catalog.list_ipsw_firmwares(device):
                     gap = "none"
@@ -649,6 +645,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Interrupted", file=sys.stderr)
         sys.exit(EXIT_ERROR)
-    except Exception as exc:  # a stage crash must not look like success
+    except Exception as exc:  
         print(f"FATAL: {type(exc).__name__}: {exc}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
