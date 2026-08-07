@@ -81,8 +81,8 @@ Choose **Install suggested plugins** and create the admin user. The suggested pl
 2. Under **Pipeline**:
    - Definition: `Pipeline script from SCM`
    - SCM: `Git`
-   - Repository URL: `/Users/user/Documents/GitHub/local-multi-agent-dev`
-   - Branch Specifier: the branch you deploy from, e.g. `*/langgraph`
+   - Repository URL: `https://github.com/hui-joyce/local-multi-agent-dev`
+   - Branch Specifier: the branch you deploy from, e.g. `*/main`
    - Script Path: `Jenkinsfile`
 3. Save
 
@@ -157,6 +157,129 @@ Archived on the build page (small, current run only):
 
 Full output remains in `artifacts/firmware_diff/<run id>/` and is not archived
 to keep Jenkins builds small.
+
+### Example outputs
+
+**`new_firmware.json`** -- written by every `check` run, whether or not anything
+was found. One entry per device whose newest build differs from
+`last_known_builds.json`; `[]` when nothing is new, which is the common case.
+
+```json
+[
+  {
+    "device": "iPhone18,1",
+    "version": "26.6",
+    "build": "23G71",
+    "url": "https://updates.cdn-apple.com/2026SummerFCS/fullrestores/140-57285/88580B31-DFDB-4502-884F-DA40EC871038/iPhone18,1_26.6_23G71_Restore.ipsw",
+    "released": "2026-07-27T17:38:06Z",
+    "signed": true
+  }
+]
+```
+
+`signed` reports whether Apple still signs the build for restore, not whether it
+is an official release. Only the current release is normally signed.
+
+**`download_plan.json`** -- one entry per device, written after the IPSWs are on
+disk. `old_ipsw` is `null` when no predecessor could be resolved, in which case
+the pair is skipped and only a baseline is recorded.
+
+```json
+[
+  {
+    "device": "iPhone18,1",
+    "version": "26.6",
+    "build": "23G71",
+    "new_ipsw": "/path/to/repo/.ipsw_downloads/iPhone18,1_26.6_23G71_Restore.ipsw",
+    "old_ipsw": "/path/to/repo/.ipsw_downloads/iPhone18,1_26.5.2_23F84_Restore.ipsw",
+    "old_version": "26.5.2",
+    "old_build": "23F84",
+    "baseline_gap": ""
+  }
+]
+```
+
+`baseline_gap` is `""` on success, `"none"` when the catalog holds no earlier
+release for the device, and `"unresolved"` when the catalog was unreachable or
+the baseline download failed.
+
+**`run_results.json`** -- one file per `analyze` run, holding a roll-up plus a
+per-device record.
+
+```json
+{
+  "timestamp": "2026-08-05T01:41:07+00:00",
+  "pairs_analysed": 1,
+  "succeeded": 1,
+  "baselines": 0,
+  "failed": 0,
+  "results": [
+    {
+      "device": "iPhone18,1",
+      "old_version": "26.5.2",
+      "new_version": "26.6",
+      "new_build": "23G71",
+      "status": "analysed",
+      "elapsed_seconds": 14812.6,
+      "diff_run": "20260805-014107",
+      "feature_reports": [
+        "artifacts/firmware_diff/20260805-014107/feature_analysis/IOKit_analysis.md",
+        "artifacts/firmware_diff/20260805-014107/feature_analysis/WebCore_analysis.md"
+      ],
+      "output_chars": 48213,
+      "agent_chain": ["supervisor", "reverse_engineering"],
+      "analysis_notes": {"notes": []}
+    }
+  ]
+}
+```
+
+`status` is `analysed`, `baseline` (recorded without a diff, no predecessor
+available), or `failed`. A failed record carries `error` instead of the report
+fields:
+
+```json
+{
+  "device": "iPhone18,1",
+  "old_version": "26.5.2",
+  "new_version": "26.6",
+  "new_build": "23G71",
+  "status": "failed",
+  "elapsed_seconds": 92.4,
+  "error": "RuntimeError: pipeline produced no firmware diff report"
+}
+```
+
+Failed devices stay out of `last_known_builds.json`, so the next run detects the
+build again and retries. Pruning is skipped on that run so the predecessor IPSW
+survives for the retry.
+
+**`reports/<run id>/`** -- a copy of the analysis output, small enough to archive
+on the build page:
+
+```
+.jenkins_pipeline/reports/20260805-014107/
+  report.json
+  feature_analysis/
+    00_SUMMARY.md
+    IOKit_analysis.md
+    WebCore_analysis.md
+    ...
+```
+
+`00_SUMMARY.md` opens with the counts for the run:
+
+```
+# Feature Analysis Summary -- iOS 26.6
+
+- **Total components in diff**: 316  (**HIGH_SIGNAL**: 216, **LOW_SIGNAL**: 100)
+- **Analysed** (report written): 38  |  **Apple Security Notes matches**: 12  | ...
+```
+
+`Apple Security Notes matches: 0` means no cached advisory was found for the
+target version, not that Apple flagged nothing. The scheduled pipeline caches
+advisories during `download`; a manual run needs
+`python scripts/update_security_notes.py <version>` first.
 
 ## Managing Jenkins
 

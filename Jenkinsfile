@@ -8,7 +8,7 @@ pipeline {
 
     options {
         timestamps()
-        timeout(time: 24, unit: 'HOURS')
+        timeout(time: 2, unit: 'DAYS')
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
         disableConcurrentBuilds()
     }
@@ -22,6 +22,9 @@ pipeline {
         PIPELINE_DEVICES         = ''
         PIPELINE_DEVICE_FAMILY   = 'iPhone'
         PIPELINE_KEEP_PER_DEVICE = '1'
+
+        // Skip components whose analysis markdown already exists in the run directory
+        FEATURE_ANALYSIS_RESUME  = '1'
     }
 
     stages {
