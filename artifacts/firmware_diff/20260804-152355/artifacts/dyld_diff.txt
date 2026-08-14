@@ -1,0 +1,29 @@
+[dyld_diff]
+command: ipsw dyld info --dylibs --diff /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone18,4_26.3_23D127_Restore/23D127__iPhone18,4/dyld_shared_cache_arm64e /Users/user/Documents/GitHub/local-multi-agent-dev/.ipsw_extracted/iPhone18,4_26.3.1_23D8133_Restore/23D8133__iPhone18,4/dyld_shared_cache_arm64e
+parsed_item_count: 3
+parsed_items:
+/System/Library/PrivateFrameworks/ProductKit.framework/ProductKit
+/System/Library/PrivateFrameworks/ProductKitCore.framework/ProductKitCore
+/System/Library/PrivateFrameworks/SettingsFoundation.framework/SettingsFoundation
+stdout:
+/System/Library/PrivateFrameworks/ProactiveSummarizationClient.framework/ProactiveSummarizationClient	(1303.10.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveSupport.framework/ProactiveSupport	(415.1.0.0.0)
+ /System/Library/PrivateFrameworks/ProactiveSupportStubs.framework/ProactiveSupportStubs	(415.1.0.0.0)
+-/System/Library/PrivateFrameworks/ProductKit.framework/ProductKit	(129.400.11.2.2)
+-/System/Library/PrivateFrameworks/ProductKitCore.framework/ProductKitCore	(129.400.11.2.2)
++/System/Library/PrivateFrameworks/ProductKit.framework/ProductKit	(129.400.11.2.4)
++/System/Library/PrivateFrameworks/ProductKitCore.framework/ProductKitCore	(129.400.11.2.4)
+ /System/Library/PrivateFrameworks/ProfileValidatedAppIdentity.framework/ProfileValidatedAppIdentity	(132.1.0.0.0)
+ /System/Library/PrivateFrameworks/ProgressUI.framework/ProgressUI	(2839.0.0.0.0)
+ /System/Library/PrivateFrameworks/PromotedContent.framework/PromotedContent	(556.3.4.0.0)
+
+ /System/Library/PrivateFrameworks/Settings/SoundsAndHapticsSettings.framework/SoundsAndHapticsSettings	(1114.3.1.0.0)
+ /System/Library/PrivateFrameworks/SettingsCellular.framework/SettingsCellular	(659.1.0.0.0)
+ /System/Library/PrivateFrameworks/SettingsCellularUI.framework/SettingsCellularUI	(659.1.0.0.0)
+-/System/Library/PrivateFrameworks/SettingsFoundation.framework/SettingsFoundation	(1087.3.2.0.0)
++/System/Library/PrivateFrameworks/SettingsFoundation.framework/SettingsFoundation	(1087.3.2.100.0)
+ /System/Library/PrivateFrameworks/SettingsHost.framework/SettingsHost	(2.3.2.0.0)
+ /System/Library/PrivateFrameworks/SettingsHostUI.framework/SettingsHostUI	(2.3.2.0.0)
+ /System/Library/PrivateFrameworks/SetupAssistant.framework/SetupAssistant	(5381.3.1.0.0)
+stderr:
+[34m[1m   •[22m Differences found        [0m
