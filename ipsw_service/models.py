@@ -20,13 +20,11 @@ class DiffCounts:
     iboot_added: int = 0
     iboot_modified: int = 0
 
-
 @dataclass
 class EvidenceItem:
     source: str
     summary: str
     details: str | None = None
-
 
 @dataclass
 class Finding:
@@ -36,7 +34,6 @@ class Finding:
     mitigation: str = ""
     confidence: float = 0.0
     evidence: list[EvidenceItem] = field(default_factory=list)
-
 
 @dataclass
 class FirmwareDiffArtifacts:
@@ -51,7 +48,6 @@ class FirmwareDiffArtifacts:
     launchd_diff: str | None = None
     raw_diff_dir: str | None = None
 
-
 @dataclass
 class FirmwareDiffSummary:
     old_firmware: str
@@ -60,7 +56,6 @@ class FirmwareDiffSummary:
     counts: DiffCounts
     high_risk_changes: int
 
-
 @dataclass
 class FirmwareDiffResult:
     summary: FirmwareDiffSummary
@@ -68,7 +63,6 @@ class FirmwareDiffResult:
     artifacts: FirmwareDiffArtifacts
     gaps: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
-
 
 @dataclass
 class FirmwareDiffRequest:
@@ -90,14 +84,10 @@ class FirmwareDiffRequest:
     include_strs: bool = True
     clean_cache: bool = True
 
-
-# noqa target: the str mixin is intentional -- DiffState values are written
-# straight into report JSON and compared against raw strings.
-class DiffState(str, Enum):  # noqa: UP042
+class DiffState(str, Enum):  
     NEW = "new"
     REMOVED = "removed"
     UPDATED = "updated"
-
 
 @dataclass
 class MachODiff:
@@ -111,14 +101,12 @@ class MachODiff:
     removed_cstrings: list[str] = field(default_factory=list)
     modified_objc_classes: list[str] = field(default_factory=list)
 
-
 @dataclass
 class KextDiff:
     path: str
     state: DiffState
     added_symbols: list[str] = field(default_factory=list)
     removed_symbols: list[str] = field(default_factory=list)
-
 
 @dataclass
 class EntitlementDiff:
@@ -127,14 +115,12 @@ class EntitlementDiff:
     added_keys: list[str] = field(default_factory=list)
     removed_keys: list[str] = field(default_factory=list)
 
-
 @dataclass
 class LaunchdDiff:
     path: str
     state: DiffState
     added_keys: list[str] = field(default_factory=list)
     removed_keys: list[str] = field(default_factory=list)
-
 
 @dataclass
 class SandboxDiff:
@@ -143,13 +129,11 @@ class SandboxDiff:
     added_rules: list[str] = field(default_factory=list)
     removed_rules: list[str] = field(default_factory=list)
 
-
 @dataclass
 class FirmwareComponentDiff:
     name: str
     state: DiffState
     hash: str | None = None
-
 
 @dataclass
 class IDiffReport:

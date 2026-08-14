@@ -695,7 +695,6 @@ class IDAToolExecutor(BaseToolExecutor):
         return require_address(address)
 
     def _ipsw_cwd(self, args: list[str]) -> str:
-        """Run ipsw from its --output directory so stray artifacts land there."""
         for flag in ("--output", "-o"):
             if flag in args:
                 index = args.index(flag)
@@ -710,9 +709,6 @@ class IDAToolExecutor(BaseToolExecutor):
             return ToolResult(
                 tool_name="ipsw_cli", success=False, output="", error="No ipsw arguments provided"
             )
-        # `ipsw download` writes checksums.txt.sha1 into its working directory, not
-        # into --output. Running from the repo root littered the root with it, so
-        # run from the output directory when the command has one.
         runner = IpswCliRunner(cwd=self._ipsw_cwd(args))
         result = runner.run(args, timeout=timeout)
         output = result.stdout if result.stdout else result.stderr

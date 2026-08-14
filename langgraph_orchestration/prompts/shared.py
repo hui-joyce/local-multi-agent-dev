@@ -1,0 +1,66 @@
+# STILL IN DEV
+"""Shared prompt helpers for local tool-calling behavior"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+
+from langgraph_orchestration.prompts import render_prompt
+
+_SOFTWARE_DEV_ALLOWED_TOOLS = [
+    "read_file",
+    "read_many_files",
+    "search_repository",
+    "get_errors",
+    "create_file",
+    "edit_file",
+]
+
+# IDA/decompiler tools available to the per-component feature-analysis agent
+RE_IDA_ANALYSIS_TOOLS = [
+    "find_address",
+    "decompile_function",
+    "get_xrefs_to",
+    "rename_local_variable",
+    "set_comment",
+    "get_entitlements",
+    "resolve_objc_dispatch",
+    "trace_variable_source",
+    "save_ida_database",
+]
+
+_REVERSE_ENGINEERING_ALLOWED_TOOLS = [
+    "read_file",
+    "read_many_files",
+    "ipsw_cli",
+    "ipsw_download",
+    "ipsw_extract",
+    "ipsw_diff",
+    *RE_IDA_ANALYSIS_TOOLS,
+]
+
+
+def get_allowed_tools(domain: str) -> list[str]:
+    if domain == "reverse_engineering":
+        return list(_REVERSE_ENGINEERING_ALLOWED_TOOLS)
+    return list(_SOFTWARE_DEV_ALLOWED_TOOLS)
+
+
+def _format_tools(tool_names: Iterable[str]) -> str:
+    return "\n".join(f"- {tool}" for tool in tool_names)
+
+
+def build_tooling_block(domain: str, user_input: str, task_focus: str) -> str:
+    if domain == "reverse_engineering":
+        allowed_tools = _format_tools(_REVERSE_ENGINEERING_ALLOWED_TOOLS)
+    else:
+        allowed_tools = _format_tools(_SOFTWARE_DEV_ALLOWED_TOOLS)
+
+    _, body = render_prompt(
+        "shared/tooling.md",
+        domain=domain,
+        allowed_tools=allowed_tools,
+        task_focus=task_focus,
+        user_input=user_input,
+    )
+    return body

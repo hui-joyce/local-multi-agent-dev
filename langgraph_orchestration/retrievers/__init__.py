@@ -1,0 +1,1 @@
+"""Optional RAG scaffolding: embedded Qdrant plus local embeddings"""

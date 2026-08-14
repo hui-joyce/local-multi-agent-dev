@@ -1,10 +1,3 @@
-"""Reading the ``ipsw`` CLI's output, and the file helpers that go with it.
-
-The CLI prints human-readable text rather than anything machine-friendly, so
-everything below is regex work over its stdout. The file helpers at the end are
-here because they exist to write what that parsing produces.
-"""
-
 from __future__ import annotations
 
 import json
@@ -51,12 +44,10 @@ _ITEM_EXTENSIONS = (
 # matches a bare com.apple.* entitlement token
 _ENTITLEMENT_RE = re.compile(r"(?<![/\w])(com\.apple\.[a-z0-9.\-]+)", re.IGNORECASE)
 
-
 def strip_ansi(text: str) -> str:
     if not text:
         return ""
     return _ANSI_ESCAPE_RE.sub("", text)
-
 
 def extract_paths_by_keyword(output: str, keyword: str) -> list[str]:
     if not output:
@@ -65,7 +56,6 @@ def extract_paths_by_keyword(output: str, keyword: str) -> list[str]:
     # strictly anchor to path-safe characters to prevent capturing punctuation
     pattern = rf"(/[a-zA-Z0-9_\-\./]*{re.escape(keyword)}[a-zA-Z0-9_\-\./]*)"
     return list(dict.fromkeys(re.findall(pattern, cleaned)))
-
 
 def _heading_level(line: str) -> tuple[int, str]:
     stripped = line.lstrip()
@@ -82,11 +72,9 @@ def _heading_level(line: str) -> tuple[int, str]:
     title = stripped[count:].strip()
     return count, title
 
-
 def _title_has_keyword(title: str, keywords: Iterable[str]) -> bool:
     lowered = title.lower()
     return any(keyword in lowered for keyword in keywords)
-
 
 def _resolve_change_type(titles: list[str]) -> str | None:
     for title in reversed(titles):
@@ -94,7 +82,6 @@ def _resolve_change_type(titles: list[str]) -> str | None:
             if _title_has_keyword(title, keywords):
                 return change_type
     return None
-
 
 def _resolve_component(titles: list[str]) -> str | None:
     for title in reversed(titles):
@@ -150,12 +137,10 @@ def _is_group_heading(title: str) -> bool:
         return True
     return any(keyword in lowered for keyword in ("view ", "updated", "removed", "new", "added"))
 
-
 def _add_unique(items: list[str], item: str, seen: set[str]) -> None:
     if item and item not in seen:
         seen.add(item)
         items.append(item)
-
 
 def parse_diff_markdown(text: str) -> dict[str, list[str]]:
     headings: list[str | None] = [None] * 6
@@ -251,7 +236,7 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
             continue
 
         stripped = line.strip()
-        # Track diff fences -- items inside a ```diff block are diff content, not binary paths.
+        # Track diff fences -- items inside a ```diff block are diff content, not binary paths
         if stripped.startswith("```"):
             in_diff_block = stripped.startswith("```diff")
             continue
@@ -350,7 +335,6 @@ def parse_diff_markdown(text: str) -> dict[str, list[str]]:
         "iboot_modified": iboot_modified,
     }
 
-
 def _apply_item(
     item: str,
     titles: list[str],
@@ -408,12 +392,10 @@ def _apply_item(
     elif active_section == "dsc":
         _add_unique(dsc_dylibs, item, seen["dsc_dylibs"])
 
-
 def parse_simple_list_output(text: str) -> list[str]:
     cleaned = strip_ansi(text)
     lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
     return list(dict.fromkeys(lines))
-
 
 def parse_dyld_diff_output(text: str) -> list[str]:
     cleaned = strip_ansi(text)
@@ -436,7 +418,6 @@ def parse_dyld_diff_output(text: str) -> list[str]:
             seen.add(path)
             items.append(path)
     return items
-
 
 def extract_cstring_diffs(text: str) -> list[str]:
     headings: list[str | None] = [None] * 6
@@ -497,7 +478,6 @@ def extract_cstring_diffs(text: str) -> list[str]:
 
     return results
 
-
 def extract_symbol_diffs(text: str) -> list[str]:
     headings: list[str | None] = [None] * 6
     results: list[str] = []
@@ -556,35 +536,24 @@ def extract_symbol_diffs(text: str) -> list[str]:
 
     return results
 
-
-# =========================================================================
-# File helpers
-#
-# Used by the diff service and the RE graph to lay out run artifacts.
-# =========================================================================
-
-
+# file helpers 
 def ensure_dir(path: str) -> str:
     os.makedirs(path, exist_ok=True)
     return path
-
 
 def write_text(path: str, content: str) -> None:
     ensure_dir(os.path.dirname(path) or ".")
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(content)
 
-
 def write_json(path: str, payload: Any) -> None:
     ensure_dir(os.path.dirname(path) or ".")
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, ensure_ascii=True)
 
-
 def read_text(path: str) -> str:
     with open(path, encoding="utf-8") as handle:
         return handle.read()
-
 
 def list_files(root: str) -> list[str]:
     files: list[str] = []
