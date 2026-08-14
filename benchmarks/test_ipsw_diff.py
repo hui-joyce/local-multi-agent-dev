@@ -16,9 +16,6 @@ from dotenv import load_dotenv
 
 from langgraph_orchestration.agents import MLXAgentFactory
 
-# Optional cloud baseline. Local MLX is the engine under test; uncomment this
-# and the swap in main() only to compare against a hosted model, and be aware
-# that doing so sends diff evidence and decompiled code off this machine.
 # from langgraph_orchestration.gemini import GeminiAgentFactory
 from langgraph_orchestration.core import StateManager
 from langgraph_orchestration.graphs.orchestration import build_orchestration_graph
@@ -246,7 +243,6 @@ def main() -> None:
         feature_reports = trigger_feature_analysis(diff_report_path, factory)
         if feature_reports:
             print(f"Feature analysis: {len(feature_reports)} reports")
-
 
 if __name__ == "__main__":
     main()

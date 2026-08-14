@@ -206,7 +206,7 @@ def build_software_dev_graph(factory: MLXAgentFactory = None):
     def route_after_codegen_tools(state: AgentState) -> str:
         if should_continue_tool_loop(state):
             return "code_generation"
-        # A dev request is only "done" once files actually land on disk. If codegen
+        # A dev request is only "done" once files are generated on disk. If codegen
         # produced only prose, retry (bounded by max_dev_iterations) before moving on
         if (
             "code_generation" in state.dev_task_plan

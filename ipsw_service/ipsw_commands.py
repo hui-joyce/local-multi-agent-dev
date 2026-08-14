@@ -1,13 +1,3 @@
-"""Wrappers around the ``ipsw`` CLI, one class per family of subcommands.
-
-Nothing here is an agent or uses a model. Each class takes an ``IpswCliRunner``,
-builds an argv list, runs it, and returns a plain dict -- deterministic, and the
-single place to look when the CLI changes its flags.
-
-``IpswExtractor`` is driven by the reverse-engineering graph; the other three by
-``FirmwareDiffService``.
-"""
-
 from __future__ import annotations
 
 import os
@@ -21,9 +11,8 @@ from ipsw_service.cli import (
 )
 from ipsw_service.parsing import ensure_dir, extract_paths_by_keyword, list_files
 
-
 class IpswExtractor:
-    """Extracts dyld_shared_cache and kernelcache out of IPSW archives."""
+    """Extracts dyld_shared_cache and kernelcache out of IPSW archives"""
 
     def __init__(self, runner: IpswCliRunner | None = None, workspace_root: str | None = None):
         self.runner = runner or IpswCliRunner(cwd=workspace_root)
@@ -130,9 +119,8 @@ class IpswExtractor:
                 matches.append(path)
         return matches
 
-
 class FrameworkDiffEngine:
-    """``ipsw diff`` -- userland frameworks, launchd, strings, entitlements."""
+    """``ipsw diff`` -- userland frameworks, launchd, strings, entitlements"""
 
     def __init__(self, runner: IpswCliRunner | None = None):
         self.runner = runner or IpswCliRunner()
@@ -262,9 +250,8 @@ class KernelAnalysisEngine:
             "stderr": result.stderr,
         }
 
-
 class MachoAnalysisEngine:
-    """``ipsw macho`` / ``ipsw dyld macho`` -- static string counts."""
+    """``ipsw macho`` / ``ipsw dyld macho`` -- static string counts"""
 
     def __init__(self, runner: IpswCliRunner | None = None):
         self.runner = runner or IpswCliRunner()
@@ -279,13 +266,8 @@ class MachoAnalysisEngine:
     ) -> dict:
         """Count statically embedded c-strings for a binary.
 
-        Prefers ``ipsw macho info --strings`` on the file itself. When the
-        binary lives inside the shared cache -- so there is no standalone file
-        to read -- routes via ``ipsw dyld macho <cache> <path> --strings``
-        instead. Counting happens in a shell pipeline through ``wc -l`` so the
-        full string dump is never buffered in Python.
-
-        Returns keys: success, count, command, stdout, stderr.
+        Uses ``ipsw macho info --strings`` for standalone binaries, or 
+        ``ipsw dyld macho`` when the binary is inside a dyld shared cache. 
         """
 
         def _run(command: str) -> dict:

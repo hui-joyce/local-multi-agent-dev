@@ -259,7 +259,6 @@ def synthesize_orchestration_output(state: AgentState) -> str:
     sections = ["# Orchestration Analysis Result", "", f"**Request:** {state.user_input}", ""]
 
     if re_output:
-        # A firmware run has a structured story to tell; a generic RE run does not.
         summary = _reverse_engineering_summary(state) if _firmware_targets(state) else ""
         sections.append(
             summary or f"## {_DOMAIN_TITLES['reverse_engineering']}\n{re_output.strip()}"

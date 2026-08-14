@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 _HDIUTIL_PERM_RE = re.compile(r"hdiutil:\s+attach\s+failed.*permission\s+denied", re.IGNORECASE)
 
-
 @dataclass
 class CommandResult:
     args: list[str]
@@ -18,7 +17,6 @@ class CommandResult:
     exit_code: int
     duration_seconds: float
     success: bool
-
 
 class IpswCliRunner:
     def __init__(self, executable: str = "ipsw", cwd: str | None = None):
@@ -82,14 +80,6 @@ class IpswCliRunner:
         timeout: int = 600,
         cwd: str | None = None,
     ) -> CommandResult:
-        """Run the command; if hdiutil permission denied is detected, retry with sudo.
-
-        Sudo credential resolution order:
-          1. ``IPSW_SUDO_PASSWORD`` environment variable -- piped to ``sudo -S``.
-          2. Passwordless sudo (``sudo -n``) -- works if the user has a
-             NOPASSWD entry for ``ipsw`` in sudoers
-          3. Falls back to returning the original (non-sudo) result
-        """
         result = self.run(args, timeout=timeout, cwd=cwd)
         if not self._needs_sudo_retry(result):
             return result
@@ -183,7 +173,6 @@ class IpswCliRunner:
         return result
 
     def run_shell(self, command: str, timeout: int = 600, cwd: str | None = None) -> CommandResult:
-        """Run a shell command string (supports pipes) and return a CommandResult"""
         started = time.perf_counter()
         try:
             proc = subprocess.run(
@@ -229,7 +218,6 @@ class IpswCliRunner:
                 success=False,
             )
 
-
 def build_download_args(
     device: str,
     version: str | None = None,
@@ -263,7 +251,6 @@ def build_download_args(
         args.append("--resume-all")
     return args
 
-
 def build_extract_args(
     ipsw_path: str,
     output_dir: str | None = None,
@@ -283,7 +270,6 @@ def build_extract_args(
         args.extend(["--output", str(output_dir)])
     args.append(str(ipsw_path))
     return args
-
 
 def build_diff_args(
     old_ipsw: str,
@@ -321,7 +307,6 @@ def build_diff_args(
     if clean:
         args.append("--clean")
     return args
-
 
 def build_dyld_diff_args(
     old_dsc: str,

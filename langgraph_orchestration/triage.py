@@ -13,7 +13,6 @@ from dataclasses import dataclass
 HIGH_SIGNAL = "HIGH_SIGNAL"
 LOW_SIGNAL = "LOW_SIGNAL"
 
-# Build metadata that carries no behavioral meaning. Anchored at the +/- marker.
 _METADATA_RE = re.compile(
     r"^[+\-]\s*("
     r"UUID:\s*[0-9A-Fa-f\-]+"  # UUID drift
@@ -35,7 +34,6 @@ _TIMESTAMP_RE = re.compile(
     re.IGNORECASE,
 )
 
-
 @dataclass(frozen=True)
 class TriageResult:
     signal: str
@@ -46,10 +44,8 @@ class TriageResult:
     def is_high_signal(self) -> bool:
         return self.signal == HIGH_SIGNAL
 
-
 def _is_noise(stripped_line: str) -> bool:
     return bool(_METADATA_RE.match(stripped_line) or _TIMESTAMP_RE.match(stripped_line))
-
 
 def triage_evidence_explained(evidence: str) -> TriageResult:
     """Classify diff evidence and return the deciding line for auditability"""

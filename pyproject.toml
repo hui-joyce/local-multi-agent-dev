@@ -1,6 +1,4 @@
 [tool.pytest.ini_options]
-# Only the real unit suite. Scripts under benchmarks/ are manual runners that
-# load the MLX model and need IDA plus firmware on disk, so they are excluded.
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
 pythonpath = ["."]
@@ -12,21 +10,12 @@ target-version = "py311"
 exclude = ["venv", "artifacts", ".langgraph_api", "benchmarks/results"]
 
 [tool.ruff.lint]
-# E501 is deliberately absent: `ruff format` already breaks long *code* lines,
-# so the only remaining violations are prompt text and long string literals
-# that cannot be split without harming readability. Formatting is enforced
-# separately with `ruff format --check`.
 select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
-# Standalone entry points must extend sys.path before importing the package,
-# which necessarily puts those imports below module level.
 "scripts/**" = ["E402"]
 "benchmarks/**" = ["E402"]
-# This module is executed by IDA Pro's own embedded interpreter, not by the
-# project venv, so it must stay compatible with whatever Python that build
-# ships. Do not let pyupgrade rewrite it to newer syntax.
 "langgraph_orchestration/tooling/ida_rpc_server.py" = ["UP"]
 
 [tool.ruff.format]
