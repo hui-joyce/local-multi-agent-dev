@@ -1,3 +1,5 @@
+"""Optional RAG scaffolding: embedded Qdrant plus local embeddings"""
+
 from __future__ import annotations
 
 import logging

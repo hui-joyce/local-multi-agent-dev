@@ -11,6 +11,7 @@ from ipsw_service.cli import (
 )
 from ipsw_service.parsing import ensure_dir, extract_paths_by_keyword, list_files
 
+
 class IpswExtractor:
     """Extracts dyld_shared_cache and kernelcache out of IPSW archives"""
 
@@ -266,8 +267,8 @@ class MachoAnalysisEngine:
     ) -> dict:
         """Count statically embedded c-strings for a binary.
 
-        Uses ``ipsw macho info --strings`` for standalone binaries, or 
-        ``ipsw dyld macho`` when the binary is inside a dyld shared cache. 
+        Uses ``ipsw macho info --strings`` for standalone binaries, or
+        ``ipsw dyld macho`` when the binary is inside a dyld shared cache.
         """
 
         def _run(command: str) -> dict:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
 @dataclass
@@ -84,7 +84,7 @@ class FirmwareDiffRequest:
     include_strs: bool = True
     clean_cache: bool = True
 
-class DiffState(str, Enum):  
+class DiffState(StrEnum):
     NEW = "new"
     REMOVED = "removed"
     UPDATED = "updated"

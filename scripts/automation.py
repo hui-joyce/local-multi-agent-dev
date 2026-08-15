@@ -645,6 +645,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Interrupted", file=sys.stderr)
         sys.exit(EXIT_ERROR)
-    except Exception as exc:  
+    except Exception as exc:
         print(f"FATAL: {type(exc).__name__}: {exc}", file=sys.stderr)
         sys.exit(EXIT_ERROR)
