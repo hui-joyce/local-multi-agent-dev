@@ -536,7 +536,7 @@ def extract_symbol_diffs(text: str) -> list[str]:
 
     return results
 
-# file helpers 
+# file helpers
 def ensure_dir(path: str) -> str:
     os.makedirs(path, exist_ok=True)
     return path
