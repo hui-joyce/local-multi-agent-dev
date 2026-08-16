@@ -9,6 +9,7 @@ from ipsw_service.ipsw_api import _version_tuple
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 
+
 @pytest.fixture(scope="module")
 def automation():
     # importing the module chdirs to the project root, so restore the cwd afterwards
@@ -19,6 +20,7 @@ def automation():
     finally:
         sys.path.remove(str(_SCRIPTS_DIR))
         os.chdir(original_cwd)
+
 
 class TestPinnedDevices:
     def test_unset_means_auto_detect(self, automation, monkeypatch):
@@ -38,6 +40,7 @@ class TestPinnedDevices:
         monkeypatch.setenv("PIPELINE_DEVICES", "   ")
         assert automation.pinned_devices() == []
 
+
 class TestKeepPerDevice:
     def test_defaults_to_one(self, automation, monkeypatch):
         monkeypatch.delenv("PIPELINE_KEEP_PER_DEVICE", raising=False)
@@ -49,6 +52,7 @@ class TestKeepPerDevice:
         monkeypatch.setenv("PIPELINE_KEEP_PER_DEVICE", raw)
         assert automation.keep_per_device() == expected
 
+
 class TestStalePartialDays:
     def test_defaults_to_a_week(self, automation, monkeypatch):
         monkeypatch.delenv("PIPELINE_STALE_PARTIAL_DAYS", raising=False)
@@ -58,6 +62,7 @@ class TestStalePartialDays:
     def test_parses_and_clamps(self, automation, monkeypatch, raw, expected):
         monkeypatch.setenv("PIPELINE_STALE_PARTIAL_DAYS", raw)
         assert automation.stale_partial_days() == expected
+
 
 class TestVersionTuple:
     # the ordering `local_ipsws` sorts by; lives in ipsw_api since release_key subsumed it
@@ -69,6 +74,7 @@ class TestVersionTuple:
 
     def test_non_numeric_parts_are_dropped(self):
         assert _version_tuple("26.7 beta") == (26,)
+
 
 class TestParseIpswName:
     def test_parses_device_version_and_build(self, automation):
@@ -91,6 +97,7 @@ class TestParseIpswName:
         name = automation.ipsw_filename("iPhone18,1", "26.6", "23G71")
         assert automation.parse_ipsw_name(name)["build"] == "23G71"
 
+
 class TestLocalIpsws:
     @staticmethod
     def _populate(directory, names):
@@ -100,12 +107,15 @@ class TestLocalIpsws:
     def test_orders_newest_version_first_and_filters_by_device(
         self, automation, tmp_path, monkeypatch
     ):
-        self._populate(tmp_path, [
-            "iPhone18,1_26.4.1_23E254_Restore.ipsw",
-            "iPhone18,1_26.6_23G71_Restore.ipsw",
-            "iPhone17,1_26.0_23A341_Restore.ipsw",
-            "checksums.txt.sha1",
-        ])
+        self._populate(
+            tmp_path,
+            [
+                "iPhone18,1_26.4.1_23E254_Restore.ipsw",
+                "iPhone18,1_26.6_23G71_Restore.ipsw",
+                "iPhone17,1_26.0_23A341_Restore.ipsw",
+                "checksums.txt.sha1",
+            ],
+        )
         monkeypatch.setattr(automation, "DOWNLOAD_DIR", tmp_path)
         assert [e["version"] for e in automation.local_ipsws("iPhone18,1")] == ["26.6", "26.4.1"]
         assert len(automation.local_ipsws()) == 3
@@ -113,6 +123,7 @@ class TestLocalIpsws:
     def test_missing_directory_is_empty(self, automation, tmp_path, monkeypatch):
         monkeypatch.setattr(automation, "DOWNLOAD_DIR", tmp_path / "absent")
         assert automation.local_ipsws() == []
+
 
 class TestManagedDevices:
     def test_combines_pinned_selection_with_previously_handled_devices(
@@ -137,6 +148,7 @@ class TestManagedDevices:
         monkeypatch.setattr(automation, "KNOWN_BUILDS_FILE", tmp_path / "absent.json")
         monkeypatch.delenv("PIPELINE_DEVICES", raising=False)
         assert automation.managed_devices() == []
+
 
 class TestReadJson:
     def test_missing_file_returns_the_default(self, automation, tmp_path):

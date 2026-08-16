@@ -26,12 +26,14 @@ MD_REPORT_PATH = Path(
     "artifacts/firmware_diff/20260712-141626/diff/26_4_1_23E254_vs_26_4_2_23E261/README.md"
 )
 
+
 @dataclass
 class FeatureAnalysisCase:
     case_id: str
     description: str
     report_path: Path
     user_input: str
+
 
 @dataclass
 class FeatureAnalysisResult:
@@ -43,6 +45,7 @@ class FeatureAnalysisResult:
     report_count: int
     report_paths: dict[str, str]
 
+
 def build_feature_case() -> FeatureAnalysisCase:
     return FeatureAnalysisCase(
         case_id="RE-FEATURE-ANALYSIS-17-0-3",
@@ -50,6 +53,7 @@ def build_feature_case() -> FeatureAnalysisCase:
         report_path=REPORT_PATH,
         user_input=("Run feature analysis on diff report: 17.0.3 (21A360) vs 17.1 (21B80)."),
     )
+
 
 def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
     report_text = case.report_path.read_text(encoding="utf-8")
@@ -83,6 +87,7 @@ def run_case(graph, case: FeatureAnalysisCase) -> FeatureAnalysisResult:
         report_count=len(reports),
         report_paths=reports,
     )
+
 
 def write_result(result: FeatureAnalysisResult, output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -121,6 +126,7 @@ def write_result(result: FeatureAnalysisResult, output_dir: Path) -> tuple[Path,
 
     return json_path, md_path
 
+
 def main() -> None:
     load_dotenv()
 
@@ -142,6 +148,7 @@ def main() -> None:
     print(f"Reports: {result.report_count}")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
+
 
 if __name__ == "__main__":
     main()

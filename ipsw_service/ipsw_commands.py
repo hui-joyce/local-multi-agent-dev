@@ -120,6 +120,7 @@ class IpswExtractor:
                 matches.append(path)
         return matches
 
+
 class FrameworkDiffEngine:
     """``ipsw diff`` -- userland frameworks, launchd, strings, entitlements"""
 
@@ -250,6 +251,7 @@ class KernelAnalysisEngine:
             "diff": result.stdout,
             "stderr": result.stderr,
         }
+
 
 class MachoAnalysisEngine:
     """``ipsw macho`` / ``ipsw dyld macho`` -- static string counts"""

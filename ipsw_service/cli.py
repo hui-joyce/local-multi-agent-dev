@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 _HDIUTIL_PERM_RE = re.compile(r"hdiutil:\s+attach\s+failed.*permission\s+denied", re.IGNORECASE)
 
+
 @dataclass
 class CommandResult:
     args: list[str]
@@ -17,6 +18,7 @@ class CommandResult:
     exit_code: int
     duration_seconds: float
     success: bool
+
 
 class IpswCliRunner:
     def __init__(self, executable: str = "ipsw", cwd: str | None = None):
@@ -218,6 +220,7 @@ class IpswCliRunner:
                 success=False,
             )
 
+
 def build_download_args(
     device: str,
     version: str | None = None,
@@ -251,6 +254,7 @@ def build_download_args(
         args.append("--resume-all")
     return args
 
+
 def build_extract_args(
     ipsw_path: str,
     output_dir: str | None = None,
@@ -270,6 +274,7 @@ def build_extract_args(
         args.extend(["--output", str(output_dir)])
     args.append(str(ipsw_path))
     return args
+
 
 def build_diff_args(
     old_ipsw: str,
@@ -307,6 +312,7 @@ def build_diff_args(
     if clean:
         args.append("--clean")
     return args
+
 
 def build_dyld_diff_args(
     old_dsc: str,
