@@ -244,5 +244,6 @@ def main() -> None:
         if feature_reports:
             print(f"Feature analysis: {len(feature_reports)} reports")
 
+
 if __name__ == "__main__":
     main()
